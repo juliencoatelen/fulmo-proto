@@ -1938,21 +1938,44 @@ p { margin: 0; }
     return makeCaptureError("generic", err);
   }
 
-  function requestOrientationPermission() {
-    if (window.DeviceOrientationEvent &&
-      typeof window.DeviceOrientationEvent.requestPermission === "function") {
-      // iOS 13+ : autorisation obligatoire, et elle ne peut être demandée que
-      // dans le geste utilisateur qui a appelé start(). Un refus est définitif
-      // pour le chargement de page en cours (rejeter l'appel ne redemande rien) :
-      // le message doit donc dire à l'utilisateur de recommencer, pas juste
-      // constater l'échec.
-      return window.DeviceOrientationEvent.requestPermission().then(function (r) {
-        if (r !== "granted") throw makeCaptureError("motion-denied");
-      }, function (err) {
-        throw makeCaptureError("motion-denied", err);
-      });
+  /* L'autorisation de mouvement, demandée DEPUIS LE GESTE.
+
+     iOS 13+ n'accorde `deviceorientation` que si `requestPermission()` part
+     de l'activation utilisateur en cours. Ce n'est pas « peu après le clic » :
+     toute promesse attendue entre le doigt et l'appel consomme l'activation,
+     et Safari refuse alors sans même afficher de demande — l'utilisateur voit
+     un refus qu'on ne lui a jamais soumis.
+
+     D'où cette séparation : `primeMotion()` est appelé SYNCHRONEMENT dans le
+     gestionnaire de clic, et `start()` récupère plus tard la promesse ainsi
+     amorcée. C'est la seule façon d'avoir la fenêtre d'autorisation. */
+  var motionGrant = null;
+
+  function primeMotion() {
+    if (!window.DeviceOrientationEvent ||
+        typeof window.DeviceOrientationEvent.requestPermission !== "function") {
+      // Android et les navigateurs de bureau n'ont pas de garde : rien à demander.
+      motionGrant = Promise.resolve(true);
+      return motionGrant;
     }
-    return Promise.resolve();
+    try {
+      motionGrant = window.DeviceOrientationEvent.requestPermission()
+        .then(function (r) { return r === "granted"; }, function () { return false; });
+    } catch (e) {
+      motionGrant = Promise.resolve(false);
+    }
+    return motionGrant;
+  }
+
+  function requestOrientationPermission() {
+    // Une demande amorcée ne sert qu'une fois : sans cela, un deuxième tour
+    // rejouerait la réponse du premier au lieu de redemander.
+    var pending = motionGrant;
+    motionGrant = null;
+    if (!pending) pending = primeMotion();
+    return pending.then(function (granted) {
+      if (!granted) throw makeCaptureError("motion-denied");
+    });
   }
 
   /* ------------------------------------------------------------------ */
@@ -2281,6 +2304,9 @@ p { margin: 0; }
   window.FulmoPanoCapture = {
     support: support,
     start: start,
+    // Doit être appelé dans le gestionnaire de clic, avant tout `await` :
+    // c'est là, et seulement là, qu'iOS accepte de demander le mouvement.
+    primeMotion: primeMotion,
     // Exposé pour les tests et la visionneuse : la conversion IMU -> quaternion
     // est la partie la plus facile à casser silencieusement.
     _quatFromDeviceOrientation: quatFromDeviceOrientation
@@ -7843,36 +7869,61 @@ p { margin: 0; }
 
     /* Le tour de la pièce. C'est la voie universelle — et la seule sur iPhone,
        où Safari n'ouvre au web ni la réalité augmentée ni le LiDAR. */
+    function runPano() {
+      dropScene();
+      window.FulmoPanoCapture.start({ roomName: room.name })
+        .then(function (result) {
+          if (!result) { toast("Tour de la pièce interrompu."); render(); return; }
+          review = {
+            kind: "pano", locationId: room.id, source: "pano",
+            pano: {
+              blob: result.blob, canvas: result.canvas,
+              width: result.width, height: result.height,
+              coverage: result.coverage, frames: result.frames
+            }
+          };
+          render();
+        })
+        .catch(function (error) {
+          render();
+          sheet({
+            title: "Le tour de la pièce n'a pas démarré",
+            body: [
+              el("p", { class: "lede", text: String((error && error.message) || error) }),
+              el("p", { class: "muted", style: "font-size:.875rem;line-height:1.6", text:
+                (error && error.code) === "motion-denied"
+                  ? "Si aucune fenêtre d'autorisation n'est apparue, c'est que le réglage « Mouvement et orientation » est désactivé dans Réglages › Safari. Activez-le, rechargez la page, puis recommencez."
+                  : "Les causes habituelles : l'autorisation caméra ou mouvement a été refusée, ou la page est dans un cadre intégré qui les interdit." })
+            ]
+          });
+        });
+    }
+
+    /* Le tour de la pièce.
+
+       L'ordre des deux premières lignes n'est pas cosmétique. iOS n'accorde
+       les capteurs de mouvement que si la demande part de l'activation
+       utilisateur EN COURS : toute promesse attendue entre le doigt et
+       `requestPermission()` la consomme, et Safari refuse alors sans rien
+       afficher — on récolte un refus qui n'a jamais été soumis à personne.
+
+       D'où : on amorce le mouvement SYNCHRONEMENT, avant le moindre `then`,
+       et on ne consulte les capacités de l'appareil qu'ensuite. Elles sont
+       d'ailleurs résolues au démarrage, pour que le cas courant n'attende
+       rien du tout. */
     function startPano() {
       if (!room) return;
+      var api = window.FulmoPanoCapture;
+      if (!api) return explainNoPano("absent");
+
+      if (api.primeMotion) api.primeMotion();
+
+      if (panoReady === "ready") return runPano();
+
       panoSupport().then(function (status) {
         panoReady = status;
         if (status !== "ready") return explainNoPano(status);
-        dropScene();
-        window.FulmoPanoCapture.start({ roomName: room.name })
-          .then(function (result) {
-            if (!result) { toast("Tour de la pièce interrompu."); render(); return; }
-            review = {
-              kind: "pano", locationId: room.id, source: "pano",
-              pano: {
-                blob: result.blob, canvas: result.canvas,
-                width: result.width, height: result.height,
-                coverage: result.coverage, frames: result.frames
-              }
-            };
-            render();
-          })
-          .catch(function (error) {
-            render();
-            sheet({
-              title: "Le tour de la pièce n'a pas démarré",
-              body: [
-                el("p", { class: "lede", text: String((error && error.message) || error) }),
-                el("p", { class: "muted", style: "font-size:.875rem;line-height:1.6", text:
-                  "Les causes habituelles : l'autorisation caméra ou mouvement a été refusée, ou la page est dans un cadre intégré qui les interdit." })
-              ]
-            });
-          });
+        runPano();
       });
     }
 
@@ -8603,6 +8654,15 @@ p { margin: 0; }
      après le premier rendu : la page ne doit jamais attendre ces réponses. */
   arSupport().then(function (status) {
     arReady = status;
+    if (state.tab === "map" && mapMode === "3d") render();
+  });
+
+  /* Idem pour la panoramique, et pour une raison qui n'est pas que
+     cosmétique : si cette réponse n'arrive qu'au moment du clic, l'attente
+     consomme l'activation utilisateur et iOS refuse les capteurs de mouvement
+     sans rien demander. Résolue ici, le geste n'attend plus rien. */
+  panoSupport().then(function (status) {
+    panoReady = status;
     if (state.tab === "map" && mapMode === "3d") render();
   });
   panoSupport().then(function (status) {
