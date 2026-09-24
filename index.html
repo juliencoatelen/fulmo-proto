@@ -1837,6 +1837,16 @@ p { margin: 0; }
     var cells = new Uint8Array(COV_W * COV_H);
     var state = { frames: 0, coverage: 0, stop: false, cancel: false };
 
+    /* Ce que la capture a réellement vu. Sans iPhone sous la main, c'est le
+       seul moyen de savoir pourquoi une panoramique sort floue : le champ a-t-il
+       été mesuré ou supposé, sur combien d'avis concordants, et à quelle vitesse
+       le téléphone tournait-il pendant les prises. */
+    var diag = {
+      video: null, screenAngle: null,
+      hfovDeg: null, hfovMeasured: false, hfovSamples: 0, hfovSpreadDeg: null,
+      speedMedian: null, speedMax: null, skippedFast: 0
+    };
+
     function ingest(fr) {
       var dims = imageSize(fr.image);
       if (!dims[0] || !dims[1]) return false;
@@ -1863,7 +1873,8 @@ p { margin: 0; }
           height: rig.h,
           coverage: state.coverage,
           frames: state.frames,
-          blob: blob
+          blob: blob,
+          diag: diag
         };
       });
     }
@@ -2359,8 +2370,15 @@ p { margin: 0; }
     };
   }
 
+  /* Au-delà de cette vitesse, l'image est filée par la pose de la caméra et
+     ne vaut plus la peine d'être accumulée. Trente degrés par seconde, c'est
+     un tour complet en douze secondes : lent pour qui se dépêche, confortable
+     pour qui suit un réticule. */
+  var SPEED_MAX = 0.52;   // rad/s, ~30°/s
+
   function runCamera(opts, ingest, finish, rig, state, cells) {
     var ui = null, stream = null, orient = null, quat = null, lastQuat = null;
+    var lastMs = 0, speeds = [];
     var hfov = opts.hfov || DEFAULT_HFOV;
 
     /* Mesure du champ, avant toute accumulation.
@@ -2399,6 +2417,18 @@ p { margin: 0; }
         // plus de rien et le défaut est un pari plus sûr.
         if (m !== null && calib.estimates.length >= 5) { hfov = m; calib.measured = true; }
         calib.locked = true;
+
+        diag.hfovDeg = hfov * 180 / PI;
+        diag.hfovMeasured = calib.measured;
+        diag.hfovSamples = calib.estimates.length;
+        if (calib.estimates.length >= 2) {
+          var sorted = calib.estimates.slice().sort(function (x, y) { return x - y; });
+          // Écart interquartile : la dispersion des avis dit s'ils s'accordent,
+          // et une médiane tirée d'avis discordants ne vaut rien.
+          var q1 = sorted[Math.floor(sorted.length * 0.25)];
+          var q3 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.75))];
+          diag.hfovSpreadDeg = (q3 - q1) * 180 / PI;
+        }
       }
     }
 
@@ -2508,6 +2538,9 @@ p { margin: 0; }
               // été produit — donc ça rejette, avec de quoi corriger le tir.
               if (state.cancel) { destroyRig(rig); return resolve(null); }
               if (state.frames === 0) { return reject(makeCaptureError("no-frames")); }
+              diag.speedMedian = median(speeds);
+              diag.video = ui.video.videoWidth + "×" + ui.video.videoHeight;
+              diag.screenAngle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
               return finish().then(resolve, reject);
             }
             if (quat && ui.video.readyState >= 2) {
@@ -2533,11 +2566,35 @@ p { margin: 0; }
                 return;
               }
 
-              if (moved) {
+              /* Vitesse de rotation. En lumière d'intérieur, une caméra de
+                 téléphone pose long : à vingt degrés par seconde, chaque image
+                 est déjà filée d'un ou deux degrés, et une panoramique faite de
+                 quarante images filées reste floue même parfaitement alignée.
+                 On laisse donc passer le mouvement lent et on écarte le reste,
+                 en le disant. */
+              var now = Date.now();
+              var speed = null;
+              if (lastQuat && lastMs) {
+                var dt = (now - lastMs) / 1000;
+                if (dt > 0.008) speed = quatAngle(lastQuat, quat) / dt;
+              }
+              if (speed !== null) {
+                speeds.push(speed);
+                if (diag.speedMax === null || speed > diag.speedMax) diag.speedMax = speed;
+              }
+              var tooFast = speed !== null && speed > SPEED_MAX;
+              if (tooFast) {
+                diag.skippedFast += 1;
+                lastMs = now;
+                ui.hint.textContent = "Trop vite : ralentissez, sinon les images sont filées.";
+              }
+
+              if (moved && !tooFast) {
                 var ok = false;
                 try { ok = ingest({ image: ui.video, hfov: hfov, quat: quat }); } catch (err) { ok = false; }
                 if (ok) {
                   lastQuat = quat;
+                  lastMs = now;
                   drawMinimap();
                   ui.pctLabel.textContent = Math.round(state.coverage * 100) + " %";
                   // Avertit sans bloquer : voir le commentaire sur ui.done.onclick.
@@ -8152,7 +8209,8 @@ p { margin: 0; }
             pano: {
               blob: result.blob, canvas: result.canvas,
               width: result.width, height: result.height,
-              coverage: result.coverage, frames: result.frames
+              coverage: result.coverage, frames: result.frames,
+              diag: result.diag || null
             }
           };
           render();
@@ -8329,6 +8387,40 @@ p { margin: 0; }
         ]) : null,
         isPano && review.pano.coverage < 0.72 ? el("p", { class: "err", style: "margin-top:12px", text:
           "Le tour est incomplet : il manque des pans de mur. Refaites-le en balayant plus haut et plus bas." }) : null,
+        /* Le relevé technique de la capture.
+
+           Il n'est pas là pour faire savant : sans iPhone sous la main, c'est
+           le seul moyen de savoir pourquoi une panoramique sort floue. Le champ
+           a-t-il été mesuré ou supposé, sur combien d'avis concordants, et à
+           quelle vitesse le téléphone tournait-il pendant les prises — un
+           dixième de seconde de pose à trente degrés par seconde suffit à filer
+           chaque image. */
+        (function () {
+          var d = review.kind === "pano" && review.pano ? review.pano.diag : null;
+          if (!d) return null;
+          function deg(v) { return v === null || v === undefined ? "—" : (v * 180 / Math.PI).toFixed(0) + "°/s"; }
+          var lines = [
+            ["Caméra", (d.video || "—") + (d.screenAngle ? " · écran à " + d.screenAngle + "°" : "")],
+            ["Champ de vision", d.hfovDeg === null ? "non mesuré"
+              : d.hfovDeg.toFixed(1) + "° " + (d.hfovMeasured
+                  ? "(mesuré sur " + d.hfovSamples + " avis"
+                    + (d.hfovSpreadDeg === null ? "" : ", dispersion " + d.hfovSpreadDeg.toFixed(1) + "°") + ")"
+                  : "(par défaut — non mesurable ici)")],
+            ["Vitesse de rotation", "médiane " + deg(d.speedMedian) + " · pointe " + deg(d.speedMax)],
+            ["Images écartées car trop rapides", String(d.skippedFast)]
+          ];
+          return el("details", { style: "margin-top:14px" }, [
+            el("summary", { class: "label", style: "cursor:pointer", text: "Relevé technique de la capture" }),
+            el("div", { class: "stack-sm", style: "margin-top:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:12px" },
+              lines.map(function (row) {
+                return el("div", { class: "inline", style: "justify-content:space-between;gap:16px;font-size:.8125rem" }, [
+                  el("span", { class: "muted", text: row[0] }),
+                  el("span", { style: "font-family:var(--mono);font-size:.75rem;text-align:right", text: row[1] })
+                ]);
+              }))
+          ]);
+        })(),
+
         el("p", { class: "muted", style: "font-size:.8125rem;margin-top:14px;max-width:62ch", text: isPano
           ? "Regardez autour de vous pour vérifier que la pièce est reconnaissable avant d'enregistrer. Rien n'est conservé tant que vous n'avez pas validé."
           : "Tournez autour pour vérifier que la pièce est reconnaissable avant d'enregistrer. Rien n'est conservé tant que vous n'avez pas validé." })
