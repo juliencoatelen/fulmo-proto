@@ -1844,7 +1844,8 @@ p { margin: 0; }
     var diag = {
       video: null, screenAngle: null,
       hfovDeg: null, hfovMeasured: false, hfovSamples: 0, hfovSpreadDeg: null,
-      speedMedian: null, speedMax: null, skippedFast: 0
+      speedMedian: null, speedMax: null, skippedFast: 0,
+      orientEvents: 0, calibError: null
     };
 
     function ingest(fr) {
@@ -1883,7 +1884,7 @@ p { margin: 0; }
     // `cells` en plus : le chemin réel en a besoin pour guider le geste (savoir
     // quelle zone il manque et où elle se trouve). Le chemin injecté n'y touche
     // jamais — aucune ligne de runSource ci-dessus n'a changé.
-    return runCamera(opts, ingest, finish, rig, state, cells);
+    return runCamera(opts, ingest, finish, rig, state, cells, diag);
   }
 
   // Chemin injecté : aucun accès à getUserMedia ni à DeviceOrientationEvent.
@@ -2376,9 +2377,10 @@ p { margin: 0; }
      pour qui suit un réticule. */
   var SPEED_MAX = 0.52;   // rad/s, ~30°/s
 
-  function runCamera(opts, ingest, finish, rig, state, cells) {
+  function runCamera(opts, ingest, finish, rig, state, cells, diag) {
     var ui = null, stream = null, orient = null, quat = null, lastQuat = null;
     var lastMs = 0, speeds = [];
+    var lastOrientMs = 0;
     var hfov = opts.hfov || DEFAULT_HFOV;
 
     /* Mesure du champ, avant toute accumulation.
@@ -2412,23 +2414,28 @@ p { margin: 0; }
 
       var elapsed = Date.now() - calib.started;
       if (calib.estimates.length >= CALIB_MIN || (elapsed > CALIB_MS && calib.tries > 8)) {
-        var m = median(calib.estimates);
+        lockCalibration();
+      }
+    }
+
+    function lockCalibration() {
+      if (calib.locked) return;
+      var m = median(calib.estimates);
         // Au moins cinq avis concordants : en dessous, la médiane ne protège
         // plus de rien et le défaut est un pari plus sûr.
-        if (m !== null && calib.estimates.length >= 5) { hfov = m; calib.measured = true; }
-        calib.locked = true;
+      if (m !== null && calib.estimates.length >= 5) { hfov = m; calib.measured = true; }
+      calib.locked = true;
 
-        diag.hfovDeg = hfov * 180 / PI;
-        diag.hfovMeasured = calib.measured;
-        diag.hfovSamples = calib.estimates.length;
-        if (calib.estimates.length >= 2) {
-          var sorted = calib.estimates.slice().sort(function (x, y) { return x - y; });
-          // Écart interquartile : la dispersion des avis dit s'ils s'accordent,
-          // et une médiane tirée d'avis discordants ne vaut rien.
-          var q1 = sorted[Math.floor(sorted.length * 0.25)];
-          var q3 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.75))];
-          diag.hfovSpreadDeg = (q3 - q1) * 180 / PI;
-        }
+      diag.hfovDeg = hfov * 180 / PI;
+      diag.hfovMeasured = calib.measured;
+      diag.hfovSamples = calib.estimates.length;
+      if (calib.estimates.length >= 2) {
+        var sorted = calib.estimates.slice().sort(function (x, y) { return x - y; });
+        // Écart interquartile : la dispersion des avis dit s'ils s'accordent,
+        // et une médiane tirée d'avis discordants ne vaut rien.
+        var q1 = sorted[Math.floor(sorted.length * 0.25)];
+        var q3 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.75))];
+        diag.hfovSpreadDeg = (q3 - q1) * 180 / PI;
       }
     }
 
@@ -2520,29 +2527,51 @@ p { margin: 0; }
         orient = function (e) {
           var angle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
           quat = quatFromDeviceOrientation(e.alpha, e.beta, e.gamma, angle);
+          lastOrientMs = Date.now();
+          diag.orientEvents += 1;
         };
         window.addEventListener("deviceorientation", orient, true);
 
         return new Promise(function (resolve, reject) {
-          ui.cancel.onclick = function () { state.cancel = true; state.stop = true; };
+          /* Sortir de la capture ne doit dépendre de rien.
+
+             Les deux boutons ne faisaient que poser un drapeau que la boucle
+             de rendu venait lire. Le jour où cette boucle est morte — une
+             exception dans la mesure du champ a suffi — l'utilisateur s'est
+             retrouvé enfermé en plein écran, sans pouvoir ni enregistrer ni
+             annuler. Un bouton de sortie qui dépend de l'état sain du
+             programme n'est pas un bouton de sortie.
+
+             `settle()` fait donc tout le travail, immédiatement, et se protège
+             d'un double appel : c'est le seul point où la capture se termine,
+             que l'ordre vienne du doigt ou de la boucle. */
+          var settled = false;
+
+          function settle() {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            if (state.cancel) { destroyRig(rig); return resolve(null); }
+            if (state.frames === 0) { destroyRig(rig); return reject(makeCaptureError("no-frames")); }
+            diag.speedMedian = median(speeds);
+            diag.video = ui.video.videoWidth + "×" + ui.video.videoHeight;
+            diag.screenAngle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
+            return finish().then(resolve, reject);
+          }
+
+          ui.cancel.onclick = function () { state.cancel = true; state.stop = true; settle(); };
           // Ne bloque jamais : qui veut s'arrêter s'arrête. Le guidage
           // dissuade de terminer trop tôt, il ne l'empêche jamais.
-          ui.done.onclick = function () { state.stop = true; };
+          ui.done.onclick = function () { state.stop = true; settle(); };
 
           function loop() {
-            if (state.stop) {
-              cleanup();
-              // `null` ne doit signifier qu'une chose : un appui volontaire sur
-              // Annuler. Terminer sans avoir capté une seule image n'est pas une
-              // annulation — l'utilisateur a agi, mais rien d'exploitable n'a
-              // été produit — donc ça rejette, avec de quoi corriger le tir.
-              if (state.cancel) { destroyRig(rig); return resolve(null); }
-              if (state.frames === 0) { return reject(makeCaptureError("no-frames")); }
-              diag.speedMedian = median(speeds);
-              diag.video = ui.video.videoWidth + "×" + ui.video.videoHeight;
-              diag.screenAngle = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-              return finish().then(resolve, reject);
-            }
+            if (settled) return;
+            // `null` ne doit signifier qu'une chose : un appui volontaire sur
+            // Annuler. Terminer sans avoir capté une seule image n'est pas une
+            // annulation — l'utilisateur a agi, mais rien d'exploitable n'a été
+            // produit — donc ça rejette, avec de quoi corriger le tir. Toute
+            // cette logique vit maintenant dans settle().
+            if (state.stop) { return settle(); }
             if (quat && ui.video.readyState >= 2) {
               // On n'accumule qu'après un déplacement angulaire réel : rester
               // immobile n'apporte rien et gonflerait le poids local, ce qui
@@ -2551,8 +2580,24 @@ p { margin: 0; }
 
               if (!calib.locked) {
                 if (!calib.started) calib.started = Date.now();
-                if (moved) {
-                  calibrate(ui.video, quat, ui.video.videoWidth, ui.video.videoHeight);
+
+                /* Le plafond de temps est appliqué ICI, dans la boucle, et pas
+                   seulement au creux de la mesure. Sinon il ne s'applique que
+                   si la mesure continue d'être appelée — et le jour où elle
+                   cesse de l'être, faute de mouvement détecté, la capture reste
+                   bloquée sur son écran de mesure sans jamais en sortir. */
+                if (Date.now() - calib.started > CALIB_MS + 3000) lockCalibration();
+                else if (moved) {
+                  /* Protégée, comme l'accumulation l'était déjà. La mesure du
+                     champ est un bonus : si elle échoue, on prend le réglage
+                     par défaut et la capture continue. Elle ne doit jamais
+                     emporter la boucle avec elle. */
+                  try {
+                    calibrate(ui.video, quat, ui.video.videoWidth, ui.video.videoHeight);
+                  } catch (err) {
+                    diag.calibError = String((err && err.message) || err);
+                    lockCalibration();
+                  }
                   lastQuat = quat;
                 }
                 ui.hint.textContent = "Tournez lentement sur vous-même : je mesure votre objectif.";
@@ -2605,7 +2650,14 @@ p { margin: 0; }
                 }
               }
             }
-            updateGuidance();
+            /* Le flux d'orientation s'est tu. Sans lui, plus rien n'avance :
+               autant le dire, plutôt que de laisser un écran figé sur lequel
+               l'utilisateur bouge sans effet. */
+            if (lastOrientMs && Date.now() - lastOrientMs > 4000) {
+              ui.hint.textContent = "Plus aucune donnée d'orientation. Terminez, puis vérifiez Réglages › Safari › Mouvement et orientation.";
+            }
+
+            try { updateGuidance(); } catch (err) { /* le guidage n'est qu'un confort */ }
             requestAnimationFrame(loop);
           }
           requestAnimationFrame(loop);
