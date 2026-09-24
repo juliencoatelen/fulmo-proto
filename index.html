@@ -1938,6 +1938,215 @@ p { margin: 0; }
     return makeCaptureError("generic", err);
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Mesurer le champ de vision au lieu de le supposer                    */
+  /*                                                                      */
+  /* Aucune API web ne donne l'angle de champ d'une caméra. Le flux        */
+  /* demandé en 1920×1080 est de surcroît un RECADRAGE du capteur, dont    */
+  /* l'angle n'est pas celui de l'objectif : la valeur varie d'un modèle   */
+  /* à l'autre, et entre l'objectif principal et l'ultra grand-angle.      */
+  /*                                                                      */
+  /* Une supposition fausse ne dégrade pas un peu, elle détruit : mesuré   */
+  /* sur la vérité terrain, 12 % d'écart font tomber le PSNR de 30 à 18 dB */
+  /* et transforment la panoramique en filé horizontal, texte fantômé et   */
+  /* grille dédoublée.                                                     */
+  /*                                                                      */
+  /* On le mesure donc sur les images elles-mêmes. Entre deux prises, le   */
+  /* capteur d'orientation donne l'angle dont le téléphone a tourné, et la */
+  /* corrélation des deux images donne le décalage en pixels. Le rapport   */
+  /* des deux EST la distance focale : f = Δpixels / Δangle. C'est la même */
+  /* mesure qu'un photographe fait en comparant un déplacement connu à son */
+  /* effet sur le film.                                                    */
+  /* ------------------------------------------------------------------ */
+
+  var STRIP_W = 256;      // largeur du profil comparé
+  var STRIP_SEARCH = 80;  // décalage maximal cherché, en pixels de profil
+
+  /* Un profil de luminance : la bande centrale de l'image, réduite à une
+     ligne. Moyenner verticalement supprime le bruit sans rien coûter, et
+     conserve exactement ce dont la corrélation a besoin — les variations
+     horizontales. */
+  function lumaStrip(image, w, h) {
+    var cv = lumaStrip.canvas || (lumaStrip.canvas = document.createElement("canvas"));
+    var rows = 4;
+    cv.width = STRIP_W; cv.height = rows;
+    var ctx = cv.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return null;
+    // Bande centrale : le haut et le bas d'une image de pièce sont souvent
+    // un plafond ou un sol unis, sans rien à corréler.
+    var sy = Math.round(h * 0.35), sh = Math.max(1, Math.round(h * 0.30));
+    ctx.drawImage(image, 0, sy, w, sh, 0, 0, STRIP_W, rows);
+    var px;
+    try { px = ctx.getImageData(0, 0, STRIP_W, rows).data; } catch (e) { return null; }
+    var out = new Float32Array(STRIP_W);
+    for (var x = 0; x < STRIP_W; x++) {
+      var sum = 0;
+      for (var y = 0; y < rows; y++) {
+        var o = (y * STRIP_W + x) * 4;
+        sum += 0.2126 * px[o] + 0.7152 * px[o + 1] + 0.0722 * px[o + 2];
+      }
+      out[x] = sum / rows;
+    }
+    return out;
+  }
+
+  /* Décalage horizontal entre deux profils, par somme des écarts absolus.
+     On rend aussi la confiance du résultat.
+
+     Attention au piège : le deuxième meilleur score est presque toujours le
+     VOISIN IMMÉDIAT du meilleur, et il en est forcément proche. Comparer les
+     deux donnerait un contraste minuscule pour toute correspondance, même
+     parfaite — mesuré : le filtre écartait précisément les bonnes mesures. On
+     cherche donc le second minimum HORS d'une fenêtre autour du premier :
+     c'est lui qui dit si un autre alignement était plausible, ce qui arrive
+     dès qu'une pièce contient un motif répété — carrelage, lames de parquet,
+     montants d'étagère. */
+  /* On ne compare que la MOITIÉ CENTRALE du profil, et c'est ce qui décide de
+     la justesse. En projection perspective, une rotation ne décale pas l'image
+     uniformément : le déplacement croît avec l'écart au centre, en sec² de
+     l'angle. Une corrélation sur toute la largeur est donc tirée par les bords,
+     surestime le décalage, et sous-estime le champ — mesuré, 4 à 5 % de biais
+     systématique, dans le même sens sur les quatre champs essayés. Sur la
+     moitié centrale, le facteur tombe de 14 % à 3,5 %, et le reste se corrige
+     analytiquement plus bas. */
+  var TPL_FROM = STRIP_W / 4, TPL_TO = STRIP_W - STRIP_W / 4;
+
+  function stripShift(a, b) {
+    var scores = new Float32Array(2 * STRIP_SEARCH + 1);
+    var valid = new Uint8Array(2 * STRIP_SEARCH + 1);
+    var best = 0, bestScore = Infinity, d, i;
+
+    for (d = -STRIP_SEARCH; d <= STRIP_SEARCH; d++) {
+      i = d + STRIP_SEARCH;
+      var from = Math.max(TPL_FROM, -d), to = Math.min(TPL_TO, STRIP_W - d);
+      if (to - from < (TPL_TO - TPL_FROM) * 0.7) continue;   // recouvrement trop faible
+      var sum = 0, n = 0;
+      for (var x = from; x < to; x++) { sum += Math.abs(a[x] - b[x + d]); n++; }
+      scores[i] = sum / n;
+      valid[i] = 1;
+      if (scores[i] < bestScore) { bestScore = scores[i]; best = d; }
+    }
+    if (!isFinite(bestScore)) return null;
+
+    var rival = Infinity;
+    for (d = -STRIP_SEARCH; d <= STRIP_SEARCH; d++) {
+      if (Math.abs(d - best) <= 4) continue;     // le voisinage du pic ne compte pas
+      i = d + STRIP_SEARCH;
+      if (valid[i] && scores[i] < rival) rival = scores[i];
+    }
+    if (!isFinite(rival) || rival <= 0) return null;
+
+    /* Affinement sous-pixel par parabole sur les trois points du minimum.
+       À 2° de rotation le décalage ne fait que quelques pixels : l'arrondi
+       au pixel coûterait plusieurs pour cent sur la focale. */
+    var refined = best;
+    var im = best - 1 + STRIP_SEARCH, ip = best + 1 + STRIP_SEARCH, ic = best + STRIP_SEARCH;
+    if (im >= 0 && ip < scores.length && valid[im] && valid[ip]) {
+      var denom = scores[im] - 2 * scores[ic] + scores[ip];
+      if (denom > 1e-6) {
+        var delta = 0.5 * (scores[im] - scores[ip]) / denom;
+        if (Math.abs(delta) <= 1) refined = best + delta;
+      }
+    }
+
+    /* Trois mesures, parce qu'aucune ne suffit seule.
+
+       RELIEF : la variation moyenne du profil. Un mur uni n'a rien à
+       corréler ; il se superpose parfaitement à lui-même quel que soit le
+       décalage, et toute mesure qu'on en tire est du bruit.
+
+       AJUSTEMENT : l'erreur du meilleur alignement, rapportée à l'amplitude
+       du profil. C'est ce qui manquait : le rapport entre le meilleur score
+       et son rival est un rapport de deux erreurs, et quand les deux
+       approchent zéro — profil plat — il s'envole au lieu de s'effondrer.
+       Mesuré : un décalage nul annoncé avec 0,63 de confiance, pendant que
+       les couples justes étaient écartés.
+
+       RIVALITÉ : le second minimum hors du pic, qui dit si un autre
+       alignement était plausible — le cas des motifs répétés. */
+    var mean = 0, x2;
+    for (x2 = TPL_FROM; x2 < TPL_TO; x2++) mean += a[x2];
+    mean /= (TPL_TO - TPL_FROM);
+    var relief = 0, amplitude = 0;
+    for (x2 = TPL_FROM; x2 < TPL_TO - 1; x2++) relief += Math.abs(a[x2 + 1] - a[x2]);
+    relief /= (TPL_TO - TPL_FROM - 1);
+    for (x2 = TPL_FROM; x2 < TPL_TO; x2++) amplitude += Math.abs(a[x2] - mean);
+    amplitude /= (TPL_TO - TPL_FROM);
+
+    return {
+      shift: refined,
+      relief: relief,
+      fit: amplitude > 0 ? 1 - bestScore / amplitude : 0,
+      confidence: (rival - bestScore) / rival
+    };
+  }
+
+  /* L'angle dont la visée a tourné autour de la verticale, entre deux poses. */
+  function yawBetween(qa, qb) {
+    var fa = rotate(qa, [0, 0, -1]);
+    var fb = rotate(qb, [0, 0, -1]);
+    var ax = fa[0], az = fa[2], bx = fb[0], bz = fb[2];
+    var la = Math.sqrt(ax * ax + az * az), lb = Math.sqrt(bx * bx + bz * bz);
+    // Visée presque verticale : la composante horizontale disparaît et
+    // l'angle n'a plus de sens.
+    if (la < 0.25 || lb < 0.25) return null;
+    ax /= la; az /= la; bx /= lb; bz /= lb;
+    return Math.atan2(ax * bz - az * bx, ax * bx + az * bz);
+  }
+
+  /* Une estimation de champ, à partir d'un couple d'images et de leurs poses.
+     Exposée pour les essais : c'est le cœur de la mesure, et il doit pouvoir
+     être vérifié sans caméra. */
+  function hfovFromPair(stripA, quatA, stripB, quatB) {
+    var yaw = yawBetween(quatA, quatB);
+    if (yaw === null) return null;
+    var deg = Math.abs(yaw) * 180 / Math.PI;
+    /* Trop grand : la perspective déforme l'image, et un simple décalage ne
+       la décrit plus — mesuré, au-delà de cinq degrés l'estimation finit par
+       s'accrocher au mauvais alignement dès que la pièce a un motif répété.
+       Trop petit aussi : à un degré et demi, un objectif large ne décale
+       l'image que de quatre pixels de profil, et un tiers de pixel d'erreur
+       d'affinement coûte déjà sept pour cent sur le champ. */
+    if (deg < 2 || deg > 5) return null;
+
+    var m = stripShift(stripA, stripB);
+    /* Seuil de confiance volontairement bas. Un motif répété — carrelage,
+       lames de parquet, montants d'étagère — crée un alignement rival tout
+       aussi plausible, et exiger une correspondance franche rendait
+       l'estimateur muet précisément dans les pièces qui en ont le plus
+       besoin. On accepte donc quelques verrouillages erronés : la médiane
+       sur des dizaines de couples les met en minorité, là où un silence ne
+       corrige rien du tout. */
+    if (!m) return null;
+    if (m.relief < 2) return null;          // profil sans relief : rien à corréler
+    if (m.fit < 0.5) return null;           // le meilleur alignement n'explique pas le profil
+    if (m.confidence < 0.02) return null;   // un autre alignement était tout aussi bon
+    if (Math.abs(m.shift) < 1.5) return null;
+
+    // Le décalage est mesuré en pixels de PROFIL ; la focale se compte dans
+    // la même unité, et le champ s'en déduit sur la largeur du profil.
+    var f = Math.abs(m.shift) / Math.abs(yaw);
+    if (!isFinite(f) || f <= 0) return null;
+
+    /* Le décalage mesuré vaut Δθ·f·(1 + t²/12) sur la moitié centrale, où
+       t = tan(champ/2) : le reste du terme en sec². On inverse cette relation
+       par quelques itérations — elle converge en trois tours, et sans elle il
+       resterait 3 % de biais, toujours dans le même sens. */
+    var t = (STRIP_W / 2) / f;
+    for (var k = 0; k < 4; k++) t = ((STRIP_W / 2) / f) * (1 + t * t / 12);
+
+    var hfov = 2 * Math.atan(t);
+    if (!(hfov > 0.5) || hfov > 2.6) return null;   // hors de [29°, 149°]
+    return hfov;
+  }
+
+  function median(values) {
+    var v = values.slice().sort(function (x, y) { return x - y; });
+    var n = v.length;
+    if (!n) return null;
+    return n % 2 ? v[(n - 1) / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+  }
+
   /* L'autorisation de mouvement, demandée DEPUIS LE GESTE.
 
      iOS 13+ n'accorde `deviceorientation` que si `requestPermission()` part
@@ -2154,6 +2363,45 @@ p { margin: 0; }
     var ui = null, stream = null, orient = null, quat = null, lastQuat = null;
     var hfov = opts.hfov || DEFAULT_HFOV;
 
+    /* Mesure du champ, avant toute accumulation.
+
+       On ne peut pas accumuler puis corriger : la sphère est écrite au fur et
+       à mesure, et les premières images y resteraient peintes de travers. La
+       capture commence donc par quelques secondes où l'on ne fait que
+       mesurer — l'utilisateur tourne, le module compare ses images à ce que
+       dit le capteur d'orientation, et en déduit la focale.
+
+       Si la pièce ne s'y prête pas — murs unis, motif répété partout — la
+       mesure se tait plutôt que de deviner, et on repart sur la valeur par
+       défaut. C'est alors exactement le comportement d'avant, pas pire. */
+    var CALIB_MIN = 12;        // estimations avant de figer
+    var CALIB_MS = 9000;       // au-delà, on prend ce qu'on a, ou le défaut
+    var calib = {
+      locked: false, measured: false,
+      strip: null, quat: null, estimates: [], started: 0, tries: 0
+    };
+
+    function calibrate(video, q, vw, vh) {
+      calib.tries += 1;
+      var strip = lumaStrip(video, vw, vh);
+      if (!strip) { calib.locked = true; return; }
+      if (calib.strip) {
+        var est = hfovFromPair(calib.strip, calib.quat, strip, q);
+        if (est !== null) calib.estimates.push(est);
+      }
+      calib.strip = strip;
+      calib.quat = q;
+
+      var elapsed = Date.now() - calib.started;
+      if (calib.estimates.length >= CALIB_MIN || (elapsed > CALIB_MS && calib.tries > 8)) {
+        var m = median(calib.estimates);
+        // Au moins cinq avis concordants : en dessous, la médiane ne protège
+        // plus de rien et le défaut est un pari plus sûr.
+        if (m !== null && calib.estimates.length >= 5) { hfov = m; calib.measured = true; }
+        calib.locked = true;
+      }
+    }
+
     function cleanup() {
       if (orient) window.removeEventListener("deviceorientation", orient, true);
       if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
@@ -2267,6 +2515,24 @@ p { margin: 0; }
               // immobile n'apporte rien et gonflerait le poids local, ce qui
               // déséquilibrerait la moyenne pondérée.
               var moved = !lastQuat || quatAngle(lastQuat, quat) > 0.045; // ~2,6°
+
+              if (!calib.locked) {
+                if (!calib.started) calib.started = Date.now();
+                if (moved) {
+                  calibrate(ui.video, quat, ui.video.videoWidth, ui.video.videoHeight);
+                  lastQuat = quat;
+                }
+                ui.hint.textContent = "Tournez lentement sur vous-même : je mesure votre objectif.";
+                ui.pctLabel.textContent = Math.min(99, Math.round(calib.estimates.length / CALIB_MIN * 100)) + " %";
+                if (calib.locked) {
+                  lastQuat = null;   // la mesure finie, la capture repart de zéro
+                  ui.warn.textContent = calib.measured ? "" :
+                    "Objectif non mesurable ici : réglage par défaut. Le résultat peut être flou.";
+                }
+                requestAnimationFrame(loop);
+                return;
+              }
+
               if (moved) {
                 var ok = false;
                 try { ok = ingest({ image: ui.video, hfov: hfov, quat: quat }); } catch (err) { ok = false; }
@@ -2307,6 +2573,13 @@ p { margin: 0; }
     // Doit être appelé dans le gestionnaire de clic, avant tout `await` :
     // c'est là, et seulement là, qu'iOS accepte de demander le mouvement.
     primeMotion: primeMotion,
+    // Exposés pour les essais : la mesure du champ doit pouvoir être
+    // vérifiée sans caméra, puisque c'est elle qui décide de la netteté.
+    _hfovFromPair: hfovFromPair,
+    _stripShift: stripShift,
+    _yawBetween: yawBetween,
+    _lumaStrip: lumaStrip,
+    _median: median,
     // Exposé pour les tests et la visionneuse : la conversion IMU -> quaternion
     // est la partie la plus facile à casser silencieusement.
     _quatFromDeviceOrientation: quatFromDeviceOrientation
