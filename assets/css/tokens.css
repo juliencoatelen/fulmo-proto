@@ -1,0 +1,136 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FULMO — jetons partagés (« Nuit électrique »)
+   Une seule source pour la landing, l'inscription et l'application.
+   Primitifs → sémantiques. Les écrans ne consomment que les sémantiques.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Polices auto-hébergées (rapides, sans traceur tiers, RGPD) ────────── */
+@font-face { font-family: "Bricolage Grotesque"; font-style: normal; font-display: swap; font-weight: 200 800;
+  src: url(../fonts/bricolage-grotesque-latin-opsz-normal.woff2) format("woff2-variations"); }
+@font-face { font-family: "Geist"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(../fonts/geist-latin-wght-normal.woff2) format("woff2-variations"); }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url(../fonts/geist-mono-latin-wght-normal.woff2) format("woff2-variations"); }
+@font-face { font-family: "Instrument Serif"; font-style: italic; font-display: swap; font-weight: 400;
+  src: url(../fonts/instrument-serif-latin-400-italic.woff2) format("woff2"); }
+@font-face { font-family: "Instrument Serif"; font-style: normal; font-display: swap; font-weight: 400;
+  src: url(../fonts/instrument-serif-latin-400-normal.woff2) format("woff2"); }
+
+:root {
+  /* ─── Primitifs ─────────────────────────────────────────────────────── */
+  --ink-0:   #07070a;   /* nuit */
+  --ink-1:   #0d0d12;
+  --ink-2:   #14141b;
+  --ink-3:   #1c1c25;
+  --ink-4:   #2a2a36;
+  --ink-5:   #3d3d4c;
+
+  --paper-0: #ffffff;
+  --paper-1: #faf9f6;
+  --paper-2: #f3f1ec;
+  --paper-3: #e7e4dc;
+  --paper-4: #cfcbc0;
+
+  --volt:      #d9ff3d;  /* l'éclair : action, trouvaille, sélection */
+  --volt-hi:   #eaff8a;
+  --volt-mid:  #a8c92a;
+  --volt-deep: #4f6808;  /* volt lisible sur blanc (7.1:1) */
+  --arc:       #7b6cff;  /* l'arc électrique : IA, 3D, secondaire */
+  --arc-hi:    #a79dff;
+  --arc-deep:  #4a3bd6;
+
+  /* Matières de l'intérieur (scène 3D, illustrations) */
+  --oak:    #b98a5e;
+  --linen:  #ece4d6;
+  --clay:   #d8cbb8;
+  --sage:   #7f9277;
+  --dusk:   #ffb77a;   /* lumière chaude de fin de journée */
+
+  --danger: #e5484d;
+  --warn:   #f5a524;
+  --ok:     #30a46c;
+
+  /* ─── Typographie ───────────────────────────────────────────────────── */
+  --font-display: "Bricolage Grotesque", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif:   "Instrument Serif", ui-serif, Georgia, serif;
+  --font-mono:    "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --fs-hero:  clamp(2.9rem, 7.4vw, 6rem);
+  --fs-h1:    clamp(2.2rem, 4.8vw, 3.9rem);
+  --fs-h2:    clamp(1.7rem, 3.2vw, 2.6rem);
+  --fs-h3:    clamp(1.2rem, 1.8vw, 1.45rem);
+  --fs-lede:  clamp(1.05rem, 1.35vw, 1.25rem);
+  --fs-body:  1rem;
+  --fs-small: .875rem;
+  --fs-micro: .75rem;
+
+  /* ─── Espace, rayons, mouvement ─────────────────────────────────────── */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px; --sp-5: 24px;
+  --sp-6: 32px; --sp-7: 48px; --sp-8: 72px; --sp-9: 112px; --sp-10: 160px;
+
+  --r-xs: 8px; --r-sm: 12px; --r-md: 16px; --r-lg: 22px; --r-xl: 30px; --r-pill: 999px;
+
+  --ease-out:    cubic-bezier(.16, 1, .3, 1);     /* expo out : arrivées */
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1); /* sélection : léger rebond */
+  --dur-1: 140ms; --dur-2: 240ms; --dur-3: 420ms; --dur-4: 720ms; --dur-5: 1200ms;
+
+  /* ─── Sémantiques — clair (application, plein jour) ─────────────────── */
+  --bg:          var(--paper-1);
+  --surface:     var(--paper-0);
+  --sunken:      var(--paper-2);
+  --raised:      var(--paper-0);
+  --fg:          #0b0b10;
+  --fg-muted:    #494956;   /* 8.4:1 */
+  --fg-faint:    #686876;   /* 5.2:1 */
+  --line:        #e6e3db;
+  --line-strong: #bdb9ae;
+  --accent:      var(--volt-deep);
+  --accent-fill: var(--volt);
+  --on-accent:   var(--ink-0);
+  --accent-soft: color-mix(in oklab, var(--volt) 24%, #fff);
+  --ai:          var(--arc-deep);
+  --ai-soft:     color-mix(in oklab, var(--arc) 14%, #fff);
+  --ring:        var(--arc-deep);
+  --shadow-1: 0 1px 2px rgb(11 11 16 / .06), 0 1px 1px rgb(11 11 16 / .04);
+  --shadow-2: 0 6px 18px -6px rgb(11 11 16 / .14), 0 2px 4px rgb(11 11 16 / .05);
+  --shadow-3: 0 30px 70px -24px rgb(11 11 16 / .28), 0 8px 18px -8px rgb(11 11 16 / .12);
+  --glow:     0 0 0 1px rgb(217 255 61 / .5), 0 10px 40px -8px rgb(217 255 61 / .55);
+}
+
+/* ─── Sémantiques — nuit (landing, inscription, choix explicite) ───────── */
+:root[data-theme="dark"], .night {
+  --bg:          var(--ink-0);
+  --surface:     var(--ink-2);
+  --sunken:      var(--ink-1);
+  --raised:      var(--ink-3);
+  --fg:          #f5f5f0;
+  --fg-muted:    #b3b3c0;   /* 9.6:1 sur nuit */
+  --fg-faint:    #8a8a99;   /* 5.6:1 */
+  --line:        rgb(255 255 255 / .09);
+  --line-strong: rgb(255 255 255 / .2);
+  --accent:      var(--volt);
+  --accent-fill: var(--volt);
+  --on-accent:   var(--ink-0);
+  --accent-soft: color-mix(in oklab, var(--volt) 14%, var(--ink-2));
+  --ai:          var(--arc-hi);
+  --ai-soft:     color-mix(in oklab, var(--arc) 20%, var(--ink-2));
+  --ring:        var(--volt);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / .5);
+  --shadow-2: 0 10px 30px -10px rgb(0 0 0 / .7);
+  --shadow-3: 0 40px 90px -30px rgb(0 0 0 / .85);
+}
+
+/* ─── Surfaces du navigateur : elles portent aussi le design ─────────────── */
+::selection { background: var(--volt); color: var(--ink-0); }
+html { scrollbar-color: var(--line-strong) transparent; accent-color: var(--volt-deep); }
+.night, [data-theme="dark"] { accent-color: var(--volt); }
+input, textarea { caret-color: var(--accent); }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+a { text-underline-offset: .22em; text-decoration-thickness: 1px; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 1ms; --dur-2: 1ms; --dur-3: 1ms; --dur-4: 1ms; --dur-5: 1ms; }
+}
