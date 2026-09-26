@@ -1,0 +1,15 @@
+{
+  "name": "Fulmo — la mémoire de votre maison",
+  "short_name": "Fulmo",
+  "description": "Retrouvez n'importe quel objet de votre maison en deux secondes.",
+  "lang": "fr",
+  "start_url": "app.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07070a",
+  "theme_color": "#07070a",
+  "icons": [
+    { "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "assets/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

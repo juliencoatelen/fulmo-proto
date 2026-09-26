@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fulmo — l'application pour retrouver vos objets à la maison</title>
+<meta name="description" content="Fulmo retient où chaque objet est rangé : pièce, meuble, tiroir. Retrouvez-le en deux secondes, même avec une faute. Gratuit, données sur votre appareil.">
+<link rel="canonical" href="https://juliencoatelen.github.io/fulmo-proto/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#07070a">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/img/icon-512.png">
+<link rel="manifest" href="site.webmanifest">
+
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:site_name" content="Fulmo">
+<meta property="og:title" content="Fulmo — votre maison a enfin une mémoire">
+<meta property="og:description" content="Rangez une fois, retrouvez tout en deux secondes : pièce, meuble, tiroir. Recherche tolérante aux fautes, plan du logement, Scan Éclair. Gratuit.">
+<meta property="og:url" content="https://juliencoatelen.github.io/fulmo-proto/">
+<meta property="og:image" content="https://juliencoatelen.github.io/fulmo-proto/assets/img/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Une pièce de nuit balayée par un laser vert ; une épingle indique « Passeport · Bureau / Commode / Tiroir du haut ».">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fulmo — votre maison a enfin une mémoire">
+<meta name="twitter:description" content="Retrouvez n'importe quel objet de votre maison en deux secondes. Gratuit, données sur votre appareil.">
+<meta name="twitter:image" content="https://juliencoatelen.github.io/fulmo-proto/assets/img/og-image.png">
+
+<link rel="preload" href="assets/fonts/bricolage-grotesque-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/instrument-serif-latin-400-italic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/css/tokens.css">
+<link rel="stylesheet" href="assets/css/landing.css">
+<link rel="modulepreload" href="assets/js/landing.bundle.js">
+<script type="module" src="assets/js/landing.bundle.js"></script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://juliencoatelen.github.io/fulmo-proto/#organization",
+      "name": "Fulmo",
+      "url": "https://juliencoatelen.github.io/fulmo-proto/",
+      "logo": "https://juliencoatelen.github.io/fulmo-proto/assets/img/icon-512.png",
+      "description": "Fulmo est une application web qui retient où sont rangés les objets de la maison et permet de les retrouver en quelques secondes."
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://juliencoatelen.github.io/fulmo-proto/#website",
+      "url": "https://juliencoatelen.github.io/fulmo-proto/",
+      "name": "Fulmo",
+      "inLanguage": "fr-FR",
+      "publisher": { "@id": "https://juliencoatelen.github.io/fulmo-proto/#organization" }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://juliencoatelen.github.io/fulmo-proto/#app",
+      "name": "Fulmo",
+      "url": "https://juliencoatelen.github.io/fulmo-proto/app.html",
+      "applicationCategory": "LifestyleApplication",
+      "operatingSystem": "Web",
+      "inLanguage": "fr-FR",
+      "description": "Inventaire de la maison : référencez vos objets par pièce, meuble et tiroir, puis retrouvez-les par une recherche tolérante aux fautes, en langage naturel, sur le plan du logement ou dans un espace 3D issu d'un scan de pièce.",
+      "featureList": [
+        "Objets, pièces et meubles illimités",
+        "Recherche tolérante aux fautes et mots-clés",
+        "Recherche en langage naturel (IA)",
+        "Scan Éclair : photo d'une étagère, l'IA liste les objets",
+        "Plan interactif du logement par niveaux",
+        "Espace 3D : nuage de points, splats gaussiens, relevé panoramique",
+        "Alertes de péremption, de garantie et de prêt",
+        "Foyer partagé",
+        "Export des données",
+        "Inventaire stocké sur l'appareil"
+      ],
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Libre",
+          "price": "0",
+          "priceCurrency": "EUR",
+          "description": "Objets et pièces illimités, recherche tolérante aux fautes, mots-clés, foyer partagé jusqu'à 5 membres, export."
+        },
+        {
+          "@type": "Offer",
+          "name": "Éclair",
+          "price": "9",
+          "priceCurrency": "EUR",
+          "priceSpecification": {
+            "@type": "UnitPriceSpecification",
+            "price": "9",
+            "priceCurrency": "EUR",
+            "unitCode": "MON",
+            "referenceQuantity": { "@type": "QuantitativeValue", "value": 1, "unitCode": "MON" }
+          },
+          "description": "Tout Libre, plus Scan Éclair, plan interactif, recherche en langage naturel, alertes et membres illimités."
+        }
+      ],
+      "publisher": { "@id": "https://juliencoatelen.github.io/fulmo-proto/#organization" }
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://juliencoatelen.github.io/fulmo-proto/#faq",
+      "mainEntity": [
+        { "@type": "Question", "name": "Comment retrouver un objet rangé chez soi ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Le plus sûr est de noter l'emplacement au moment où vous rangez. Avec Fulmo, vous indiquez une fois la pièce, le meuble et le tiroir ou le bac ; ensuite, vous tapez le nom de l'objet, même avec une faute, et Fulmo affiche le chemin exact, par exemple « Bureau / Commode / Tiroir du haut »." } },
+        { "@type": "Question", "name": "Qu'est-ce que Fulmo ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Fulmo est une application web d'inventaire pour la maison. Vous décrivez votre logement (pièces, meubles, contenants), vous y rangez vos objets, puis vous les retrouvez par la recherche, sur le plan du logement ou dans un espace 3D. « Fulmo » signifie « éclair » en espéranto." } },
+        { "@type": "Question", "name": "Combien coûte Fulmo ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "La formule Libre est gratuite : objets et pièces illimités, recherche tolérante aux fautes, mots-clés, foyer partagé jusqu'à 5 membres et export des données. La formule Éclair coûte 9 € par mois et ajoute le Scan Éclair, le plan interactif, la recherche en langage naturel, les alertes et des membres illimités. L'inscription ne demande pas de carte bancaire." } },
+        { "@type": "Question", "name": "Mes données sont-elles envoyées sur un serveur ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Non. Votre inventaire est enregistré dans le navigateur de votre appareil. Deux fonctions de la formule Éclair utilisent l'IA, et seulement quand vous les lancez : la recherche en langage naturel envoie uniquement la phrase que vous tapez, et le Scan Éclair envoie la photo que vous prenez pour qu'elle soit analysée. Votre inventaire, lui, ne quitte pas l'appareil." } },
+        { "@type": "Question", "name": "Fulmo fonctionne-t-il sans connexion ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "En grande partie. L'inventaire et la recherche tolérante aux fautes tournent dans votre navigateur, sans aller-retour avec un serveur : une fois l'application ouverte, ils continuent de répondre si le réseau tombe, à la cave comme au grenier. Le Scan Éclair et la recherche en langage naturel ont besoin d'une connexion." } },
+        { "@type": "Question", "name": "Peut-on partager l'inventaire avec sa famille ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Oui. Le foyer partagé réunit jusqu'à 5 membres dans la formule Libre et un nombre illimité de membres dans la formule Éclair : tout le monde range et retrouve dans le même logement." } },
+        { "@type": "Question", "name": "Comment fonctionne le Scan Éclair ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Vous photographiez une étagère, un tiroir ou un bac. L'IA identifie les objets visibles, les nomme et les pré-range dans le contenant choisi. Vous vérifiez la liste, corrigez si besoin et validez. C'est la façon la plus rapide de référencer un rangement plein." } },
+        { "@type": "Question", "name": "Qu'est-ce que l'espace 3D de Fulmo ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "C'est une vue de vos pièces en trois dimensions. Vous pouvez importer le scan d'une pièce au format .ply (nuage de points ou splats gaussiens), par exemple réalisé avec une application de scan sur téléphone, ou faire un relevé panoramique. Vos meubles y sont placés et vos objets s'y retrouvent d'un geste." } },
+        { "@type": "Question", "name": "Faut-il installer une application ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Non. Fulmo s'ouvre dans le navigateur, sur téléphone comme sur ordinateur. Il suffit de créer un compte gratuit, ou d'essayer la démo avec un logement déjà rempli de 40 objets." } },
+        { "@type": "Question", "name": "Fulmo peut-il me rappeler une date de péremption ou un objet prêté ?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Oui, avec la formule Éclair. Vous ajoutez une date à un objet (péremption d'un médicament, fin de garantie d'un appareil, prêt à un proche) et Fulmo vous prévient au bon moment." } }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body class="night">
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z"/></symbol>
+  <symbol id="logo" viewBox="0 0 48 48"><circle cx="24" cy="24" r="15.5" fill="none" stroke="currentColor" stroke-width="3.2"/><path d="M27.6 8.5 15.5 26.6h6.8l-2.3 13.1 12.5-18.9h-6.9z" fill="#d9ff3d" stroke="#07070a" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+</svg>
+
+<a class="skip" href="#contenu">Aller au contenu</a>
+
+<header class="nav">
+  <div class="nav-bar">
+    <a class="brand" href="#top" aria-label="Fulmo, retour en haut de page">
+      <svg class="brand-mark" aria-hidden="true"><use href="#logo"/></svg>
+      <span class="brand-name">Fulmo</span>
+    </a>
+    <nav class="nav-links" aria-label="Navigation principale">
+      <a href="#fonctionnement">Fonctionnement</a>
+      <a href="#plan">Plan et 3D</a>
+      <a href="#usages">Usages</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="#faq">Questions</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="nav-demo" href="app.html#demo">Essayer la démo</a>
+      <a class="btn btn-volt btn-sm" href="app.html#signup">Créer mon compte</a>
+    </div>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-panel">
+      <svg class="ic ic-open" aria-hidden="true"><use href="#i-menu"/></svg>
+      <svg class="ic ic-close" aria-hidden="true"><use href="#i-x"/></svg>
+      <span class="sr">Menu</span>
+    </button>
+  </div>
+  <div class="nav-panel" id="nav-panel">
+    <nav aria-label="Navigation mobile">
+      <a href="#fonctionnement">Fonctionnement</a>
+      <a href="#plan">Plan et 3D</a>
+      <a href="#usages">Usages</a>
+      <a href="#confidentialite">Confidentialité</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="#faq">Questions</a>
+    </nav>
+    <div class="nav-panel-cta">
+      <a class="btn btn-volt" href="app.html#signup">Créer mon compte gratuit</a>
+      <a class="btn btn-ghost" href="app.html#demo">Essayer la démo</a>
+    </div>
+  </div>
+</header>
+
+<main id="contenu">
+
+<!-- ═══ HERO ════════════════════════════════════════════════════════════ -->
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <div class="hero-sticky">
+    <div class="hero-stage" aria-hidden="true">
+      <svg class="hero-fallback" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" focusable="false">
+        <defs>
+          <linearGradient id="fb-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#060b1f"/><stop offset="1" stop-color="#26386b"/></linearGradient>
+          <radialGradient id="fb-lamp" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ffb46b" stop-opacity=".55"/><stop offset="1" stop-color="#ffb46b" stop-opacity="0"/></radialGradient>
+          <radialGradient id="fb-vig" cx="0.55" cy="0.35" r="0.8"><stop offset="0.4" stop-color="#07070a" stop-opacity="0"/><stop offset="1" stop-color="#07070a" stop-opacity=".9"/></radialGradient>
+          <linearGradient id="fb-floor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2618"/><stop offset="1" stop-color="#0c0906"/></linearGradient>
+        </defs>
+        <rect width="1600" height="900" fill="#141016"/>
+        <rect y="610" width="1600" height="290" fill="url(#fb-floor)"/>
+        <g class="fb-line">
+          <rect x="250" y="170" width="330" height="310" fill="url(#fb-sky)"/>
+          <path d="M415 170v310M250 375h330"/>
+          <path d="M260 480h310v12H260z"/>
+          <path d="M210 600c0-40 20-58 60-58h300c40 0 60 18 60 58v34H210z" fill="#2c3a2c"/>
+          <path d="M720 150h300v460H720zM870 150v460M720 250h300M720 350h300M720 450h300M720 550h300"/>
+          <path d="M1090 460h260v150h-260zM1090 510h260M1090 560h260"/>
+          <path class="fb-drawer" d="M1096 466h248v38h-248z"/>
+          <path d="M1140 255h150v190h-150z"/>
+          <circle cx="665" cy="360" r="120" fill="url(#fb-lamp)" stroke="none"/>
+          <path d="M640 350h50l-8-40h-34zM665 350v260"/>
+          <circle cx="1150" cy="410" r="110" fill="url(#fb-lamp)" stroke="none"/>
+        </g>
+        <g class="fb-pin"><circle cx="1220" cy="484" r="7"/><path d="M1220 477v-70"/></g>
+        <rect width="1600" height="900" fill="url(#fb-vig)"/>
+      </svg>
+      <canvas class="hero-canvas"></canvas>
+      <div class="hero-pin" data-key="passeport">
+        <span class="pin-dot"></span>
+        <span class="pin-stem"></span>
+        <span class="pin-card">
+          <span class="pin-name">Passeport</span>
+          <span class="pin-path">Bureau / Commode / Tiroir du haut</span>
+        </span>
+      </div>
+      <div class="hero-scrim"></div>
+    </div>
+    <div class="cursor-glow" aria-hidden="true"></div>
+
+    <div class="hero-content wrap">
+      <div class="hero-search" data-state="found" aria-hidden="true">
+        <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+        <span class="hs-field"><span class="hs-query">Où est le passeport ?</span><span class="hs-caret"></span></span>
+        <span class="hs-status"><span class="hs-found">Passeport</span><span class="hs-path">Bureau / Commode / Tiroir du haut</span></span>
+      </div>
+      <h1 id="hero-title" class="hero-title">Votre maison a enfin une <em>mémoire</em>.</h1>
+      <p class="hero-lede">Rangez une fois, retrouvez tout en deux secondes. Fulmo retient la pièce, le meuble et le tiroir de chaque objet, et vous y mène même quand vous tapez avec une faute.</p>
+      <div class="cta-row">
+        <a class="btn btn-volt btn-lg" href="app.html#signup">Créer mon compte gratuit <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+        <a class="btn btn-ghost btn-lg" href="app.html#demo">Essayer la démo</a>
+      </div>
+      <ul class="reassure">
+        <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Gratuit, sans carte bancaire</li>
+        <li><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Vos données restent sur votre appareil</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ COMMENT ÇA MARCHE ═══════════════════════════════════════════════ -->
+<section class="story" id="fonctionnement" aria-labelledby="story-title">
+  <div class="wrap">
+    <header class="section-head">
+      <h2 id="story-title">Trois gestes, et la maison <em>se souvient</em>.</h2>
+      <p>Pas de tableur, pas d'étiquettes à imprimer. Vous décrivez votre logement comme vous le parcourez, puis vous y rangez vos objets, à la main ou d'une photo.</p>
+    </header>
+    <div class="story-grid">
+      <div class="story-stage" data-active="0" aria-hidden="true">
+        <div class="st-frame">
+          <svg class="st-plan" viewBox="0 0 480 360" focusable="false">
+            <g class="pl-rooms">
+              <g class="pl-room" style="--i:0"><rect x="20" y="20" width="120" height="140"/><text x="80" y="94">Cuisine</text></g>
+              <g class="pl-room" style="--i:1"><rect x="140" y="20" width="110" height="140"/><text x="195" y="94">Salle de bain</text></g>
+              <g class="pl-room" style="--i:2"><rect x="250" y="20" width="210" height="140"/><text x="355" y="94">Chambre</text></g>
+              <g class="pl-room" style="--i:3"><rect x="20" y="160" width="120" height="180"/><text x="80" y="214">Entrée</text></g>
+              <g class="pl-room" style="--i:4"><rect x="140" y="160" width="190" height="180"/><text x="235" y="300">Séjour</text></g>
+              <g class="pl-room pl-bureau" style="--i:5"><rect x="330" y="160" width="130" height="180"/><text x="395" y="300">Bureau</text>
+                <rect class="pl-furn" x="336" y="166" width="52" height="12" rx="2"/>
+                <rect class="pl-furn" x="400" y="166" width="54" height="16" rx="2"/>
+              </g>
+            </g>
+            <path class="pl-route" d="M80 332V250H300q30 0 45-25l17-45" pathLength="1"/>
+            <g class="pl-pin" transform="translate(362 174)"><circle class="pl-pin-ring" r="11"/><circle class="pl-pin-dot" r="5"/></g>
+          </svg>
+          <svg class="st-shelf" viewBox="0 0 480 360" focusable="false">
+            <g class="sh-unit">
+              <rect x="70" y="26" width="340" height="310" rx="4"/>
+              <path d="M70 128h340M70 232h340M240 26v310"/>
+            </g>
+            <g class="sh-objs">
+              <rect x="86" y="78" width="96" height="46" rx="8" class="o-rust"/><rect x="118" y="70" width="32" height="10" rx="3" class="o-rust"/>
+              <rect x="192" y="88" width="16" height="36" rx="3" class="o-glass"/><rect x="212" y="94" width="16" height="30" rx="3" class="o-glass"/>
+              <rect x="256" y="92" width="44" height="32" rx="6" class="o-clay"/><circle cx="278" cy="108" r="8" class="o-dark"/>
+              <rect x="316" y="60" width="80" height="64" rx="3" class="o-linen"/>
+              <rect x="86" y="190" width="86" height="38" rx="3" class="o-sage"/><path d="M92 204h74" class="o-line"/>
+              <circle cx="206" cy="204" r="24" class="o-dark"/><circle cx="206" cy="204" r="10" class="o-rust"/>
+              <path d="M258 228c4-26 10-34 20-34s12 10 14 34z" class="o-linen"/><path d="M290 228c4-24 10-30 18-30s10 8 12 30z" class="o-linen"/>
+              <rect x="342" y="176" width="50" height="52" rx="4" class="o-clay"/><path d="M342 186h50" class="o-line"/>
+              <rect x="84" y="262" width="140" height="70" rx="8" class="o-sage"/>
+              <rect x="256" y="262" width="140" height="70" rx="8" class="o-dark"/>
+            </g>
+            <g class="sh-scan"><rect x="60" y="20" width="360" height="3" rx="1.5"/></g>
+            <g class="sh-tags">
+              <g class="sh-tag" style="--i:0" transform="translate(134 62)"><rect x="-44" y="-15" width="88" height="22" rx="11"/><text y="0">Perceuse</text></g>
+              <g class="sh-tag" style="--i:1" transform="translate(278 76)"><rect x="-50" y="-15" width="100" height="22" rx="11"/><text y="0">Mètre ruban</text></g>
+              <g class="sh-tag" style="--i:2" transform="translate(356 46)"><rect x="-54" y="-15" width="108" height="22" rx="11"/><text y="0">Boîte de vis</text></g>
+              <g class="sh-tag" style="--i:3" transform="translate(190 168)"><rect x="-52" y="-15" width="104" height="22" rx="11"/><text y="0">Rallonge 5 m</text></g>
+              <g class="sh-tag" style="--i:4" transform="translate(290 250)"><rect x="-36" y="-15" width="72" height="22" rx="11"/><text y="0">Gants</text></g>
+              <g class="sh-tag" style="--i:5" transform="translate(360 160)"><rect x="-58" y="-15" width="116" height="22" rx="11"/><text y="0">Pot de peinture</text></g>
+              <g class="sh-tag" style="--i:6" transform="translate(154 250)"><rect x="-60" y="-15" width="120" height="22" rx="11"/><text y="0">Chevilles de 6</text></g>
+            </g>
+            <g class="sh-corners"><path d="M50 40V14h26M430 40V14h-26M50 322v26h26M430 322v26h-26"/></g>
+          </svg>
+          <div class="st-search">
+            <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+            <span class="st-typed" data-text="chargeur ordi">chargeur ordi</span>
+          </div>
+          <div class="st-result">
+            <span class="st-r-name">Chargeur d'ordinateur</span>
+            <span class="st-r-path">Bureau / Bibliothèque / Boîte à câbles</span>
+          </div>
+        </div>
+      </div>
+
+      <ol class="story-steps">
+        <li class="story-step is-active">
+          <h3>Décrivez votre logement</h3>
+          <p>Maison ou appartement, un niveau ou trois : vous nommez les pièces, puis les meubles qui rangent quelque chose. Commode, bibliothèque, placard de l'entrée, bacs du grenier. Cinq minutes suffisent pour poser le squelette.</p>
+          <p class="step-note">Pièces, meubles et contenants illimités, dès la formule gratuite.</p>
+        </li>
+        <li class="story-step">
+          <h3>Rangez, ou scannez</h3>
+          <p>Ajoutez un objet en deux mots et choisissez son tiroir. Pour une étagère pleine, le Scan Éclair fait le travail : une photo, et l'IA liste ce qu'elle voit, objet par objet. Vous relisez, vous validez.</p>
+          <p class="step-note">Mots-clés, photos, dates de garantie ou de péremption : tout se retrouve.</p>
+        </li>
+        <li class="story-step">
+          <h3>Retrouvez</h3>
+          <p>Tapez ce que vous cherchez, comme ça vient. « chargeur ordi », « perseuse », « les papiers de la voiture ». Fulmo tolère les fautes, comprend les phrases, et trace le chemin jusqu'au bon tiroir.</p>
+          <p class="step-note">La recherche classique répond en local, sans réseau.</p>
+        </li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ PLAN & 3D ══════════════════════════════════════════════════════ -->
+<section class="plan" id="plan" aria-labelledby="plan-title">
+  <div class="wrap plan-grid">
+    <div class="plan-copy">
+      <h2 id="plan-title">Toute la maison, <em>en coupe</em>.</h2>
+      <p>Le plan interactif montre vos niveaux comme une maquette ouverte. Touchez une pièce, elle s'allume et déroule ce qu'elle contient. Quand un objet est trouvé, il se signale à sa place.</p>
+      <p>Pour aller plus loin, l'espace 3D accueille le scan de vos pièces : nuage de points ou splats gaussiens importés au format .ply depuis une application de scan sur téléphone, ou relevé panoramique fait sur place. Vos meubles s'y ancrent, vos objets s'y retrouvent d'un geste.</p>
+      <div class="plan-rooms" role="group" aria-label="Pièces du plan">
+        <button type="button" data-room="bureau" aria-pressed="true" data-label="Bureau" data-where="Commode, bibliothèque, boîte à câbles" data-items="Passeport, garanties, chargeurs, disque dur de sauvegarde">Bureau</button>
+        <button type="button" data-room="sejour" aria-pressed="false" data-label="Séjour" data-where="Buffet, meuble télé" data-items="Jeux de société, piles, télécommandes de rechange">Séjour</button>
+        <button type="button" data-room="cuisine" aria-pressed="false" data-label="Cuisine" data-where="Placard haut, tiroir à ustensiles" data-items="Boîte à pharmacie, moule à tarte, mode d'emploi du four">Cuisine</button>
+        <button type="button" data-room="entree" aria-pressed="false" data-label="Entrée" data-where="Placard, vide-poche" data-items="Clés de secours, parapluies, carte grise">Entrée</button>
+        <button type="button" data-room="chambre" aria-pressed="false" data-label="Chambre" data-where="Armoire, chevet" data-items="Draps d'hiver, valise cabine, bijoux">Chambre</button>
+        <button type="button" data-room="sdb" aria-pressed="false" data-label="Salle de bain" data-where="Armoire murale" data-items="Thermomètre, sirop, trousse de voyage">Salle de bain</button>
+        <button type="button" data-room="grenier" aria-pressed="false" data-label="Grenier" data-where="Bacs empilés, étagère métal" data-items="Guirlandes, boules de Noël, vêtements de bébé">Grenier</button>
+      </div>
+      <p class="plan-detail" aria-live="polite"><span class="pd-room">Bureau</span><span class="pd-where">Commode, bibliothèque, boîte à câbles</span><span class="pd-items">Passeport, garanties, chargeurs, disque dur de sauvegarde</span></p>
+    </div>
+    <div class="plan-visual">
+<svg class="iso" viewBox="48 -242 406 558" role="img" aria-labelledby="iso-title">
+<title id="iso-title">Plan en coupe d'une maison sur deux niveaux : entrée, bureau, cuisine et séjour au rez-de-chaussée ; salle de bain, chambre et grenier à l'étage.</title>
+<g class="iso-level"><polygon class="iso-slab f-l" points="63.7,174.4 271.6,294.4 271.6,286.0 63.7,166.0"/><polygon class="iso-slab f-r" points="437.8,198.4 271.6,294.4 271.6,286.0 437.8,190.0"/><g class="iso-room" data-room="entree"><title>Entrée</title><polygon class="iso-floor" points="230.0,70.0 313.1,118.0 240.4,160.0 157.3,112.0"/><polygon class="iso-wall w-x" points="230.0,70.0 157.3,112.0 157.3,90.4 230.0,48.4"/><polygon class="iso-wall w-y" points="230.0,70.0 313.1,118.0 313.1,96.4 230.0,48.4"/><polygon class="iso-furn f-l" points="217.5,84.4 250.8,103.6 250.8,58.0 217.5,38.8"/><polygon class="iso-furn f-r" points="263.3,96.4 250.8,103.6 250.8,58.0 263.3,50.8"/><polygon class="iso-furn f-t" points="230.0,31.6 263.3,50.8 250.8,58.0 217.5,38.8"/><text class="iso-label" x="235.2" y="119.0" text-anchor="middle">Entrée</text></g><g class="iso-room" data-room="cuisine"><title>Cuisine</title><polygon class="iso-floor" points="157.3,112.0 240.4,160.0 146.9,214.0 63.7,166.0"/><polygon class="iso-wall w-x" points="157.3,112.0 63.7,166.0 63.7,144.4 157.3,90.4"/><polygon class="iso-wall w-y" points="157.3,112.0 240.4,160.0 240.4,138.4 157.3,90.4"/><polygon class="iso-furn f-l" points="75.2,165.4 87.6,172.6 87.6,151.0 75.2,143.8"/><polygon class="iso-furn f-r" points="168.7,125.8 87.6,172.6 87.6,151.0 168.7,104.2"/><polygon class="iso-furn f-t" points="156.2,97.0 168.7,104.2 87.6,151.0 75.2,143.8"/><polygon class="iso-furn f-l" points="140.6,169.6 169.7,186.4 169.7,164.8 140.6,148.0"/><polygon class="iso-furn f-r" points="188.4,175.6 169.7,186.4 169.7,164.8 188.4,154.0"/><polygon class="iso-furn f-t" points="159.3,137.2 188.4,154.0 169.7,164.8 140.6,148.0"/><text class="iso-label" x="152.1" y="167.0" text-anchor="middle">Cuisine</text></g><g class="iso-room" data-room="bureau"><title>Bureau</title><polygon class="iso-floor" points="313.1,118.0 437.8,190.0 365.1,232.0 240.4,160.0"/><polygon class="iso-wall w-x" points="313.1,118.0 240.4,160.0 240.4,138.4 313.1,96.4"/><polygon class="iso-wall w-y" points="313.1,118.0 437.8,190.0 437.8,168.4 313.1,96.4"/><polygon class="iso-furn f-l" points="306.9,131.2 346.4,154.0 346.4,103.6 306.9,80.8"/><polygon class="iso-furn f-r" points="355.7,148.6 346.4,154.0 346.4,103.6 355.7,98.2"/><polygon class="iso-furn f-t" points="316.3,75.4 355.7,98.2 346.4,103.6 306.9,80.8"/><polygon class="iso-furn f-l" points="364.1,165.4 391.1,181.0 391.1,160.6 364.1,145.0"/><polygon class="iso-furn f-r" points="401.5,175.0 391.1,181.0 391.1,160.6 401.5,154.6"/><polygon class="iso-furn f-t" points="374.5,139.0 401.5,154.6 391.1,160.6 364.1,145.0"/><polygon class="iso-furn f-l" points="344.3,215.2 363.0,226.0 363.0,217.6 344.3,206.8"/><polygon class="iso-furn f-r" points="381.7,215.2 363.0,226.0 363.0,217.6 381.7,206.8"/><polygon class="iso-furn f-t" points="363.0,196.0 381.7,206.8 363.0,217.6 344.3,206.8"/><text class="iso-label" x="339.1" y="179.0" text-anchor="middle">Bureau</text></g><g class="iso-room" data-room="sejour"><title>Séjour</title><polygon class="iso-floor" points="240.4,160.0 365.1,232.0 271.6,286.0 146.9,214.0"/><polygon class="iso-wall w-x" points="240.4,160.0 146.9,214.0 146.9,192.4 240.4,138.4"/><polygon class="iso-wall w-y" points="240.4,160.0 365.1,232.0 365.1,210.4 240.4,138.4"/><polygon class="iso-furn f-l" points="163.5,211.6 182.2,222.4 182.2,203.2 163.5,192.4"/><polygon class="iso-furn f-r" points="227.9,196.0 182.2,222.4 182.2,203.2 227.9,176.8"/><polygon class="iso-furn f-t" points="209.2,166.0 227.9,176.8 182.2,203.2 163.5,192.4"/><polygon class="iso-furn f-l" points="217.5,228.4 242.5,242.8 242.5,233.2 217.5,218.8"/><polygon class="iso-furn f-r" points="267.4,228.4 242.5,242.8 242.5,233.2 267.4,218.8"/><polygon class="iso-furn f-t" points="242.5,204.4 267.4,218.8 242.5,233.2 217.5,218.8"/><polygon class="iso-furn f-l" points="286.1,258.4 296.5,264.4 296.5,246.4 286.1,240.4"/><polygon class="iso-furn f-r" points="350.6,233.2 296.5,264.4 296.5,246.4 350.6,215.2"/><polygon class="iso-furn f-t" points="340.2,209.2 350.6,215.2 296.5,246.4 286.1,240.4"/><text class="iso-label" x="256.0" y="227.0" text-anchor="middle">Séjour</text></g><text class="iso-level-name" x="77.7" y="192.0" transform="rotate(30 77.7 192.0)">Rez-de-chaussée</text></g><g class="iso-level"><polygon class="iso-slab f-l" points="63.7,-51.2 271.6,68.8 271.6,60.4 63.7,-59.6"/><polygon class="iso-slab f-r" points="437.8,-27.2 271.6,68.8 271.6,60.4 437.8,-35.6"/><g class="iso-room" data-room="sdb"><title>Salle de bain</title><polygon class="iso-floor" points="230.0,-155.6 302.7,-113.6 230.0,-71.6 157.3,-113.6"/><polygon class="iso-wall w-x" points="230.0,-155.6 157.3,-113.6 157.3,-135.2 230.0,-177.2"/><polygon class="iso-wall w-y" points="230.0,-155.6 302.7,-113.6 302.7,-135.2 230.0,-177.2"/><polygon class="iso-furn f-l" points="213.4,-138.8 248.7,-118.4 248.7,-132.8 213.4,-153.2"/><polygon class="iso-furn f-r" points="265.3,-128.0 248.7,-118.4 248.7,-132.8 265.3,-142.4"/><polygon class="iso-furn f-t" points="230.0,-162.8 265.3,-142.4 248.7,-132.8 213.4,-153.2"/><polygon class="iso-furn f-l" points="265.3,-116.0 279.9,-107.6 279.9,-146.0 265.3,-154.4"/><polygon class="iso-furn f-r" points="290.3,-113.6 279.9,-107.6 279.9,-146.0 290.3,-152.0"/><polygon class="iso-furn f-t" points="275.7,-160.4 290.3,-152.0 279.9,-146.0 265.3,-154.4"/><text class="iso-label" x="230.0" y="-109.6" text-anchor="middle">Salle de bain</text></g><g class="iso-room" data-room="chambre"><title>Chambre</title><polygon class="iso-floor" points="302.7,-113.6 437.8,-35.6 354.7,12.4 219.6,-65.6"/><polygon class="iso-wall w-x" points="302.7,-113.6 219.6,-65.6 219.6,-87.2 302.7,-135.2"/><polygon class="iso-wall w-y" points="302.7,-113.6 437.8,-35.6 437.8,-57.2 302.7,-135.2"/><polygon class="iso-furn f-l" points="273.6,-60.8 319.4,-34.4 319.4,-47.6 273.6,-74.0"/><polygon class="iso-furn f-r" points="373.4,-65.6 319.4,-34.4 319.4,-47.6 373.4,-78.8"/><polygon class="iso-furn f-t" points="327.7,-105.2 373.4,-78.8 319.4,-47.6 273.6,-74.0"/><polygon class="iso-furn f-l" points="391.1,-42.2 413.9,-29.0 413.9,-77.0 391.1,-90.2"/><polygon class="iso-furn f-r" points="426.4,-36.2 413.9,-29.0 413.9,-77.0 426.4,-84.2"/><polygon class="iso-furn f-t" points="403.6,-97.4 426.4,-84.2 413.9,-77.0 391.1,-90.2"/><text class="iso-label" x="328.7" y="-46.6" text-anchor="middle">Chambre</text></g><g class="iso-room" data-room="grenier"><title>Grenier</title><polygon class="iso-floor" points="157.3,-113.6 365.1,6.4 271.6,60.4 63.7,-59.6"/><polygon class="iso-wall w-x" points="157.3,-113.6 63.7,-59.6 63.7,-81.2 157.3,-135.2"/><polygon class="iso-wall w-y" points="157.3,-113.6 365.1,6.4 365.1,-15.2 157.3,-135.2"/><polygon class="iso-furn f-l" points="84.5,-59.6 103.2,-48.8 103.2,-63.2 84.5,-74.0"/><polygon class="iso-furn f-r" points="121.9,-59.6 103.2,-48.8 103.2,-63.2 121.9,-74.0"/><polygon class="iso-furn f-t" points="103.2,-84.8 121.9,-74.0 103.2,-63.2 84.5,-74.0"/><polygon class="iso-furn f-l" points="107.4,-46.4 126.1,-35.6 126.1,-50.0 107.4,-60.8"/><polygon class="iso-furn f-r" points="144.8,-46.4 126.1,-35.6 126.1,-50.0 144.8,-60.8"/><polygon class="iso-furn f-t" points="126.1,-71.6 144.8,-60.8 126.1,-50.0 107.4,-60.8"/><polygon class="iso-furn f-l" points="84.5,-74.0 103.2,-63.2 103.2,-92.0 84.5,-102.8"/><polygon class="iso-furn f-r" points="121.9,-74.0 103.2,-63.2 103.2,-92.0 121.9,-102.8"/><polygon class="iso-furn f-t" points="103.2,-113.6 121.9,-102.8 103.2,-92.0 84.5,-102.8"/><polygon class="iso-furn f-l" points="265.3,-20.0 319.4,11.2 319.4,-22.4 265.3,-53.6"/><polygon class="iso-furn f-r" points="331.8,4.0 319.4,11.2 319.4,-22.4 331.8,-29.6"/><polygon class="iso-furn f-t" points="277.8,-60.8 331.8,-29.6 319.4,-22.4 265.3,-53.6"/><text class="iso-label" x="214.4" y="-22.6" text-anchor="middle">Grenier</text></g><text class="iso-level-name" x="77.7" y="-33.6" transform="rotate(30 77.7 -33.6)">Étage</text></g><g class="iso-pin" transform="translate(382.8 149.8)"><circle class="iso-pin-ring" r="9"/><circle class="iso-pin-dot" r="4"/><path class="iso-pin-stem" d="M0 0V-26"/></g>
+</svg>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ USAGES ═════════════════════════════════════════════════════════ -->
+<section class="uses" id="usages" aria-labelledby="uses-title">
+  <div class="wrap">
+    <header class="section-head">
+      <h2 id="uses-title">Ce que l'on cherche <em>vraiment</em>.</h2>
+      <p>Des questions posées dans une vraie maison, et les réponses que Fulmo donne. Les fautes de frappe sont d'origine.</p>
+    </header>
+  </div>
+  <div class="marquee" data-paused="false">
+    <div class="mq-row">
+      <ul class="mq-track">
+        <li><q>passeport</q><span>Bureau / Commode / Tiroir du haut</span></li>
+        <li><q>carte grise</q><span>Entrée / Placard / Pochette bleue</span></li>
+        <li><q>clé allen du lit</q><span>Garage / Établi / Tiroir 2</span></li>
+        <li><q>thermomètre</q><span>Salle de bain / Armoire murale / Boîte blanche</span></li>
+        <li><q>boules de noël</q><span>Grenier / Bac rouge / Couvercle étiqueté</span></li>
+        <li><q>rallonge 5 m</q><span>Cellier / Étagère / Bac à câbles</span></li>
+      </ul>
+      <ul class="mq-track" aria-hidden="true">
+        <li><q>passeport</q><span>Bureau / Commode / Tiroir du haut</span></li>
+        <li><q>carte grise</q><span>Entrée / Placard / Pochette bleue</span></li>
+        <li><q>clé allen du lit</q><span>Garage / Établi / Tiroir 2</span></li>
+        <li><q>thermomètre</q><span>Salle de bain / Armoire murale / Boîte blanche</span></li>
+        <li><q>boules de noël</q><span>Grenier / Bac rouge / Couvercle étiqueté</span></li>
+        <li><q>rallonge 5 m</q><span>Cellier / Étagère / Bac à câbles</span></li>
+      </ul>
+    </div>
+    <div class="mq-row mq-reverse">
+      <ul class="mq-track">
+        <li><q>perseuse</q><span>Garage / Armoire métal / Étagère du bas</span></li>
+        <li><q>la ponceuse prêtée ?</q><span>Prêtée à Karim, depuis le 12 mars</span></li>
+        <li><q>garantie lave-linge</q><span>Bureau / Classeur / Garanties</span></li>
+        <li><q>doudou de rechange</q><span>Chambre / Armoire / Bac du haut</span></li>
+        <li><q>sirop pour la toux</q><span>Salle de bain / Armoire / Périme en novembre</span></li>
+        <li><q>chargeur ordi</q><span>Bureau / Bibliothèque / Boîte à câbles</span></li>
+      </ul>
+      <ul class="mq-track" aria-hidden="true">
+        <li><q>perseuse</q><span>Garage / Armoire métal / Étagère du bas</span></li>
+        <li><q>la ponceuse prêtée ?</q><span>Prêtée à Karim, depuis le 12 mars</span></li>
+        <li><q>garantie lave-linge</q><span>Bureau / Classeur / Garanties</span></li>
+        <li><q>doudou de rechange</q><span>Chambre / Armoire / Bac du haut</span></li>
+        <li><q>sirop pour la toux</q><span>Salle de bain / Armoire / Périme en novembre</span></li>
+        <li><q>chargeur ordi</q><span>Bureau / Bibliothèque / Boîte à câbles</span></li>
+      </ul>
+    </div>
+    <div class="wrap mq-ctrl">
+      <button class="mq-toggle" type="button" aria-pressed="false">
+        <svg class="ic ic-pause" aria-hidden="true"><use href="#i-pause"/></svg>
+        <svg class="ic ic-play" aria-hidden="true"><use href="#i-play"/></svg>
+        <span class="mq-label">Mettre en pause le défilement</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <ul class="use-list">
+      <li class="use">
+        <h3>Papiers</h3>
+        <p>Passeport, livret de famille, carte grise, factures sous garantie. Les documents qu'on ne cherche qu'une fois par an, toujours la veille du départ.</p>
+        <p class="use-path"><span>Bureau</span><span>Commode</span><span>Tiroir du haut</span></p>
+      </li>
+      <li class="use">
+        <h3>Noël</h3>
+        <p>Onze mois au grenier, trois bacs identiques. Fulmo sait lequel contient la guirlande qui marche, et lequel garde la crèche.</p>
+        <p class="use-path"><span>Grenier</span><span>Étagère métal</span><span>Bac rouge</span></p>
+      </li>
+      <li class="use">
+        <h3>Outillage</h3>
+        <p>La clé Allen livrée avec le lit, les chevilles de 6, la mèche béton. Le Scan Éclair référence un établi entier en une photo.</p>
+        <p class="use-path"><span>Garage</span><span>Établi</span><span>Tiroir 2</span></p>
+      </li>
+      <li class="use">
+        <h3>Médicaments</h3>
+        <p>Le thermomètre à trois heures du matin, sans allumer toute la maison. Et une alerte avant que le sirop ne périme.</p>
+        <p class="use-path"><span>Salle de bain</span><span>Armoire murale</span><span>Boîte blanche</span></p>
+      </li>
+      <li class="use">
+        <h3>Prêts</h3>
+        <p>La ponceuse, le tome 3, la tente de camping. Notez à qui vous prêtez et depuis quand : Fulmo s'en souvient, vous n'avez plus à le faire.</p>
+        <p class="use-path"><span>Prêtée à Karim</span><span>depuis le 12 mars</span></p>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══ CONFIDENTIALITÉ ═════════════════════════════════════════════════ -->
+<section class="privacy" id="confidentialite" aria-labelledby="privacy-title">
+  <div class="wrap privacy-grid">
+    <div class="privacy-copy">
+      <h2 id="privacy-title">Votre inventaire ne quitte pas <em>la maison</em>.</h2>
+      <p>Ce que vous rangez dit beaucoup de vous. Fulmo l'enregistre dans le navigateur de votre appareil, pas sur nos serveurs. Il n'y a pas de base de données centrale à fuiter, pas de profil publicitaire à revendre.</p>
+      <ul class="facts">
+        <li><svg class="ic" aria-hidden="true"><use href="#i-device"/></svg><span><strong>Stocké sur votre appareil.</strong> Objets, photos, plan et scans 3D restent en local.</span></li>
+        <li><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span><strong>L'IA ne voit que votre question.</strong> La recherche en langage naturel envoie la phrase tapée, rien d'autre. Le Scan Éclair envoie la photo que vous prenez, pour l'analyser.</span></li>
+        <li><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg><span><strong>Vos données vous suivent.</strong> Exportez tout l'inventaire à tout moment, formule gratuite comprise.</span></li>
+      </ul>
+    </div>
+    <figure class="privacy-visual" aria-labelledby="privacy-cap">
+      <div class="pv-device">
+        <div class="pv-head"><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>Sur votre téléphone</div>
+        <ul class="pv-inv">
+          <li><span>Passeport</span><span>Bureau / Commode</span></li>
+          <li><span>Guirlande</span><span>Grenier / Bac rouge</span></li>
+          <li><span>Perceuse</span><span>Garage / Armoire</span></li>
+          <li><span>Thermomètre</span><span>Salle de bain</span></li>
+          <li><span>Carte grise</span><span>Entrée / Placard</span></li>
+          <li><span>+ tout le reste</span><span>reste ici</span></li>
+        </ul>
+      </div>
+      <div class="pv-wire" aria-hidden="true"><span class="pv-packet">« où est la perceuse ? »</span></div>
+      <div class="pv-ai"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg>IA</div>
+      <figcaption id="privacy-cap">Seule la phrase de recherche part vers l'IA. L'inventaire reste sur l'appareil.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ═══ TARIFS ═════════════════════════════════════════════════════════ -->
+<section class="pricing" id="tarifs" aria-labelledby="pricing-title">
+  <div class="wrap">
+    <header class="section-head section-head-center">
+      <h2 id="pricing-title">Gratuit pour ranger. <em>Éclair</em> pour aller vite.</h2>
+      <p>La formule Libre n'a pas de limite d'objets ni de pièces. Éclair ajoute l'IA, le plan interactif et les alertes.</p>
+    </header>
+    <div class="plans">
+      <article class="plan-card" aria-labelledby="plan-libre">
+        <h3 id="plan-libre">Libre</h3>
+        <p class="price"><span class="amount">0 €</span><span class="per">pour toujours</span></p>
+        <p class="plan-pitch">Tout ce qu'il faut pour que la maison se souvienne.</p>
+        <ul class="features">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Objets illimités</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Pièces, zones et meubles illimités</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Recherche tolérante aux fautes</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Mots-clés et métadonnées</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Foyer partagé jusqu'à 5 membres</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Export de vos données</li>
+        </ul>
+        <a class="btn btn-ghost btn-lg btn-block" href="app.html#signup">Créer mon compte gratuit</a>
+      </article>
+      <article class="plan-card plan-eclair" data-tilt aria-labelledby="plan-eclair">
+        <div class="pc-sheen" aria-hidden="true"></div>
+        <h3 id="plan-eclair"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg>Éclair</h3>
+        <p class="price"><span class="amount">9 €</span><span class="per">par mois</span></p>
+        <p class="plan-pitch">Pour référencer une maison entière en un week-end.</p>
+        <ul class="features">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Tout le plan Libre, sans limite</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Scan Éclair : une photo, les objets listés</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Plan interactif du logement</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Recherche en langage naturel</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Alertes péremption, garantie et prêts</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Membres du foyer illimités</li>
+        </ul>
+        <a class="btn btn-volt btn-lg btn-block" href="app.html#signup">Commencer avec Éclair</a>
+      </article>
+    </div>
+    <p class="pricing-note">Vous choisissez la formule en créant votre compte. Pas besoin de carte bancaire pour Libre.</p>
+  </div>
+</section>
+
+<!-- ═══ FAQ ════════════════════════════════════════════════════════════ -->
+<section class="faq" id="faq" aria-labelledby="faq-title">
+  <div class="wrap faq-grid">
+    <header class="faq-head">
+      <h2 id="faq-title">Questions <em>fréquentes</em></h2>
+      <p>Une autre question ? Le plus simple est d'ouvrir la démo : un logement de 40 objets vous attend, prêt à être fouillé.</p>
+      <a class="btn btn-ghost" href="app.html#demo">Essayer la démo</a>
+    </header>
+    <div class="faq-list">
+      <details>
+        <summary><h3>Comment retrouver un objet rangé chez soi ?</h3></summary>
+        <p>Le plus sûr est de noter l'emplacement au moment où vous rangez. Avec Fulmo, vous indiquez une fois la pièce, le meuble et le tiroir ou le bac ; ensuite, vous tapez le nom de l'objet, même avec une faute, et Fulmo affiche le chemin exact, par exemple « Bureau / Commode / Tiroir du haut ».</p>
+      </details>
+      <details>
+        <summary><h3>Qu'est-ce que Fulmo ?</h3></summary>
+        <p>Fulmo est une application web d'inventaire pour la maison. Vous décrivez votre logement (pièces, meubles, contenants), vous y rangez vos objets, puis vous les retrouvez par la recherche, sur le plan du logement ou dans un espace 3D. « Fulmo » signifie « éclair » en espéranto.</p>
+      </details>
+      <details>
+        <summary><h3>Combien coûte Fulmo ?</h3></summary>
+        <p>La formule Libre est gratuite : objets et pièces illimités, recherche tolérante aux fautes, mots-clés, foyer partagé jusqu'à 5 membres et export des données. La formule Éclair coûte 9 € par mois et ajoute le Scan Éclair, le plan interactif, la recherche en langage naturel, les alertes et des membres illimités. L'inscription ne demande pas de carte bancaire.</p>
+      </details>
+      <details>
+        <summary><h3>Mes données sont-elles envoyées sur un serveur ?</h3></summary>
+        <p>Non. Votre inventaire est enregistré dans le navigateur de votre appareil. Deux fonctions de la formule Éclair utilisent l'IA, et seulement quand vous les lancez : la recherche en langage naturel envoie uniquement la phrase que vous tapez, et le Scan Éclair envoie la photo que vous prenez pour qu'elle soit analysée. Votre inventaire, lui, ne quitte pas l'appareil.</p>
+      </details>
+      <details>
+        <summary><h3>Fulmo fonctionne-t-il sans connexion ?</h3></summary>
+        <p>En grande partie. L'inventaire et la recherche tolérante aux fautes tournent dans votre navigateur, sans aller-retour avec un serveur : une fois l'application ouverte, ils continuent de répondre si le réseau tombe, à la cave comme au grenier. Le Scan Éclair et la recherche en langage naturel ont besoin d'une connexion.</p>
+      </details>
+      <details>
+        <summary><h3>Peut-on partager l'inventaire avec sa famille ?</h3></summary>
+        <p>Oui. Le foyer partagé réunit jusqu'à 5 membres dans la formule Libre et un nombre illimité de membres dans la formule Éclair : tout le monde range et retrouve dans le même logement.</p>
+      </details>
+      <details>
+        <summary><h3>Comment fonctionne le Scan Éclair ?</h3></summary>
+        <p>Vous photographiez une étagère, un tiroir ou un bac. L'IA identifie les objets visibles, les nomme et les pré-range dans le contenant choisi. Vous vérifiez la liste, corrigez si besoin et validez. C'est la façon la plus rapide de référencer un rangement plein.</p>
+      </details>
+      <details>
+        <summary><h3>Qu'est-ce que l'espace 3D de Fulmo ?</h3></summary>
+        <p>C'est une vue de vos pièces en trois dimensions. Vous pouvez importer le scan d'une pièce au format .ply (nuage de points ou splats gaussiens), par exemple réalisé avec une application de scan sur téléphone, ou faire un relevé panoramique. Vos meubles y sont placés et vos objets s'y retrouvent d'un geste.</p>
+      </details>
+      <details>
+        <summary><h3>Faut-il installer une application ?</h3></summary>
+        <p>Non. Fulmo s'ouvre dans le navigateur, sur téléphone comme sur ordinateur. Il suffit de créer un compte gratuit, ou d'essayer la démo avec un logement déjà rempli de 40 objets.</p>
+      </details>
+      <details>
+        <summary><h3>Fulmo peut-il me rappeler une date de péremption ou un objet prêté ?</h3></summary>
+        <p>Oui, avec la formule Éclair. Vous ajoutez une date à un objet (péremption d'un médicament, fin de garantie d'un appareil, prêt à un proche) et Fulmo vous prévient au bon moment.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CTA FINAL ══════════════════════════════════════════════════════ -->
+<section class="final" aria-labelledby="final-title">
+  <canvas class="bolt-canvas" aria-hidden="true"></canvas>
+  <div class="wrap final-inner">
+    <h2 id="final-title">Rangez une fois.<br><em>Retrouvez</em> toujours.</h2>
+    <p>Le compte est gratuit, le premier objet prend dix secondes. La prochaine fois que quelqu'un demande où est le passeport, la réponse tient en une ligne.</p>
+    <div class="cta-row">
+      <a class="btn btn-volt btn-lg" href="app.html#signup">Créer mon compte gratuit <svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      <a class="btn btn-ghost btn-lg" href="app.html#demo">Essayer la démo</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <a class="brand" href="#top" aria-label="Fulmo, retour en haut de page">
+        <svg class="brand-mark" aria-hidden="true"><use href="#logo"/></svg>
+        <span class="brand-name">Fulmo</span>
+      </a>
+      <p>La mémoire de votre maison. « Fulmo » signifie « éclair » en espéranto.</p>
+    </div>
+    <nav class="footer-nav" aria-label="Liens du pied de page">
+      <a href="app.html#signup">Créer un compte</a>
+      <a href="app.html#demo">Démo</a>
+      <a href="#fonctionnement">Fonctionnement</a>
+      <a href="#tarifs">Tarifs</a>
+      <a href="#confidentialite">Confidentialité</a>
+      <a href="#faq">Questions fréquentes</a>
+    </nav>
+    <p class="footer-legal">© 2026 Fulmo. Inventaire stocké sur votre appareil.</p>
+  </div>
+</footer>
+</body>
+</html>

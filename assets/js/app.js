@@ -656,72 +656,217 @@
   function toast(message) {
     var existing = document.querySelector(".toast");
     if (existing) existing.remove();
-    var node = el("div", { class: "toast", role: "status", text: message });
+    var node = el("div", { class: "toast", role: "status", "aria-live": "polite" }, [icon("bolt", 15), el("span", { text: message })]);
     document.body.appendChild(node);
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { node.remove(); }, 2600);
+    // Une sortie, pas une disparition : le message s'efface au lieu de
+    // s'évanouir d'une image à l'autre.
+    toastTimer = setTimeout(function () {
+      node.classList.add("is-leaving");
+      setTimeout(function () { node.remove(); }, 260);
+    }, 2800);
   }
 
   function plural(count, one, many) { return count + " " + (Math.abs(count) < 2 ? one : many); }
+
+  function reduceMotion() {
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+
+  /* Confirmation dans le style de l'application. `confirm()` bloquait la page,
+     ignorait le thème et ne disait pas ce que le bouton allait faire. */
+  function confirmSheet(options) {
+    var done = false;
+    function cancel() {
+      if (done) return;
+      done = true;
+      closeSheet();
+      if (options.onCancel) options.onCancel();
+    }
+    var cancelButton = el("button", { class: "btn btn-line", type: "button", onclick: cancel }, options.cancelLabel || "Annuler");
+    var okButton = el("button", {
+      class: "btn " + (options.danger ? "btn-danger" : "btn-volt"), type: "button",
+      onclick: function () {
+        if (done) return;
+        done = true;
+        closeSheet();
+        options.onConfirm();
+      }
+    }, options.danger ? [icon("trash", 15), options.confirmLabel] : options.confirmLabel);
+    sheet({
+      title: options.title,
+      role: "alertdialog",
+      body: [el("p", { class: "confirm-body" }, options.body)],
+      foot: [cancelButton, okButton],
+      initialFocus: cancelButton,
+      onClose: function () {
+        if (done) return;
+        done = true;
+        if (options.onCancel) options.onCancel();
+      }
+    });
+  }
+
+  /* Le reflet du bouton principal suit le pointeur. Un seul écouteur délégué,
+     posé une fois : les boutons sont recréés à chaque rendu. */
+  if (window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+    document.addEventListener("pointermove", function (event) {
+      var target = event.target && event.target.closest ? event.target.closest(".btn-volt") : null;
+      if (!target) return;
+      var box = target.getBoundingClientRect();
+      target.style.setProperty("--mx", Math.round(event.clientX - box.left) + "px");
+      target.style.setProperty("--my", Math.round(event.clientY - box.top) + "px");
+    }, { passive: true });
+  }
+
+  /* Le chemin de rangement en fil d'Ariane : pièce › meuble › contenant, et
+     l'endroit précis en volt. Les séparateurs sont dessinés, et redits en
+     texte pour un lecteur d'écran. */
+  function crumbs(locationId, spot) {
+    var path = pathOf(locationId);
+    if (!path.length) return el("div", { class: "crumbs" }, [el("span", { class: "unsorted", text: "À ranger" })]);
+    function sep() {
+      var svg = icon("chev");
+      return el("span", { class: "sep" }, [svg, el("span", { class: "sr-only", text: " › " })]);
+    }
+    var parts = [];
+    path.forEach(function (name, index) {
+      if (index) parts.push(sep());
+      parts.push(el("span", { class: index === path.length - 1 ? "leaf" : null, text: name }));
+    });
+    if (spot) { parts.push(sep()); parts.push(el("span", { class: "spot", text: spot })); }
+    return el("div", { class: "crumbs", title: path.concat(spot ? [spot] : []).join(" › ") }, parts);
+  }
+
+  /* Illustration des états vides : la maison et la loupe, au trait du jeu
+     d'icônes. */
+  function emptyArt() {
+    var wrap = el("span", { "aria-hidden": "true" });
+    wrap.innerHTML =
+      '<svg class="empty-art" viewBox="0 0 148 112" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path class="ground" d="M8 100h132"/>' +
+      '<path stroke="currentColor" d="M24 100V54L58 26l34 28v46"/>' +
+      '<path stroke="currentColor" d="M16 61 58 25l42 36"/>' +
+      '<path stroke="currentColor" d="M50 100V82a8 8 0 0 1 16 0v18"/>' +
+      '<rect stroke="currentColor" x="33" y="59" width="12" height="11" rx="2"/>' +
+      '<circle class="lens" cx="100" cy="70" r="19"/>' +
+      '<path stroke="currentColor" stroke-width="5" d="m114 84 13 13"/>' +
+      '<path class="spark" d="M123 44l6-6M127 57h8M113 38v-8"/>' +
+      '</svg>';
+    return wrap;
+  }
 
   /* ─── Modale générique ────────────────────────────────────────────── */
 
   var openSheet = null;
 
   function sheet(options) {
-    closeSheet();
+    // Le focus à rendre est celui d'AVANT la feuille précédente, s'il y en a
+    // une : une feuille qui en remplace une autre ne doit pas rendre la main
+    // à un bouton de la feuille disparue.
+    var previous = openSheet ? openSheet.previous : document.activeElement;
+    closeSheet(true);
 
+    function dismiss() { closeSheet(); if (options.onClose) options.onClose(); }
+
+    var grip = el("div", { class: "sheet-grip", "aria-hidden": "true" }, [el("i")]);
+    var head = el("div", { class: "sheet-head" }, [
+      el("h2", { class: "display t-md", text: options.title }),
+      el("button", { class: "icon-btn", type: "button", "aria-label": "Fermer", onclick: dismiss }, [icon("x", 18)])
+    ]);
     var body = el("div", { class: "sheet-body" }, options.body || []);
     var card = el("div", {
       class: "sheet" + (options.wide ? " sheet-wide" : ""),
-      role: "dialog", "aria-modal": "true", "aria-label": options.title
+      role: options.role || "dialog", "aria-modal": "true", "aria-label": options.title, tabindex: "-1"
     }, [
-      el("div", { class: "sheet-head" }, [
-        el("h2", { class: "display t-md", text: options.title }),
-        el("button", { class: "icon-btn", type: "button", "aria-label": "Fermer", onclick: function () { closeSheet(); if (options.onClose) options.onClose(); } }, [icon("x", 18)])
-      ]),
+      grip,
+      head,
       body,
       options.foot ? el("div", { class: "sheet-foot" }, options.foot) : null
     ]);
 
     var backdrop = el("div", {
       class: "sheet-backdrop",
-      onclick: function (event) {
-        if (event.target !== backdrop) return;
-        closeSheet();
-        if (options.onClose) options.onClose();
-      }
+      onclick: function (event) { if (event.target === backdrop) dismiss(); }
     }, [card]);
 
     document.body.appendChild(backdrop);
     document.body.style.overflow = "hidden";
-    openSheet = { backdrop: backdrop, onClose: options.onClose };
+    openSheet = { backdrop: backdrop, onClose: options.onClose, previous: previous };
 
-    // Échappement et piège de focus : les deux choses qu'une modale doit faire
-    // et que l'on oublie une fois sur deux.
-    var previous = document.activeElement;
-    var focusables = card.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-    if (focusables.length) focusables[Math.min(1, focusables.length - 1)].focus();
+    /* Tirer vers le bas pour fermer (mobile). La poignée et l'en-tête
+       servent de prise ; un geste court ou lent ramène la feuille en place. */
+    (function () {
+      var start = null;
+      function down(event) {
+        if (window.innerWidth >= 640 || event.button > 0) return;
+        if (event.target.closest("button, input, a")) return;
+        start = { y: event.clientY, t: Date.now(), dy: 0 };
+        card.classList.add("is-dragging");
+        try { event.currentTarget.setPointerCapture(event.pointerId); } catch (e) {}
+      }
+      function move(event) {
+        if (!start) return;
+        start.dy = Math.max(0, event.clientY - start.y);
+        card.style.transform = "translateY(" + start.dy + "px)";
+      }
+      function up() {
+        if (!start) return;
+        var dy = start.dy, speed = dy / Math.max(1, Date.now() - start.t);
+        start = null;
+        card.classList.remove("is-dragging");
+        if (dy > 110 || (dy > 30 && speed > 0.6)) { dismiss(); return; }
+        card.style.transition = "transform var(--dur-2) var(--ease-out)";
+        card.style.transform = "";
+        setTimeout(function () { card.style.transition = ""; }, 260);
+      }
+      [grip, head].forEach(function (zone) {
+        zone.addEventListener("pointerdown", down);
+        zone.addEventListener("pointermove", move);
+        zone.addEventListener("pointerup", up);
+        zone.addEventListener("pointercancel", up);
+      });
+    })();
 
+    // Premier focus : ce que l'appelant désigne, sinon un champ marqué
+    // `autofocus`, sinon la feuille elle-même — on n'ouvre pas le clavier d'un
+    // téléphone sans raison.
+    var first = options.initialFocus || card.querySelector("[autofocus]") || card;
+    try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); }
+
+    // Échappement et piège de focus. La liste est relue à chaque tabulation :
+    // le contenu d'une feuille change (filtre d'emplacements, erreurs).
     openSheet.onKey = function (event) {
-      if (event.key === "Escape") { event.preventDefault(); closeSheet(); if (options.onClose) options.onClose(); return; }
-      if (event.key !== "Tab" || focusables.length === 0) return;
-      var first = focusables[0], last = focusables[focusables.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      if (event.key === "Escape") { event.preventDefault(); dismiss(); return; }
+      if (event.key !== "Tab") return;
+      var focusables = Array.prototype.filter.call(
+        card.querySelectorAll('button:not(:disabled), [href], input:not(:disabled), select, textarea, [tabindex]:not([tabindex="-1"])'),
+        function (node) { return node.offsetParent !== null; }
+      );
+      if (focusables.length === 0) { event.preventDefault(); return; }
+      var firstNode = focusables[0], last = focusables[focusables.length - 1];
+      if (event.shiftKey && (document.activeElement === firstNode || document.activeElement === card)) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); firstNode.focus(); }
     };
-    openSheet.previous = previous;
     document.addEventListener("keydown", openSheet.onKey);
     return card;
   }
 
-  function closeSheet() {
+  /* `replacing` : une autre feuille prend la place, on ne rend ni le
+     défilement ni le focus à la page. */
+  function closeSheet(replacing) {
     if (!openSheet) return;
-    document.removeEventListener("keydown", openSheet.onKey);
-    openSheet.backdrop.remove();
-    document.body.style.overflow = "";
-    if (openSheet.previous && openSheet.previous.focus) openSheet.previous.focus();
+    var closing = openSheet;
     openSheet = null;
+    document.removeEventListener("keydown", closing.onKey);
+    var node = closing.backdrop;
+    node.classList.add("is-closing");
+    setTimeout(function () { node.remove(); }, 230);
+    if (replacing === true) return;
+    if (!cmdk) document.body.style.overflow = "";
+    if (closing.previous && closing.previous.isConnected && closing.previous.focus) {
+      try { closing.previous.focus({ preventScroll: true }); } catch (e) {}
+    }
   }
 
   /* ─── Sélecteur de meubles ────────────────────────────────────────────
@@ -973,10 +1118,18 @@
     { label: "Alertes", hint: "Péremptions, garanties, prêts", ic: "bell",
       keys: "alertes peremption garantie prete", run: function () { goTab("alerts"); } },
     { label: "Réglages", hint: "Foyer, membres, thème, abonnement", ic: "cog",
-      keys: "reglages parametres theme foyer membres abonnement", run: function () { goTab("settings"); } }
+      keys: "reglages parametres foyer membres abonnement export", run: function () { goTab("settings"); } },
+    { label: "Basculer le thème clair / sombre", hint: "Le clair pour le plein jour, le sombre pour le soir", ic: "moon",
+      keys: "theme sombre clair nuit jour apparence", run: function () { toggleTheme(); } }
   ];
 
-  function goTab(id) { state.tab = id; save(); render(); }
+  function goTab(id) { closePalette(); state.tab = id; save(); render(); }
+
+  function toggleTheme() {
+    state.theme = state.theme === "dark" ? "light" : "dark";
+    applyTheme(); save(); render();
+    toast(state.theme === "dark" ? "Thème sombre." : "Thème clair.");
+  }
 
   /* Met en évidence la portion trouvée. Sans ça on relit la ligne entière
      pour comprendre pourquoi elle est là. */
@@ -1050,6 +1203,7 @@
         art: rootIconOf(item.locationId),
         name: item.name + (item.quantity > 1 ? "  ×" + item.quantity : ""),
         sub: path.length ? path.join(" / ") : "À ranger",
+        crumbsOf: item.locationId || "",
         spot: item.spot,
         why: row.reason ? WHY[row.reason] : null,
         isTag: row.reason === "tag",
@@ -1111,7 +1265,7 @@
       onmousedown: function (event) { if (event.target === backdrop) closePalette(); }
     }, [panel]);
 
-    cmdk = { backdrop: backdrop, input: input, list: list, filters: filters, index: 0, rows: [], tag: null };
+    cmdk = { backdrop: backdrop, input: input, list: list, filters: filters, index: 0, rows: [], tag: null, panel: panel, previous: document.activeElement };
 
     document.body.appendChild(backdrop);
     document.body.style.overflow = "hidden";
@@ -1124,19 +1278,40 @@
 
   function closePalette() {
     if (!cmdk) return;
-    document.removeEventListener("keydown", cmdk.onKey);
-    cmdk.backdrop.remove();
-    if (!openSheet) document.body.style.overflow = "";
+    var closing = cmdk;
     cmdk = null;
+    document.removeEventListener("keydown", closing.onKey);
+    closing.backdrop.remove();
+    if (!openSheet) document.body.style.overflow = "";
+    if (closing.previous && closing.previous.isConnected && closing.previous.focus) {
+      try { closing.previous.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
+
+  /* Une ligne ferme la palette AVANT d'agir : sinon la feuille d'objet ou
+     l'onglet demandé s'ouvraient sous la palette, qui restait au-dessus. */
+  function runRow(row) {
+    closePalette();
+    row.run();
   }
 
   function paletteKey(event) {
     if (!cmdk) return;
     if (event.key === "Escape") { event.preventDefault(); closePalette(); return; }
+    // Piège de focus : la palette est modale.
+    if (event.key === "Tab") {
+      var focusables = cmdk.panel.querySelectorAll("input, button");
+      var first = focusables[0], last = focusables[focusables.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      return;
+    }
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Enter") return;
+    // Entrée sur un bouton (puce, fermer) appartient à ce bouton.
+    if (event.key === "Enter" && document.activeElement !== cmdk.input) return;
     if (cmdk.rows.length === 0) return;
     event.preventDefault();
-    if (event.key === "Enter") { cmdk.rows[cmdk.index].run(); return; }
+    if (event.key === "Enter") { runRow(cmdk.rows[cmdk.index]); return; }
     cmdk.index = (cmdk.index + (event.key === "ArrowDown" ? 1 : -1) + cmdk.rows.length) % cmdk.rows.length;
     paintSelection();
   }
@@ -1186,15 +1361,14 @@
         nodes.push(el("button", {
           class: "cmdk-row", type: "button", role: "option", "aria-selected": index === 0 ? "true" : "false",
           onmousemove: function () { if (cmdk.index !== index) { cmdk.index = index; paintSelection(); } },
-          onclick: row.run
+          onclick: function () { runRow(row); }
         }, [
           el("span", { class: "fig" }, [row.icon ? icon(row.icon, 17) : sym(row.art, 19)]),
           el("span", { class: "txt" }, [
             el("span", { class: "nm" }, [markMatch(row.name, cmdk.tag ? "" : query)]),
-            el("span", { class: "sub path" }, [
-              row.sub,
-              row.spot ? el("span", { class: "spot", text: " · " + row.spot }) : null
-            ])
+            row.crumbsOf !== undefined
+              ? crumbs(row.crumbsOf || null, row.spot)
+              : el("span", { class: "sub" + (row.icon ? " hint" : " path") }, [row.sub])
           ]),
           row.why ? el("span", { class: "why" + (row.isTag ? " tag" : ""), text: row.why }) : null
         ]));
@@ -1236,131 +1410,966 @@
 
   /* ═══ Bandeau de démonstration ══════════════════════════════════════ */
 
+  /* Une ligne, discrète : elle dit la vérité sur le prototype sans voler la
+     vedette. Sur les écrans de nuit (inscription, onboarding), elle prend la
+     nuit elle aussi. */
   function demoBar() {
-    return el("div", { class: "demo-bar" }, [
-      el("strong", { text: "Prototype" }),
-      el("span", { text: "Données locales à ce navigateur · aucun paiement" }),
+    var night = !state.account || !state.household;
+    return el("div", { class: "demo-bar" + (night ? " night" : "") }, [
+      el("span", { class: "demo-dot", "aria-hidden": "true" }),
+      el("span", { class: "demo-text" }, [
+        el("strong", { text: "Prototype" }),
+        el("span", { class: "demo-long", text: " · données locales à ce navigateur, aucun paiement" }),
+        el("span", { class: "demo-short", text: " · données locales" })
+      ]),
       el("span", { class: "spacer" }),
       state.account ? el("button", {
-        type: "button",
-        onclick: function () {
-          if (!confirm("Effacer ce prototype et repartir de l'inscription ?")) return;
-          state = blank(); save(); render();
-        },
-        text: "Réinitialiser"
-      }) : null
+        class: "demo-reset", type: "button", "aria-label": "Réinitialiser le prototype", title: "Réinitialiser le prototype",
+        onclick: confirmReset
+      }, [icon("loop", 13), el("span", { class: "lbl", text: "Réinitialiser" })]) : null
+    ]);
+  }
+
+  function confirmReset() {
+    confirmSheet({
+      title: "Réinitialiser le prototype ?",
+      body: "Le logement, les objets, les relevés et l'historique de ce navigateur seront effacés, et vous repartirez de l'inscription.",
+      confirmLabel: "Tout effacer",
+      danger: true,
+      onConfirm: function () {
+        closePalette();
+        dropScene();
+        state = blank();
+        searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null };
+        aiResults = null;
+        review = null; placingId = null; spaceFocus = null; spaceRoomId = null; mapFocus = null;
+        applyTheme(); save(); render();
+        toast("Prototype réinitialisé.");
+      }
+    });
+  }
+
+  /* ═══ Inscription et onboarding — outillage partagé ═════════════════
+
+     Tout ce qui suit est préfixé `ob` et ne sert qu'aux écrans de nuit :
+     création de compte, choix de formule, configuration du logement.
+
+     Une contrainte gouverne tout le reste : render() reconstruit le DOM
+     entier, ce qui coupe net une animation en cours. Les interactions de
+     sélection (tuiles, compteurs, panier) mettent donc la page à jour EN
+     PLACE ; seuls les changements d'étape repassent par render(), sous une
+     View Transition quand le navigateur la connaît. */
+
+  var OB_CALM = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  var OB_FINE = window.matchMedia ? window.matchMedia("(hover: hover) and (pointer: fine)") : null;
+  function obCalm() { return !!(OB_CALM && OB_CALM.matches); }
+  function obFine() { return !!(OB_FINE && OB_FINE.matches); }
+
+  function obSvg(tag, attrs, children) {
+    var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    if (attrs) Object.keys(attrs).forEach(function (key) {
+      if (attrs[key] != null) node.setAttribute(key, String(attrs[key]));
+    });
+    (children || []).forEach(function (child) { if (child) node.appendChild(child); });
+    return node;
+  }
+
+  /* Les couleurs du canvas viennent des jetons : le canvas ne lit pas le CSS,
+     on les résout donc une fois, avec une valeur de secours. */
+  function obColor(name, fallback) {
+    var value = "";
+    try { value = getComputedStyle(document.documentElement).getPropertyValue(name).trim(); } catch (e) {}
+    var match = /^#([0-9a-f]{6})$/i.exec(value) || /^#([0-9a-f]{6})$/i.exec(fallback);
+    var n = parseInt(match[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function obRgba(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; }
+
+  function obFirstName(full) { return String(full || "").trim().split(/\s+/)[0] || ""; }
+
+  /* Annonces pour les lecteurs d'écran. Le nœud vit hors de #root : recréé à
+     chaque rendu, il ne serait jamais lu. */
+  var obLive = null;
+  function obAnnounce(text) {
+    if (!obLive) {
+      obLive = el("div", { class: "ob-sr", role: "status", "aria-live": "polite" });
+      document.body.appendChild(obLive);
+    }
+    obLive.textContent = "";
+    setTimeout(function () { obLive.textContent = text; }, 60);
+  }
+
+  /* ─── Le pointeur ─────────────────────────────────────────────────── */
+
+  var obPointer = { x: -9999, y: -9999, on: false };
+  window.addEventListener("pointermove", function (event) {
+    if (event.pointerType !== "mouse") return;
+    obPointer.x = event.clientX; obPointer.y = event.clientY; obPointer.on = true;
+  }, { passive: true });
+  document.documentElement.addEventListener("mouseleave", function () { obPointer.on = false; });
+
+  /* ─── Fond vivant : une constellation volt et arc ─────────────────────
+     Un seul canvas, créé une fois et réinséré à chaque rendu : il garde son
+     état et sa boucle. La boucle s'arrête d'elle-même dès que le canvas
+     quitte la page (entrée dans l'application) ou que l'onglet est caché. */
+
+  var obBg = { node: null, ctx: null, pts: [], raf: 0, w: 0, h: 0, dpr: 1, mx: -9999, my: -9999, volt: null, arc: null };
+
+  function obBackdrop() {
+    if (!obBg.node) {
+      obBg.node = el("canvas", { class: "ob-bg", "aria-hidden": "true" });
+      obBg.ctx = obBg.node.getContext("2d");
+      obBg.volt = obColor("--volt", "#d9ff3d");
+      obBg.arc = obColor("--arc-hi", "#a79dff");
+    }
+    requestAnimationFrame(obBgStart);
+    return obBg.node;
+  }
+
+  function obBgResize() {
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w = window.innerWidth, h = window.innerHeight;
+    if (w === obBg.w && h === obBg.h && dpr === obBg.dpr) return;
+    var grew = !obBg.pts.length || w * h > obBg.w * obBg.h * 1.3;
+    obBg.w = w; obBg.h = h; obBg.dpr = dpr;
+    obBg.node.width = Math.round(w * dpr);
+    obBg.node.height = Math.round(h * dpr);
+    if (!grew) return;
+    var count = Math.max(26, Math.min(96, Math.round(w * h / 15000)));
+    obBg.pts = [];
+    for (var i = 0; i < count; i++) {
+      obBg.pts.push({
+        x: Math.random() * w, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.14, vy: (Math.random() - 0.5) * 0.14,
+        r: Math.random() * 1.2 + 0.5, arc: Math.random() < 0.24, tw: Math.random() * 6.3
+      });
+    }
+  }
+
+  function obBgStart() {
+    if (!obBg.node || !obBg.node.isConnected) return;
+    obBgResize();
+    if (obCalm()) { obBgDraw(0, true); return; }
+    if (!obBg.raf && !document.hidden) obBg.raf = requestAnimationFrame(obBgTick);
+  }
+
+  function obBgTick(time) {
+    obBg.raf = 0;
+    if (!obBg.node || !obBg.node.isConnected || document.hidden || obCalm()) return;
+    obBgDraw(time, false);
+    obParallax();
+    obBg.raf = requestAnimationFrame(obBgTick);
+  }
+
+  function obBgDraw(time, still) {
+    var ctx = obBg.ctx, w = obBg.w, h = obBg.h, pts = obBg.pts;
+    var volt = obBg.volt, arc = obBg.arc, reach = 150, link = 128;
+    ctx.setTransform(obBg.dpr, 0, 0, obBg.dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+
+    var live = obPointer.on && obFine() && !still;
+    if (live) {
+      obBg.mx += (obPointer.x - obBg.mx) * (obBg.mx < -9000 ? 1 : 0.12);
+      obBg.my += (obPointer.y - obBg.my) * (obBg.my < -9000 ? 1 : 0.12);
+      // Le halo qui suit la souris : une lampe de poche, pas un projecteur.
+      var glow = ctx.createRadialGradient(obBg.mx, obBg.my, 0, obBg.mx, obBg.my, 360);
+      glow.addColorStop(0, obRgba(volt, 0.07));
+      glow.addColorStop(0.5, obRgba(arc, 0.03));
+      glow.addColorStop(1, obRgba(arc, 0));
+      ctx.fillStyle = glow;
+      ctx.fillRect(obBg.mx - 360, obBg.my - 360, 720, 720);
+    }
+
+    var i, j, p, q, dx, dy, d;
+    for (i = 0; i < pts.length; i++) {
+      p = pts[i];
+      if (!still) {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < -10) p.x = w + 10; else if (p.x > w + 10) p.x = -10;
+        if (p.y < -10) p.y = h + 10; else if (p.y > h + 10) p.y = -10;
+        if (live) {
+          dx = p.x - obBg.mx; dy = p.y - obBg.my; d = Math.sqrt(dx * dx + dy * dy);
+          if (d < reach && d > 0.5) { var push = (1 - d / reach) * 0.55; p.x += dx / d * push; p.y += dy / d * push; }
+        }
+      }
+    }
+
+    ctx.lineWidth = 1;
+    for (i = 0; i < pts.length; i++) {
+      p = pts[i];
+      for (j = i + 1; j < pts.length; j++) {
+        q = pts[j];
+        dx = p.x - q.x; dy = p.y - q.y;
+        if (dx > link || dx < -link || dy > link || dy < -link) continue;
+        d = Math.sqrt(dx * dx + dy * dy);
+        if (d >= link) continue;
+        ctx.strokeStyle = obRgba(p.arc && q.arc ? arc : volt, (1 - d / link) * 0.1);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+      }
+      if (live) {
+        dx = p.x - obBg.mx; dy = p.y - obBg.my; d = Math.sqrt(dx * dx + dy * dy);
+        if (d < reach * 1.25) {
+          ctx.strokeStyle = obRgba(volt, (1 - d / (reach * 1.25)) * 0.28);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(obBg.mx, obBg.my); ctx.stroke();
+        }
+      }
+    }
+
+    for (i = 0; i < pts.length; i++) {
+      p = pts[i];
+      var a = still ? 0.45 : 0.36 + Math.sin(time * 0.0012 + p.tw) * 0.2;
+      ctx.fillStyle = obRgba(p.arc ? arc : volt, a);
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 6.2832); ctx.fill();
+    }
+  }
+
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) obBgStart(); });
+  window.addEventListener("resize", function () { if (obBg.node && obBg.node.isConnected) { obBgResize(); if (obCalm()) obBgDraw(0, true); } });
+  if (OB_CALM && OB_CALM.addEventListener) OB_CALM.addEventListener("change", obBgStart);
+
+  /* La maquette du logement pivote très légèrement avec la souris : on la
+     regarde de là où l'on est. Lissé, borné à quelques degrés. */
+  var obPar = { x: 0, y: 0 };
+  function obParallax() {
+    var models = document.querySelectorAll(".ob-side .ob-model");
+    if (!models.length) return;
+    var tx = 0, ty = 0;
+    if (obPointer.on && obFine()) {
+      tx = (obPointer.x / window.innerWidth - 0.5) * 2;
+      ty = (obPointer.y / window.innerHeight - 0.5) * 2;
+    }
+    obPar.x += (tx - obPar.x) * 0.06;
+    obPar.y += (ty - obPar.y) * 0.06;
+    for (var i = 0; i < models.length; i++) {
+      models[i].style.transform = "rotateX(" + (-obPar.y * 5).toFixed(2) + "deg) rotateY(" + (obPar.x * 7).toFixed(2) + "deg)";
+    }
+  }
+
+  /* ─── Étincelles ──────────────────────────────────────────────────────
+     Un calque fixe au-dessus de tout, hors de #root : la gerbe continue
+     pendant le changement d'étape au lieu d'être coupée par le rendu. */
+
+  var obFx = { node: null, ctx: null, parts: [], raf: 0, last: 0, dpr: 1 };
+
+  function obFxEnsure() {
+    if (!obFx.node) {
+      obFx.node = el("canvas", { class: "ob-fx", "aria-hidden": "true" });
+      obFx.ctx = obFx.node.getContext("2d");
+      obFx.volt = obColor("--volt", "#d9ff3d");
+      obFx.hi = obColor("--volt-hi", "#eaff8a");
+      obFx.arc = obColor("--arc-hi", "#a79dff");
+      obFx.linen = obColor("--linen", "#ece4d6");
+    }
+    if (!obFx.node.isConnected) document.body.appendChild(obFx.node);
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (obFx.node.width !== Math.round(window.innerWidth * dpr) || obFx.node.height !== Math.round(window.innerHeight * dpr)) {
+      obFx.dpr = dpr;
+      obFx.node.width = Math.round(window.innerWidth * dpr);
+      obFx.node.height = Math.round(window.innerHeight * dpr);
+    }
+  }
+
+  /* opts : count, power, up (biais vers le haut), confetti. */
+  function obSpark(x, y, opts) {
+    if (obCalm()) return;
+    opts = opts || {};
+    obFxEnsure();
+    var count = opts.count || 18, power = opts.power || 5;
+    for (var i = 0; i < count; i++) {
+      var angle = opts.up ? -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.1 : Math.random() * Math.PI * 2;
+      var speed = power * (0.35 + Math.random() * 0.85);
+      var confetti = opts.confetti && Math.random() < 0.55;
+      obFx.parts.push({
+        x: x, y: y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+        life: 0, max: confetti ? 1300 + Math.random() * 900 : 380 + Math.random() * 460,
+        confetti: confetti, rot: Math.random() * 6.3, spin: (Math.random() - 0.5) * 0.3,
+        size: confetti ? 3 + Math.random() * 3.5 : 1 + Math.random() * 1.2,
+        tone: Math.random()
+      });
+    }
+    if (!obFx.raf) { obFx.last = 0; obFx.raf = requestAnimationFrame(obFxTick); }
+  }
+
+  function obBurstFrom(node, event, opts) {
+    var rect = node.getBoundingClientRect();
+    var x = event && event.clientX ? event.clientX : rect.left + rect.width / 2;
+    var y = event && event.clientY ? event.clientY : rect.top + rect.height / 2;
+    obSpark(x, y, opts);
+  }
+
+  function obFxTick(time) {
+    var dt = obFx.last ? Math.min(40, time - obFx.last) : 16;
+    obFx.last = time;
+    var ctx = obFx.ctx;
+    ctx.setTransform(obFx.dpr, 0, 0, obFx.dpr, 0, 0);
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    var k = dt / 16;
+    obFx.parts = obFx.parts.filter(function (p) { p.life += dt; return p.life < p.max; });
+    obFx.parts.forEach(function (p) {
+      var t = p.life / p.max, fade = 1 - t * t;
+      if (p.confetti) {
+        p.vx *= Math.pow(0.97, k); p.vy = p.vy * Math.pow(0.97, k) + 0.09 * k; p.rot += p.spin * k;
+        p.x += p.vx * k; p.y += p.vy * k;
+        ctx.save();
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = obRgba(p.tone < 0.55 ? obFx.volt : p.tone < 0.8 ? obFx.linen : obFx.arc, 1);
+        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+        ctx.restore();
+      } else {
+        p.vx *= Math.pow(0.9, k); p.vy = p.vy * Math.pow(0.9, k) + 0.05 * k;
+        p.x += p.vx * k; p.y += p.vy * k;
+        ctx.globalCompositeOperation = "lighter";
+        ctx.strokeStyle = obRgba(p.tone < 0.7 ? obFx.volt : p.tone < 0.9 ? obFx.hi : obFx.arc, fade);
+        ctx.lineWidth = p.size; ctx.lineCap = "round";
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx * 2.6, p.y - p.vy * 2.6); ctx.stroke();
+        ctx.globalCompositeOperation = "source-over";
+      }
+    });
+    ctx.globalAlpha = 1;
+    if (obFx.parts.length) obFx.raf = requestAnimationFrame(obFxTick);
+    else { obFx.raf = 0; ctx.clearRect(0, 0, window.innerWidth, window.innerHeight); }
+  }
+
+  /* ─── Tilt 3D et reflet ───────────────────────────────────────────────
+     Réservés au pointeur fin : au doigt, une carte qui penche sous le pouce
+     ne fait que gêner la lecture. */
+
+  function obTilt(node, max) {
+    if (!obFine() || obCalm()) return node;
+    node.classList.add("ob-tilt");
+    node.addEventListener("pointermove", function (event) {
+      var rect = node.getBoundingClientRect();
+      var px = (event.clientX - rect.left) / rect.width, py = (event.clientY - rect.top) / rect.height;
+      node.style.setProperty("--rx", ((0.5 - py) * max).toFixed(2) + "deg");
+      node.style.setProperty("--ry", ((px - 0.5) * max).toFixed(2) + "deg");
+      node.style.setProperty("--gx", (px * 100).toFixed(1) + "%");
+      node.style.setProperty("--gy", (py * 100).toFixed(1) + "%");
+    });
+    node.addEventListener("pointerleave", function () {
+      node.style.setProperty("--rx", "0deg");
+      node.style.setProperty("--ry", "0deg");
+    });
+    return node;
+  }
+
+  /* Le reflet qui suit le pointeur sur le bouton principal. */
+  function obGloss(node) {
+    if (!obFine()) return node;
+    node.addEventListener("pointermove", function (event) {
+      var rect = node.getBoundingClientRect();
+      node.style.setProperty("--gx", ((event.clientX - rect.left) / rect.width * 100).toFixed(1) + "%");
+      node.style.setProperty("--gy", ((event.clientY - rect.top) / rect.height * 100).toFixed(1) + "%");
+    });
+    return node;
+  }
+
+  /* La coche qui se dessine : un tracé normalisé (pathLength = 1) dont le
+     CSS anime le stroke-dashoffset quand la sélection change EN PLACE. */
+  function obCheck(size) {
+    return obSvg("svg", { class: "ob-check", viewBox: "0 0 24 24", width: size, height: size, "aria-hidden": "true", focusable: "false" }, [
+      obSvg("path", { d: "M5 12.6l4.4 4.3L19 7.4", pathLength: "1" })
+    ]);
+  }
+
+  /* Bouton principal : pilule volt, reflet, état de chargement. */
+  function obCta(label, attrs, iconName) {
+    var node = el("button", Object.assign({ class: "ob-cta", type: "button" }, attrs || {}), [
+      el("span", { class: "ob-cta-label", text: label }),
+      iconName === null ? null : icon(iconName || "arrow-right", 17),
+      el("span", { class: "ob-spin", "aria-hidden": "true" })
+    ]);
+    return obGloss(node);
+  }
+
+  /* Vol d'un élément vers sa destination (FLIP) : la pièce touchée rejoint
+     le panier. Un fantôme en position fixe, un arc, puis il se dissout. */
+  function obFly(from, to) {
+    if (obCalm() || !from || !to) return;
+    var a = from.getBoundingClientRect(), b = to.getBoundingClientRect();
+    if (!a.width || !b.width) return;
+    var ghost = from.cloneNode(true);
+    ghost.classList.add("ob-ghost");
+    ghost.setAttribute("aria-hidden", "true");
+    ghost.style.left = a.left + "px"; ghost.style.top = a.top + "px";
+    ghost.style.width = a.width + "px"; ghost.style.height = a.height + "px";
+    document.body.appendChild(ghost);
+    var dx = b.left + b.width / 2 - (a.left + a.width / 2);
+    var dy = b.top + b.height / 2 - (a.top + a.height / 2);
+    var lift = Math.min(120, Math.abs(dx) * 0.25 + 40);
+    if (!ghost.animate) { ghost.remove(); return; }
+    var run = ghost.animate([
+      { transform: "translate(0,0) scale(1)", opacity: 1 },
+      { transform: "translate(" + (dx * 0.5) + "px," + (dy * 0.5 - lift) + "px) scale(1.15)", opacity: 1, offset: 0.45 },
+      { transform: "translate(" + dx + "px," + dy + "px) scale(.5)", opacity: 0 }
+    ], { duration: 560, easing: "cubic-bezier(.45,0,.25,1)" });
+    run.onfinish = function () { ghost.remove(); };
+  }
+
+  function obInView(node) {
+    if (!node) return false;
+    var r = node.getBoundingClientRect();
+    return r.width > 0 && r.top >= 0 && r.bottom <= window.innerHeight;
+  }
+
+  function obPop(node) {
+    if (!node) return;
+    node.classList.remove("ob-bump");
+    void node.offsetWidth;
+    node.classList.add("ob-bump");
+  }
+
+  /* ─── Transitions d'étape ─────────────────────────────────────────────
+     View Transitions quand elles existent : l'ancienne étape glisse et
+     s'efface pendant que la nouvelle arrive, dans le sens du parcours.
+     Sinon, la nouvelle étape joue seule son entrée. */
+
+  var obEnter = null;       // sens d'entrée à jouer au prochain rendu (repli)
+  var obKeys = null;        // actions clavier de l'étape affichée
+
+  function obTransition(mutate, dir) {
+    document.documentElement.setAttribute("data-ob-dir", dir || "fwd");
+    function run() {
+      mutate();
+      render();
+      window.scrollTo(0, 0);
+      obSettle();
+    }
+    if (document.startViewTransition && !obCalm()) {
+      try { document.startViewTransition(run); return; } catch (e) {}
+    }
+    obEnter = obCalm() ? null : (dir || "fwd");
+    run();
+  }
+
+  /* Après un changement d'étape : le focus va au champ désigné ou au titre,
+     et l'étape est annoncée. */
+  function obSettle() {
+    var target = document.querySelector(".ob [data-ob-focus]") || document.getElementById("ob-step-title");
+    if (target) {
+      var isField = target.tagName === "INPUT";
+      if (!isField || obFine()) { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } }
+      else { var title = document.getElementById("ob-step-title"); if (title) title.focus({ preventScroll: true }); }
+    }
+    var count = document.querySelector(".ob-count");
+    var heading = document.getElementById("ob-step-title");
+    if (heading) obAnnounce((count ? count.textContent + " : " : "") + heading.textContent);
+  }
+
+  /* Échap revient en arrière, Entrée continue. Branché une fois ; chaque
+     étape déclare ses actions dans obKeys. */
+  document.addEventListener("keydown", function (event) {
+    if (!obKeys || openSheet || event.defaultPrevented || event.isComposing) return;
+    if (!document.querySelector(".ob") || document.querySelector(".cmdk-backdrop, .ob-celebrate")) return;
+    var target = event.target || {};
+    var tag = target.tagName;
+    if (event.key === "Escape") {
+      // Dans un champ rempli, Échap sort du champ ; il ne jette pas l'étape.
+      if ((tag === "INPUT" || tag === "TEXTAREA") && target.value) { target.blur(); return; }
+      if (obKeys.back) { event.preventDefault(); obKeys.back(); }
+      return;
+    }
+    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (tag === "BUTTON" || tag === "A" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (target.getAttribute && target.getAttribute("data-ob-own-enter")) return;
+    if (obKeys.primary) { event.preventDefault(); obKeys.primary(); }
+  });
+
+  /* ─── La maquette du logement ─────────────────────────────────────────
+     Une axonométrie en SVG : chaque niveau est une dalle, chaque pièce un
+     sol de matière avec deux murs bas, en coupe comme une maison de poupée.
+     Les niveaux sont éclatés vers le haut — c'est le langage du plan par
+     niveaux de l'application. Les pièces ajoutées tombent à leur place ;
+     celles déjà vues restent immobiles d'un rendu à l'autre (obSeen). */
+
+  var obSeen = Object.create(null);
+  function obFresh(key) { var fresh = !obSeen[key]; obSeen[key] = true; return fresh; }
+
+  var OB_U = 30, OB_K = 0.8660254;
+  var OB_MAT = {
+    cuisine: "clay", salon: "oak", chambre: "linen", sdb: "sage", entree: "dusk", bureau: "oak",
+    enfant: "dusk", sam: "oak", wc: "sage", buanderie: "linen", dressing: "linen", cellier: "clay",
+    garage: "clay", cave: "clay", grenier: "oak", cabanon: "oak", atelier: "clay", jardin: "sage",
+    terrasse: "sage", balcon: "sage", couloir: "linen", veranda: "sage", debarras: "clay", soussol: "clay"
+  };
+  var OB_GROUND = { garage: 1, cave: 1, soussol: 1, jardin: 1, terrasse: 1, cellier: 1, buanderie: 1, cabanon: 1, atelier: 1, entree: 1, cuisine: 1, salon: 1, sam: 1, veranda: 1 };
+  var OB_UPSTAIRS = { chambre: 1, enfant: 1, dressing: 1, sdb: 1, bureau: 1 };
+  var OB_TYPE_LABEL = { apartment: "Appartement", house: "Maison", studio: "Studio", other: "Logement" };
+
+  /* Cellules remplies par « coquilles » carrées : la position d'une pièce ne
+     dépend que de son rang, jamais de la taille de la grille. Ajouter une
+     pièce agrandit la dalle sans déplacer celles qui y sont déjà. */
+  function obCell(k) {
+    var s = Math.floor(Math.sqrt(k)), r = k - s * s;
+    return r <= s ? [s, r] : [r - s - 1, s];
+  }
+
+  function obPt(x, y, z) {
+    return ((x - y) * OB_U * OB_K).toFixed(1) + "," + ((x + y) * OB_U * 0.5 - z * OB_U).toFixed(1);
+  }
+  function obFace(points, cls) {
+    return obSvg("polygon", { class: cls, points: points.map(function (p) { return obPt(p[0], p[1], p[2]); }).join(" ") });
+  }
+
+  /* Répartition sur les niveaux : ce qui vit en bas reste en bas, les
+     chambres montent, le grenier est au sommet. Stable quand on ajoute. */
+  function obLevels(rooms, floors) {
+    var F = Math.max(1, Math.min(8, floors || 1));
+    var levels = [];
+    for (var i = 0; i < F; i++) levels.push([]);
+    var up = 0, other = 0;
+    rooms.forEach(function (room) {
+      var level = 0;
+      if (F > 1) {
+        if (room.key === "grenier") level = F - 1;
+        else if (OB_GROUND[room.key]) level = 0;
+        else if (OB_UPSTAIRS[room.key]) level = 1 + (up++ % (F - 1));
+        else level = other++ % F;
+      }
+      levels[level].push(room);
+    });
+    return levels;
+  }
+
+  function obModel(data, opts) {
+    opts = opts || {};
+    var rooms = data.rooms || [];
+    var levels = obLevels(rooms, data.floors);
+    var most = 0;
+    levels.forEach(function (level) { most = Math.max(most, level.length); });
+    var G = Math.max(2, Math.ceil(Math.sqrt(most)));
+    var F = levels.length;
+    var LH = G * 0.64 + 0.62, FT = 0.07, WH = 0.44, SLAB = 0.14, GAP = 0.08, PAD = 0.1;
+
+    var svg = obSvg("svg", {
+      class: "ob-model-svg", role: "img", focusable: "false",
+      "aria-label": "Aperçu de " + (data.name || "votre logement") + " : " + plural(rooms.length, "pièce", "pièces") + (F > 1 ? " sur " + F + " niveaux" : "")
+    });
+
+    var shadowId = uid("ob-shadow");
+    svg.appendChild(obSvg("defs", {}, [
+      obSvg("radialGradient", { id: shadowId }, [
+        obSvg("stop", { offset: "0", "stop-color": "#000", "stop-opacity": ".55" }),
+        obSvg("stop", { offset: "1", "stop-color": "#000", "stop-opacity": "0" })
+      ])
+    ]));
+    var ground = (G + PAD) * OB_U;
+    svg.appendChild(obSvg("ellipse", { cx: 0, cy: ground * 0.5 + SLAB * OB_U + 8, rx: ground * OB_K * 1.35, ry: ground * 0.42, fill: "url(#" + shadowId + ")" }));
+
+    var freshIndex = 0;
+    levels.forEach(function (list, L) {
+      var z0 = L * LH;
+      var zs = z0 - FT;
+      var level = obSvg("g", { class: "ob-m-level" + (opts.levelNew === L ? " is-new" : ""), style: "--i:" + L });
+      var a = -PAD, b = G + PAD;
+      level.appendChild(obFace([[a, a, zs], [b, a, zs], [b, b, zs], [a, b, zs]], "ob-m-slab"));
+      level.appendChild(obFace([[a, b, zs], [b, b, zs], [b, b, zs - SLAB], [a, b, zs - SLAB]], "ob-m-slab-a"));
+      level.appendChild(obFace([[b, a, zs], [b, b, zs], [b, b, zs - SLAB], [b, a, zs - SLAB]], "ob-m-slab-b"));
+
+      for (var k = list.length; k < G * G; k++) {
+        var c = obCell(k);
+        level.appendChild(obFace([
+          [c[0] + GAP, c[1] + GAP, zs], [c[0] + 1 - GAP, c[1] + GAP, zs],
+          [c[0] + 1 - GAP, c[1] + 1 - GAP, zs], [c[0] + GAP, c[1] + 1 - GAP, zs]
+        ], "ob-m-ghost"));
+      }
+
+      var placed = list.map(function (room, index) { return { room: room, cell: obCell(index) }; });
+      placed.sort(function (p, q) { return (p.cell[0] + p.cell[1]) - (q.cell[0] + q.cell[1]) || p.cell[0] - q.cell[0]; });
+
+      var labels = [];
+      placed.forEach(function (entry) {
+        var room = entry.room, cx = entry.cell[0], cy = entry.cell[1];
+        var x0 = cx + GAP, x1 = cx + 1 - GAP, y0 = cy + GAP, y1 = cy + 1 - GAP;
+        var fresh = obFresh("pm:" + room.id) && !opts.noDrop;
+        var mat = OB_MAT[room.key] || ["linen", "oak", "sage", "clay", "dusk"][(room.label || "").length % 5];
+        var group = obSvg("g", {
+          class: "ob-m-room" + (fresh ? " is-new" : "") + (opts.focus === room.id ? " is-focus" : ""),
+          "data-room": room.id,
+          style: "--m:var(--" + mat + ");--d:" + (fresh ? Math.min(600, (freshIndex++) * 90) : 0) + "ms;--i:" + (L * 9 + cx + cy)
+        });
+        var title = obSvg("title");
+        title.textContent = room.label;
+        group.appendChild(title);
+        group.appendChild(obFace([[x0, y0, z0], [x0, y1, z0], [x0, y1, z0 + WH], [x0, y0, z0 + WH]], "ob-m-wl"));
+        group.appendChild(obFace([[x0, y0, z0], [x1, y0, z0], [x1, y0, z0 + WH], [x0, y0, z0 + WH]], "ob-m-wr"));
+        group.appendChild(obFace([[x0, y1, z0], [x1, y1, z0], [x1, y1, z0 - FT], [x0, y1, z0 - FT]], "ob-m-sa"));
+        group.appendChild(obFace([[x1, y0, z0], [x1, y1, z0], [x1, y1, z0 - FT], [x1, y0, z0 - FT]], "ob-m-sb"));
+        group.appendChild(obFace([[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], "ob-m-top"));
+        group.appendChild(obFace([[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], "ob-m-hl"));
+
+        // Les rangements : de petits volumes posés contre les murs.
+        (room.furniture || []).slice(0, 5).forEach(function (name, n) {
+          var s = 0.17, h = 0.16 + ((name.length * 7) % 5) * 0.045;
+          var fx = n < 3 ? x0 + 0.07 + n * 0.24 : x0 + 0.05;
+          var fy = n < 3 ? y0 + 0.05 : y0 + 0.31 + (n - 3) * 0.24;
+          var box = obSvg("g", { class: "ob-m-box" + (obFresh("pf:" + room.id + ":" + name) && !fresh && !opts.noDrop ? " is-new" : "") });
+          box.appendChild(obFace([[fx, fy + s, z0], [fx + s, fy + s, z0], [fx + s, fy + s, z0 + h], [fx, fy + s, z0 + h]], "ob-m-box-a"));
+          box.appendChild(obFace([[fx + s, fy, z0], [fx + s, fy + s, z0], [fx + s, fy + s, z0 + h], [fx + s, fy, z0 + h]], "ob-m-box-b"));
+          box.appendChild(obFace([[fx, fy, z0 + h], [fx + s, fy, z0 + h], [fx + s, fy + s, z0 + h], [fx, fy + s, z0 + h]], "ob-m-box-t"));
+          group.appendChild(box);
+        });
+        level.appendChild(group);
+
+        if (opts.labels !== false) {
+          var at = obPt(cx + 0.5, cy + 0.56, z0).split(",");
+          var text = obSvg("text", { class: "ob-m-label", x: at[0], y: at[1], "text-anchor": "middle", "data-label": room.id });
+          text.textContent = obShort(room.label);
+          labels.push(text);
+        }
+      });
+      labels.forEach(function (text) { level.appendChild(text); });
+
+      if (F > 1) {
+        var tag = obPt(-PAD, b, zs - SLAB * 0.5).split(",");
+        level.appendChild(obSvg("text", { class: "ob-m-tag", x: (+tag[0] - 7).toFixed(1), y: tag[1], "text-anchor": "end" }, [
+          document.createTextNode(L === 0 ? "RDC" : "N" + L)
+        ]));
+      }
+      svg.appendChild(level);
+    });
+
+    // Cadrage : calculé une fois pour toutes les dalles et murs.
+    var half = (G + 2 * PAD) * OB_U * OB_K;
+    var top = -(PAD * 2) * OB_U * 0.5 - ((F - 1) * LH + WH) * OB_U;
+    var bottom = (G + PAD) * OB_U + SLAB * OB_U + 14;
+    var left = -half - (F > 1 ? 34 : 10), width = half * 2 + (F > 1 ? 44 : 20);
+    svg.setAttribute("viewBox", left.toFixed(1) + " " + (top - 10).toFixed(1) + " " + width.toFixed(1) + " " + (bottom - top + 14).toFixed(1));
+
+    return el("div", { class: "ob-model" + (opts.materialize ? " ob-materialize" : "") }, [svg]);
+  }
+
+  function obShort(label) {
+    var text = String(label || "").trim() || "Sans nom";
+    return text.length > 15 ? text.slice(0, 14) + "…" : text;
+  }
+
+  function obMeta(type, rooms, floors) {
+    var parts = [OB_TYPE_LABEL[type] || "Logement"];
+    if (floors > 1) parts.push(plural(floors, "niveau", "niveaux"));
+    if (rooms.length) parts.push(plural(rooms.length, "pièce", "pièces"));
+    var furn = 0;
+    rooms.forEach(function (room) { furn += (room.furniture || []).length; });
+    if (furn) parts.push(plural(furn, "rangement", "rangements"));
+    return parts.join(" · ");
+  }
+
+  /* Le panneau d'aperçu : la maquette et l'enseigne du logement. */
+  function obSidePanel(data, opts) {
+    opts = opts || {};
+    var name = el("p", { class: "ob-sign-name", text: data.name || "Votre logement" });
+    var meta = el("p", { class: "ob-sign-meta", text: data.rooms.length ? obMeta(data.type, data.rooms, data.floors) : (opts.empty || "Vos pièces apparaîtront ici, une à une.") });
+    return el("aside", { class: "ob-side" + (opts.band ? " ob-side--band" : "") + (opts.hideMobile ? " ob-side--desk" : ""), "aria-label": "Aperçu du logement" }, [
+      obModel(data, opts),
+      el("div", { class: "ob-sign" }, [name, meta, opts.caption ? el("p", { class: "ob-sign-cap", text: opts.caption }) : null])
+    ]);
+  }
+
+  /* L'ossature commune des écrans de nuit. */
+  function obShell(kind, head, stageChildren, side, extra) {
+    var stage = el("section", {
+      class: "ob-stage" + (obEnter ? " ob-in-" + obEnter : ""),
+      "aria-labelledby": "ob-step-title"
+    }, stageChildren);
+    obEnter = null;
+    return el("div", { class: "ob ob-" + kind + " night" }, [
+      obBackdrop(),
+      head,
+      extra || null,
+      el("main", { class: "ob-main" + (side ? "" : " ob-main--solo") }, [stage, side || null])
     ]);
   }
 
   /* ═══ Écran 1 — Création de compte ══════════════════════════════════ */
 
-  /* L'état du formulaire vit HORS de la fonction de rendu. Déclaré à
-     l'intérieur, il était réinitialisé à chaque render() : les messages
-     d'erreur disparaissaient avant d'être peints et les champs se vidaient —
-     de l'extérieur, le bouton semblait ne rien faire. */
-  var signup = { fullName: "", email: "", password: "", errors: {} };
+  /* L'état du formulaire vit HORS de la fonction de rendu : un render()
+     venu d'ailleurs ne vide pas les champs et ne perd pas les erreurs. */
+  function obBlankSignup() { return { fullName: "", email: "", password: "", errors: {}, busy: false }; }
+  var signup = obBlankSignup();
+
+  var OB_DOMAINS = ["gmail.com", "hotmail.com", "hotmail.fr", "outlook.com", "outlook.fr", "yahoo.com", "yahoo.fr",
+    "orange.fr", "free.fr", "laposte.net", "sfr.fr", "icloud.com", "wanadoo.fr", "live.fr", "proton.me", "protonmail.com", "gmx.fr", "bbox.fr", "neuf.fr"];
+
+  function obDistance(a, b) {
+    var row = [], i, j, prev, tmp;
+    for (j = 0; j <= b.length; j++) row.push(j);
+    for (i = 1; i <= a.length; i++) {
+      prev = row[0]; row[0] = i;
+      for (j = 1; j <= b.length; j++) {
+        tmp = row[j];
+        row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+        prev = tmp;
+      }
+    }
+    return row[b.length];
+  }
+
+  /* « gmial.com » est presque toujours « gmail.com ». On propose, on ne
+     corrige jamais d'office. */
+  function obEmailHint(value) {
+    var match = /^([^@\s]+)@([^@\s]+)$/.exec(String(value).trim().toLowerCase());
+    if (!match || OB_DOMAINS.indexOf(match[2]) !== -1) return null;
+    var best = null, score = 3;
+    OB_DOMAINS.forEach(function (domain) {
+      var d = obDistance(match[2], domain);
+      if (d < score) { score = d; best = domain; }
+    });
+    return best ? match[1] + "@" + best : null;
+  }
+
+  function obFieldError(key, value) {
+    value = value || "";
+    if (key === "fullName") return value.trim() ? null : "Indiquez au moins un prénom.";
+    if (key === "email") {
+      if (!value.trim()) return "Indiquez votre adresse email.";
+      return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim()) ? null : "Cette adresse email n'est pas valide : vérifiez le @ et le domaine.";
+    }
+    // Mêmes règles que le serveur : 12 caractères et une variété minimale.
+    if (value.length < 12) {
+      var missing = 12 - value.length;
+      return "Encore " + missing + (missing > 1 ? " caractères" : " caractère") + " : le mot de passe doit en faire 12 au minimum.";
+    }
+    if (new Set(value).size < 5) return "Ce mot de passe est trop répétitif. Utilisez au moins cinq caractères différents.";
+    return null;
+  }
+
+  /* La jauge : informative pendant la frappe, jamais un reproche. */
+  function obStrength(pw) {
+    if (!pw) return { level: 0, value: 0, text: "12 caractères minimum, dont 5 différents." };
+    if (pw.length < 12) return { level: 1, value: pw.length / 12 * 0.45, text: pw.length + " sur 12 caractères" };
+    if (new Set(pw).size < 5) return { level: 1, value: 0.45, text: "Trop répétitif : variez les caractères." };
+    var kinds = [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter(function (re) { return re.test(pw); }).length;
+    var score = 2 + (pw.length >= 16 ? 1 : 0) + (kinds >= 3 ? 1 : 0);
+    if (score === 2) return { level: 2, value: 0.62, text: "Correct. Plus long, il serait plus solide." };
+    if (score === 3) return { level: 3, value: 0.82, text: "Solide." };
+    return { level: 4, value: 1, text: "Excellent." };
+  }
+
+  /* Le logement d'exemple de l'aperçu d'inscription : il porte déjà votre
+     prénom pendant que vous le tapez. */
+  var OB_TEASER = [
+    { id: "ob-t1", key: "salon", label: "Salon", icon: "r-salon", kind: "room", furniture: ["Buffet", "Bibliothèque"] },
+    { id: "ob-t2", key: "cuisine", label: "Cuisine", icon: "r-cuisine", kind: "room", furniture: ["Placard haut", "Tiroir à couverts", "Sous l'évier"] },
+    { id: "ob-t3", key: "chambre", label: "Chambre", icon: "r-chambre", kind: "room", furniture: ["Armoire", "Table de chevet"] },
+    { id: "ob-t4", key: "sdb", label: "Salle de bain", icon: "r-sdb", kind: "room", furniture: ["Armoire à pharmacie"] },
+    { id: "ob-t5", key: "entree", label: "Entrée", icon: "r-entree", kind: "room", furniture: ["Placard"] }
+  ];
+
+  function obTeaserName() {
+    var first = obFirstName(signup.fullName);
+    return first ? "Chez " + first : "Chez vous";
+  }
+
+  var OB_GOOGLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">' +
+    '<path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.2-2.1 3.5-5.2 3.5-8.8z"/>' +
+    '<path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1 .7-2.4 1.2-4 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/>' +
+    '<path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/>' +
+    '<path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg>';
+
+  var OB_APPLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="currentColor">' +
+    '<path d="M16.4 1.4c0 1.1-.5 2.3-1.2 3.1-.7.9-2 1.6-3 1.6l-.3-.1c0-1.1.6-2.3 1.2-3 .8-.9 2.1-1.6 3.2-1.7l.1.1zm4.5 15.7c0 .1-.5 1.6-1.5 3.1-.9 1.3-1.9 2.7-3.4 2.7s-1.9-.9-3.6-.9c-1.7 0-2.3.9-3.7.9-1.4 0-2.3-1.3-3.4-2.8C4 18.3 3 15.5 3 12.8c0-4.3 2.8-6.6 5.6-6.6 1.4 0 2.7 1 3.6 1 .9 0 2.2-1 3.9-1 .6 0 2.9.1 4.4 2.2-.1.1-2.4 1.4-2.4 4.2 0 3.3 2.9 4.4 2.8 4.5z"/></svg>';
 
   function screenSignup() {
+    obKeys = null;
+    var fields = {};
+    var cta, ctaLabel, signName;
+
+    function setStatus(key, message, markOk) {
+      var f = fields[key];
+      signup.errors[key] = message || null;
+      f.wrap.classList.toggle("is-err", !!message);
+      f.wrap.classList.toggle("is-ok", !message && !!markOk && !!signup[key]);
+      if (message) f.input.setAttribute("aria-invalid", "true");
+      else f.input.removeAttribute("aria-invalid");
+      f.msg.replaceChildren();
+      if (message) f.msg.appendChild(el("span", { class: "ob-msg-err" }, [icon("warn", 13), el("span", { text: message })]));
+    }
+
+    function offerEmail() {
+      var better = obEmailHint(signup.email);
+      if (!better) return;
+      var f = fields.email;
+      f.msg.replaceChildren(el("button", {
+        class: "ob-suggest", type: "button",
+        onclick: function () {
+          signup.email = better; f.input.value = better;
+          setStatus("email", null, true); f.input.focus();
+        }
+      }, ["Vouliez-vous dire ", el("strong", { text: better }), " ?"]));
+    }
+
+    /* Validation douce : au départ du champ, jamais pendant la première
+       saisie. Une fois une erreur affichée, elle se met à jour à la frappe
+       pour disparaître dès que c'est corrigé. */
+    function check(key, soft) {
+      var value = signup[key];
+      if (soft && !value) { setStatus(key, null, false); return true; }
+      var message = obFieldError(key, value);
+      setStatus(key, message, true);
+      if (!message && key === "email") offerEmail();
+      return !message;
+    }
+
+    function field(key, label, type, autocomplete, extras) {
+      var id = "ob-f-" + key;
+      var input = el("input", {
+        class: "ob-input", id: id, name: key, type: type, placeholder: " ",
+        autocomplete: autocomplete, value: signup[key], required: true,
+        maxlength: key === "fullName" ? 80 : 254,
+        autocapitalize: key === "fullName" ? "words" : "none",
+        spellcheck: key === "fullName" ? null : "false",
+        inputmode: key === "email" ? "email" : null,
+        "aria-describedby": id + "-msg" + (key === "password" ? " ob-meter-txt" : ""),
+        oninput: function (event) {
+          signup[key] = event.target.value;
+          if (signup.errors[key]) check(key, false);
+          else if (fields[key].wrap.classList.contains("is-ok") && obFieldError(key, signup[key])) fields[key].wrap.classList.remove("is-ok");
+          if (key === "password") paintMeter();
+          if (key === "fullName" && signName) signName.textContent = obTeaserName();
+        },
+        onblur: function () { check(key, true); }
+      });
+      var msg = el("div", { class: "ob-msg", id: id + "-msg", "aria-live": "polite" });
+      var wrap = el("div", { class: "ob-field ob-field--" + key }, [
+        input,
+        el("label", { class: "ob-flabel", for: id, text: label }),
+        key === "password" ? null : el("span", { class: "ob-field-ok", "aria-hidden": "true" }, [obCheck(16)])
+      ].concat(extras || []).concat([msg]));
+      fields[key] = { input: input, msg: msg, wrap: wrap };
+      if (signup.errors[key]) setTimeout(function () { setStatus(key, signup.errors[key], false); }, 0);
+      return wrap;
+    }
+
+    /* Afficher le mot de passe : on garde la position du curseur. */
+    var eye = el("button", {
+      class: "ob-eye", type: "button", "aria-pressed": "false", "aria-controls": "ob-f-password",
+      "aria-label": "Afficher le mot de passe",
+      onclick: function () {
+        var input = fields.password.input;
+        var start = input.selectionStart, end = input.selectionEnd;
+        var show = input.type === "password";
+        input.type = show ? "text" : "password";
+        eye.setAttribute("aria-pressed", show ? "true" : "false");
+        eye.setAttribute("aria-label", show ? "Masquer le mot de passe" : "Afficher le mot de passe");
+        eye.replaceChildren(icon(show ? "eye-off" : "eye", 19));
+        input.focus();
+        try { input.setSelectionRange(start, end); } catch (e) {}
+      }
+    }, [icon("eye", 19)]);
+
+    var meterFill = el("i", { class: "ob-meter-fill" });
+    var meterTxt = el("span", { class: "ob-meter-txt", id: "ob-meter-txt" });
+    var meter = el("div", { class: "ob-meter" }, [
+      el("span", { class: "ob-meter-track", "aria-hidden": "true" }, [meterFill, el("i", { class: "ob-meter-ticks" })]),
+      meterTxt
+    ]);
+    function paintMeter() {
+      var s = obStrength(signup.password);
+      meter.setAttribute("data-level", s.level);
+      meterFill.style.setProperty("--v", s.value.toFixed(3));
+      meterTxt.textContent = s.text;
+    }
 
     function submit(event) {
       event.preventDefault();
-
-      var name = signup.fullName.trim();
-      var email = signup.email.trim().toLowerCase();
-      var password = signup.password;
-      var errors = {};
-
-      if (name.length < 1) errors.fullName = "Indiquez au moins un prénom.";
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) errors.email = "Cette adresse email n'est pas valide.";
-      // Mêmes règles que le serveur : 12 caractères et une variété minimale.
-      if (password.length < 12) errors.password = "Encore " + (12 - password.length) + " caractère(s) : le mot de passe doit en faire 12 au minimum.";
-      else if (new Set(password).size < 5) errors.password = "Ce mot de passe est trop répétitif. Utilisez au moins cinq caractères différents.";
-
-      signup.errors = errors;
-
-      if (Object.keys(errors).length > 0) {
-        render();
-        // Le premier champ fautif reprend le focus : sans cela, sur mobile, le
-        // message s'affiche hors écran et l'utilisateur ne le voit pas.
-        var first = document.querySelector('[aria-invalid="true"]');
-        if (first) { first.focus(); first.scrollIntoView({ block: "center" }); }
+      if (signup.busy) return;
+      var firstBad = null;
+      ["fullName", "email", "password"].forEach(function (key) {
+        if (!check(key, false) && !firstBad) firstBad = key;
+      });
+      if (firstBad) {
+        var f = fields[firstBad];
+        f.input.focus();
+        f.wrap.classList.remove("ob-shake");
+        void f.wrap.offsetWidth;
+        f.wrap.classList.add("ob-shake");
+        obAnnounce(signup.errors[firstBad]);
         return;
       }
-
-      enter({ name: name, email: email }, false);
+      signup.busy = true;
+      cta.classList.add("is-busy");
+      cta.setAttribute("aria-busy", "true");
+      ctaLabel.textContent = "Création du compte…";
+      obBurstFrom(cta, null, { count: 22, power: 5, up: true });
+      var account = { name: signup.fullName.trim(), email: signup.email.trim().toLowerCase() };
+      setTimeout(function () { enter(account, false); }, obCalm() ? 150 : 700);
     }
 
-    function field(label, key, type, placeholder, autocomplete, hint) {
-      var input = el("input", {
-        // `name` est conservé : c'est ce sur quoi s'appuient les gestionnaires
-        // de mots de passe et le remplissage automatique du navigateur.
-        class: "input", type: type, name: key, placeholder: placeholder,
-        autocomplete: autocomplete, value: signup[key],
-        "aria-invalid": signup.errors[key] ? "true" : null,
-        "aria-describedby": signup.errors[key] ? "err-" + key : null,
-        oninput: function (event) {
-          signup[key] = event.target.value;
-          // On efface l'erreur dès la correction, sans redessiner : redessiner
-          // à chaque frappe ferait perdre le curseur.
-          if (signup.errors[key]) {
-            signup.errors[key] = null;
-            event.target.removeAttribute("aria-invalid");
-            var node = document.getElementById("err-" + key);
-            if (node) node.remove();
-          }
+    /* Google et Apple : présents parce que c'est ainsi que la vraie
+       application ouvrira un compte en un geste. Ici, aucun fournisseur
+       n'est contacté, et le bouton le dit. */
+    function social(provider, markup) {
+      var glyph = el("span", { class: "ob-social-ic", html: markup });
+      return el("button", {
+        class: "ob-social-btn", type: "button",
+        "aria-label": "Continuer avec " + provider + " (compte fictif dans ce prototype)",
+        onclick: function () {
+          enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, false);
+          toast("Prototype : compte fictif créé, sans connexion à " + provider + ".");
         }
-      });
-
-      return el("label", { class: "field" }, [
-        el("span", { text: label }),
-        input,
-        signup.errors[key]
-          ? el("span", { class: "err", id: "err-" + key, role: "alert", text: signup.errors[key] })
-          : (hint ? el("span", { style: "font-size:.75rem;color:var(--faint)", text: hint }) : null)
-      ]);
+      }, [glyph, el("span", { text: provider })]);
     }
 
-    return el("div", { class: "screen", style: "position:relative" }, [
-      el("div", { class: "halo", "aria-hidden": "true" }),
-      el("div", { class: "screen-head" }, [logo(22)]),
-      el("div", { class: "screen-body" }, [
-        el("div", { class: "screen-inner" }, [
-          el("div", {}, [
-            el("h1", { class: "display t-xl", text: "Créer votre compte" }),
-            el("p", { class: "lede", style: "margin-top:10px", text: "Deux minutes pour ne plus jamais rien chercher." })
-          ]),
+    cta = obCta("Créer mon compte gratuit", { type: "submit" });
+    ctaLabel = cta.querySelector(".ob-cta-label");
+    if (signup.busy) signup.busy = false;
 
-          el("form", { class: "stack", onsubmit: submit, novalidate: true }, [
-            field("Prénom et nom", "fullName", "text", "Camille Dupont", "name"),
-            field("Adresse email", "email", "email", "vous@exemple.fr", "email"),
-            field("Mot de passe", "password", "password", "12 caractères minimum", "new-password", "12 caractères minimum, comme dans la vraie application. Aucun email n'est envoyé."),
-            el("button", { class: "btn btn-lg btn-volt", type: "submit", style: "margin-top:6px", text: "Créer mon compte" })
-          ]),
-
-          /* Entrée directe : un prototype qu'on n'atteint qu'après avoir passé
-             une validation de mot de passe n'est pas un prototype utile. */
-          el("div", { class: "stack-sm", style: "border-top:1px solid var(--line);padding-top:22px" }, [
-            el("button", {
-              class: "btn btn-line", type: "button", style: "width:100%",
-              onclick: function () {
-                enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true);
-              }
-            }, [icon("bolt", 16), "Entrer directement, logement déjà rempli"]),
-            el("p", {
-              style: "font-size:.75rem;line-height:1.6;color:var(--faint);text-align:center",
-              text: "Compte de démonstration, Éclair activé, 40 objets déjà référencés."
-            })
-          ])
-        ])
-      ])
+    var form = el("form", { class: "ob-form", onsubmit: submit, novalidate: true, "aria-label": "Création de compte" }, [
+      field("fullName", "Prénom et nom", "text", "name"),
+      field("email", "Adresse email", "email", "email"),
+      field("password", "Mot de passe", "password", "new-password", [eye, meter]),
+      cta,
+      el("p", { class: "ob-trust" }, [icon("shield", 14), el("span", { text: "Votre inventaire reste sur votre appareil. Aucun email n'est envoyé." })])
     ]);
+    paintMeter();
+
+    var side = obSidePanel({ name: obTeaserName(), type: "apartment", floors: 1, rooms: OB_TEASER }, {
+      hideMobile: true,
+      caption: "Aperçu. Votre logement prendra forme ici, pièce par pièce, pendant la configuration."
+    });
+    signName = side.querySelector(".ob-sign-name");
+
+    var head = el("header", { class: "ob-head" }, [logo(22)]);
+
+    var stage = [
+      el("h1", { class: "ob-title ob-title--hero", id: "ob-step-title", tabindex: "-1" }, [
+        "Retrouvez tout en un ", el("em", { class: "ob-serif", text: "éclair" }), "."
+      ]),
+      el("p", { class: "ob-lede", text: "Créez votre compte gratuit. Deux minutes pour décrire votre logement, puis chaque objet se retrouve en deux secondes." }),
+      form,
+      el("div", { class: "ob-or", role: "separator" }, [el("span", { text: "ou" })]),
+      el("div", { class: "ob-social" }, [social("Google", OB_GOOGLE), social("Apple", OB_APPLE)]),
+      el("p", { class: "ob-fine", text: "Prototype : ces deux boutons créent un compte fictif. Ni Google ni Apple ne sont contactés." }),
+      /* Entrée directe : un prototype qu'on n'atteint qu'après avoir passé
+         une validation de mot de passe n'est pas un prototype utile. */
+      el("button", {
+        class: "ob-demo", type: "button",
+        onclick: function (event) {
+          obBurstFrom(event.currentTarget, event, { count: 16 });
+          enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true);
+        }
+      }, [
+        el("span", { class: "ob-demo-ic", "aria-hidden": "true" }, [icon("bolt", 18)]),
+        el("span", { class: "ob-demo-txt" }, [
+          el("strong", { text: "Essayer avec un logement déjà rempli" }),
+          el("span", { text: "40 objets, Éclair activé, sans inscription." })
+        ]),
+        icon("arrow-right", 16)
+      ])
+    ];
+
+    var screen = obShell("signup", head, stage, side);
+    if (obFine()) setTimeout(function () { var f = fields.fullName && fields.fullName.input; if (f && f.isConnected && !document.activeElement.matches("input")) f.focus({ preventScroll: true }); }, 30);
+    return screen;
   }
 
   /* Ouvre la session du prototype. `seeded` saute la configuration du logement
      et charge l'exemple, pour atterrir directement dans l'application. */
   function enter(account, seeded) {
     state.account = { name: account.name, email: account.email, createdAt: Date.now() };
-    signup = { fullName: "", email: "", password: "", errors: {} };
+    signup = obBlankSignup();
+    wiz = null;
+    screenOnboarding.last = 0;
 
     if (seeded) {
       seedHousehold();
@@ -1370,19 +2379,18 @@
       state.tab = "search";
       save();
       render();
+      window.scrollTo(0, 0);
       toast("Bienvenue. Éclair activé, 40 objets chargés.");
       return;
     }
 
+    // Le choix de formule est la première étape du parcours, pas une modale.
     state.screen = "onboarding";
     save();
-    render();
-    // Le choix de formule arrive à la fin de la création du compte, avant la
-    // configuration du logement.
-    setTimeout(planSheet, 220);
+    obTransition(function () {}, "fwd");
   }
 
-  /* ═══ Modale de formule ═════════════════════════════════════════════ */
+  /* ═══ Choix de formule ══════════════════════════════════════════════ */
 
   var FREE_FEATURES = [
     "Objets illimités", "Pièces, zones et meubles illimités",
@@ -1394,88 +2402,169 @@
     "Plan interactif du logement", "Recherche en langage naturel",
     "Alertes péremption, garantie et prêts", "Membres du foyer illimités"
   ];
+  var OB_PLANS = [
+    { id: "free", name: "Libre", price: "0 €", suffix: "pour toujours", pitch: "Tout ce qu'il faut pour ne plus jamais chercher.", features: FREE_FEATURES },
+    { id: "premium", name: "Éclair", price: "9 €", suffix: "par mois", pitch: "Pour référencer vite et chercher encore plus vite.", features: PAID_FEATURES, tag: "Recommandé" }
+  ];
 
-  function planSheet() {
-    var chosen = state.plan;
+  /* Deux cartes en groupe radio : flèches pour passer de l'une à l'autre,
+     Espace pour choisir, Entrée pour valider (branché par l'étape). */
+  function obPlanChooser(initial, onChange) {
+    var chosen = initial === "premium" ? "premium" : "free";
+    var cards = {};
 
-    function card(id, name, price, suffix, pitch, features, tag) {
-      var node = el("button", {
-        class: "plan-card", type: "button", role: "radio",
-        "aria-checked": chosen === id ? "true" : "false",
-        onclick: function () { chosen = id; refresh(); }
+    function set(id, event) {
+      if (id === chosen && !event) return;
+      chosen = id;
+      OB_PLANS.forEach(function (plan) {
+        var on = plan.id === id;
+        cards[plan.id].setAttribute("aria-checked", on ? "true" : "false");
+        cards[plan.id].tabIndex = on ? 0 : -1;
+      });
+      if (event) obBurstFrom(cards[id], event, { count: id === "premium" ? 26 : 14, power: id === "premium" ? 6 : 4 });
+      if (onChange) onChange(id);
+    }
+
+    var group = el("div", {
+      class: "ob-plans", role: "radiogroup", "aria-label": "Formule",
+      onkeydown: function (event) {
+        var keys = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+        if (!keys[event.key]) return;
+        event.preventDefault();
+        var next = chosen === "free" ? "premium" : "free";
+        set(next, null);
+        cards[next].focus();
+      }
+    });
+
+    OB_PLANS.forEach(function (plan) {
+      var card = el("div", {
+        class: "ob-plan ob-plan--" + plan.id, role: "radio",
+        tabindex: chosen === plan.id ? "0" : "-1",
+        "aria-checked": chosen === plan.id ? "true" : "false",
+        "aria-labelledby": "ob-plan-" + plan.id,
+        onclick: function (event) { if (chosen !== plan.id) set(plan.id, event); },
+        onkeydown: function (event) {
+          if (event.key === " ") { event.preventDefault(); if (chosen !== plan.id) set(plan.id, event); }
+        }
       }, [
-        el("div", { class: "plan-top" }, [
-          el("div", {}, [
-            el("div", { class: "inline", style: "gap:8px" }, [
-              el("span", { class: "plan-name", text: name }),
-              tag ? el("span", { class: "label badge", text: tag }) : null
-            ]),
-            el("p", { class: "muted", style: "font-size:.8125rem;margin-top:5px", text: pitch })
+        el("span", { class: "ob-plan-shine", "aria-hidden": "true" }),
+        el("div", { class: "ob-plan-top" }, [
+          el("p", { class: "ob-plan-name", id: "ob-plan-" + plan.id }, [
+            plan.name,
+            plan.tag ? el("span", { class: "ob-plan-tag", text: plan.tag }) : null
           ]),
-          el("span", { class: "plan-radio", "aria-hidden": "true" }, [chosen === id ? icon("check", 13) : null])
+          el("span", { class: "ob-tick", "aria-hidden": "true" }, [obCheck(16)])
         ]),
-        el("p", { class: "plan-price" }, [price, suffix ? el("small", { text: suffix }) : null]),
-        el("ul", { class: "plan-feats" }, features.map(function (feature) {
-          return el("li", {}, [icon("check"), el("span", { text: feature })]);
+        el("p", { class: "ob-plan-price" }, [el("span", { class: "tnum", text: plan.price }), el("small", { text: plan.suffix })]),
+        el("p", { class: "ob-plan-pitch", text: plan.pitch }),
+        el("ul", { class: "ob-plan-feats" }, plan.features.map(function (feature) {
+          return el("li", {}, [icon("check", 14), el("span", { text: feature })]);
         }))
       ]);
-      return node;
-    }
+      obTilt(card, 8);
+      cards[plan.id] = card;
+      group.appendChild(card);
+    });
 
-    function refresh() {
-      closeSheet();
-      draw();
-    }
+    return { node: group, get: function () { return chosen; }, set: set };
+  }
 
-    function finish() {
-      state.plan = chosen;
-      state.planSeen = true;
-      save();
-      closeSheet();
-      render();
-      if (chosen === "premium") toast("Éclair activé — gratuitement, en mode prototype.");
-    }
+  var OB_PLAN_NOTE = "Prototype : l'Éclair s'active gratuitement. Aucune carte n'est demandée et rien n'est débité. Dans la vraie application, un paiement sécurisé s'ouvrirait ici.";
 
-    function draw() {
-      sheet({
-        title: "Choisissez votre formule",
-        wide: true,
-        onClose: function () { state.planSeen = true; save(); render(); },
-        body: [
-          el("p", { class: "lede", text: "Vous pouvez commencer gratuitement et passer à l'Éclair plus tard. Aucun engagement." }),
-          el("div", { class: "plan-grid", role: "radiogroup", "aria-label": "Formule" }, [
-            card("free", "Libre", "0 €", null, "Tout ce qu'il faut pour ne plus jamais chercher.", FREE_FEATURES, null),
-            card("premium", "Éclair", "9 €", "/mois", "Pour référencer vite et chercher encore plus vite.", PAID_FEATURES, "Recommandé")
-          ]),
-          el("p", {
-            class: "label",
-            style: "text-transform:none;letter-spacing:.04em;font-size:.75rem;line-height:1.7;color:var(--faint)",
-            text: "Dans la vraie application, choisir l'Éclair ouvre un paiement Stripe. Ici, l'abonnement s'active gratuitement : c'est un prototype, aucune carte n'est demandée et rien n'est débité."
-          })
-        ],
-        foot: [
-          el("button", {
-            class: "btn btn-lg btn-volt", type: "button", style: "width:100%",
-            onclick: finish,
-            text: chosen === "premium" ? "Activer l'Éclair (gratuit en démo)" : "Continuer avec le plan Libre"
-          }),
-          el("p", { class: "muted", style: "text-align:center;font-size:.75rem;margin-top:12px", text: "Vous pourrez changer de formule à tout moment depuis les réglages." })
-        ]
-      });
-    }
+  function obPlanLabel(id) { return id === "premium" ? "Activer l'Éclair, gratuit en démo" : "Continuer avec Libre"; }
 
-    draw();
+  /* Conservé pour un changement de formule hors du parcours (réglages) :
+     les mêmes cartes, dans une feuille. */
+  function planSheet() {
+    var button;
+    var chooser = obPlanChooser(state.plan, function (id) { button.textContent = obPlanLabel(id); });
+    button = el("button", {
+      class: "btn btn-lg btn-volt", type: "button", style: "width:100%",
+      onclick: function () {
+        state.plan = chooser.get();
+        state.planSeen = true;
+        save();
+        closeSheet();
+        render();
+        if (state.plan === "premium") toast("Éclair activé — gratuitement, en mode prototype.");
+      },
+      text: obPlanLabel(chooser.get())
+    });
+    sheet({
+      title: "Choisissez votre formule",
+      wide: true,
+      onClose: function () { state.planSeen = true; save(); render(); },
+      body: [chooser.node, el("p", { class: "ob-fine", text: OB_PLAN_NOTE })],
+      foot: [button]
+    });
   }
 
   /* ═══ Écran 2 — Onboarding ══════════════════════════════════════════ */
 
   var wiz = null;
 
+  function obSteps() {
+    return ["plan", "type", "name", "floors", "rooms", "rename", "furniture"].filter(function (step) {
+      if (step === "plan") return wiz.withPlan;
+      if (step === "floors") return !(wiz.type === "studio" || wiz.type === "apartment");
+      return true;
+    });
+  }
+
+  function obNameIdeas(type) {
+    var first = obFirstName(state.account && state.account.name);
+    var ideas = {
+      apartment: ["L'appart", "Mon appartement", "La maison"],
+      house: ["La maison", "La maison de famille", "La maison de vacances"],
+      studio: ["Le studio", "Mon studio", "Le pied-à-terre"],
+      other: ["La maison", "Le loft", "La résidence secondaire"]
+    }[type] || ["La maison"];
+    return (first ? ["Chez " + first] : []).concat(ideas);
+  }
+
+  function obFloorsText(n) {
+    if (n <= 1) return "Plain-pied : tout est au même niveau.";
+    if (n === 2) return "Rez-de-chaussée et un étage.";
+    return "Rez-de-chaussée et " + (n - 1) + " étages.";
+  }
+
+  /* La petite maison de l'étape « niveaux » : les étages s'empilent, le
+     toit se soulève pour laisser entrer le nouveau. */
+  function obHouseArt(n, delta) {
+    var h = Math.min(22, 116 / n), W = 84, X = 18, base = 150;
+    var top = base - n * h;
+    var svg = obSvg("svg", { class: "ob-house-svg", viewBox: "0 0 120 160", "aria-hidden": "true", focusable: "false" });
+    svg.appendChild(obSvg("path", { class: "ob-house-ground", d: "M4 " + base + "H116" }));
+    for (var i = 0; i < n; i++) {
+      var y = base - (i + 1) * h;
+      var floor = obSvg("g", { class: "ob-house-floor" + (delta > 0 && i === n - 1 ? " is-new" : "") });
+      floor.appendChild(obSvg("rect", { x: X, y: y.toFixed(1), width: W, height: h.toFixed(1), rx: 1.5 }));
+      var wh = Math.max(3, h * 0.36), wy = y + (h - wh) / 2;
+      for (var w = 0; w < 3; w++) {
+        if (i === 0 && w === 1) {
+          floor.appendChild(obSvg("rect", { class: "ob-house-door", x: X + W / 2 - 5, y: (y + h * 0.3).toFixed(1), width: 10, height: (h * 0.7).toFixed(1), rx: 1 }));
+          continue;
+        }
+        var lit = (i * 3 + w * 5 + n) % 4 === 0;
+        floor.appendChild(obSvg("rect", { class: "ob-house-win" + (lit ? " is-lit" : ""), x: X + 12 + w * 25, y: wy.toFixed(1), width: 10, height: wh.toFixed(1), rx: 1 }));
+      }
+      svg.appendChild(floor);
+    }
+    svg.appendChild(obSvg("path", {
+      class: "ob-house-roof" + (delta > 0 ? " is-lift" : delta < 0 ? " is-drop" : ""),
+      style: "--h:" + h.toFixed(1) + "px",
+      d: "M" + (X - 7) + " " + top.toFixed(1) + " L60 " + (top - 30).toFixed(1) + " L" + (X + W + 7) + " " + top.toFixed(1) + "Z"
+    }));
+    return svg;
+  }
+
   function screenOnboarding() {
     if (!wiz) {
-      var first = state.account ? state.account.name.split(" ")[0] : "";
+      var first = obFirstName(state.account ? state.account.name : "");
       wiz = {
         step: 0,
+        withPlan: !state.planSeen,
         type: "apartment",
         name: first ? "Chez " + first : "La maison",
         floors: 1,
@@ -1484,29 +2573,46 @@
       };
     }
 
-    var steps = ["type", "name", "floors", "rooms", "rename", "furniture"];
-    if (wiz.type === "studio" || wiz.type === "apartment") steps = steps.filter(function (s) { return s !== "floors"; });
+    var steps = obSteps();
+    wiz.step = Math.max(0, Math.min(steps.length - 1, wiz.step));
     var current = steps[wiz.step];
+    var sideNode = null;
 
     function go(delta) {
-      wiz.step = Math.max(0, Math.min(steps.length - 1, wiz.step + delta));
-      render();
+      obTransition(function () {
+        wiz.step = Math.max(0, Math.min(obSteps().length - 1, wiz.step + delta));
+      }, delta < 0 ? "back" : "fwd");
+    }
+
+    function data() {
+      return { name: wiz.name.trim() || "La maison", type: wiz.type, floors: wiz.type === "house" || wiz.type === "other" ? wiz.floors : 1, rooms: wiz.rooms };
+    }
+
+    function side(band) {
+      sideNode = obSidePanel(data(), { band: band, labels: true });
+      return sideNode;
+    }
+
+    /* Redessine l'aperçu sans toucher à l'étape : seules les pièces
+       nouvelles tombent, les autres restent en place. */
+    function repaintSide(opts) {
+      if (!sideNode || !sideNode.isConnected) return;
+      var fresh = obSidePanel(data(), Object.assign({ band: sideNode.classList.contains("ob-side--band"), labels: true }, opts || {}));
+      sideNode.replaceChildren.apply(sideNode, Array.prototype.slice.call(fresh.childNodes));
     }
 
     /* Retire UN exemplaire précis, puis renumérote ce qui reste : supprimer
        « Chambre 2 » sur trois chambres ne doit pas laisser un trou entre
        « Chambre » et « Chambre 3 ». Les pièces renommées à la main sont
        laissées telles quelles — on ne réécrit pas le choix de l'utilisateur.
-
-       La puce du panier désigne l'exemplaire exact : c'est là qu'on regarde
-       quand on veut en enlever un, et c'est donc celui-là qu'on retire. */
+       Ne dessine rien : l'appelant repeint en place ou relance le rendu. */
     function removeRoomById(id, key) {
       wiz.rooms = wiz.rooms.filter(function (r) { return r.id !== id; });
-      if (!key) { render(); return; }
+      if (!key) return;
 
       var preset = null;
       for (var i = 0; i < ROOMS.length; i++) if (ROOMS[i].key === key) preset = ROOMS[i];
-      if (!preset) { render(); return; }
+      if (!preset) return;
 
       var remaining = wiz.rooms.filter(function (r) { return r.key === key; });
       var allDefault = remaining.every(function (r) { return r.label.indexOf(preset.label) === 0; });
@@ -1515,28 +2621,28 @@
           room.label = index === 0 ? preset.label : preset.label + " " + (index + 1);
         });
       }
-      render();
     }
 
     function addRoom(preset) {
       var existing = wiz.rooms.filter(function (r) { return r.key === preset.key; }).length;
-      wiz.rooms.push({
+      var room = {
         id: uid("r"), key: preset.key, icon: preset.icon, kind: preset.kind,
         // Un deuxième exemplaire est numéroté d'office : « Chambre 2 » est plus
         // utile qu'une deuxième « Chambre » indistinguable.
         label: existing === 0 ? preset.label : preset.label + " " + (existing + 1),
         furniture: (preset.suggests || []).slice(0, 3)
-      });
-      render();
+      };
+      wiz.rooms.push(room);
+      return room;
     }
 
-    function finish() {
-      state.household = { name: wiz.name.trim() || "La maison", type: wiz.type, floors: wiz.floors };
+    function commit() {
+      state.household = { name: wiz.name.trim() || "La maison", type: wiz.type, floors: data().floors };
       state.locations = [];
       state.items = [];
 
       wiz.rooms.forEach(function (room) {
-        var parent = { id: uid("loc"), parentId: null, kind: room.kind, name: room.label, icon: room.icon, floor: room.kind === "zone" ? 0 : 1 };
+        var parent = { id: uid("loc"), parentId: null, kind: room.kind, name: room.label.trim() || "Pièce", icon: room.icon, floor: room.kind === "zone" ? 0 : 1 };
         state.locations.push(parent);
         room.furniture.forEach(function (name) {
           state.locations.push({ id: uid("loc"), parentId: parent.id, kind: "furniture", name: name, icon: null, floor: parent.floor });
@@ -1546,239 +2652,558 @@
       state.screen = "app";
       state.tab = "search";
       wiz = null;
+      obKeys = null;
       save();
       render();
+      window.scrollTo(0, 0);
     }
 
-    var head = el("div", { class: "stack-sm", style: "margin-bottom:34px" }, [
-      el("div", { class: "inline", style: "justify-content:space-between" }, [
-        el("p", { class: "label", text: "Étape " + (wiz.step + 1) + " sur " + steps.length }),
-        wiz.step > 0 ? el("button", { class: "btn btn-sm btn-quiet", type: "button", onclick: function () { go(-1); } }, [icon("arrow-left", 14), "Retour"]) : null
-      ]),
-      el("div", { class: "progress" }, [el("i", { style: "width:" + ((wiz.step + 1) / steps.length * 100) + "%" })])
-    ]);
+    /* La fin : le logement se matérialise, une gerbe d'étincelles, puis
+       l'application. Bref, et passable d'un clic. */
+    function finish(event, button) {
+      var furn = 0;
+      wiz.rooms.forEach(function (room) { furn += room.furniture.length; });
+      var d = data();
+      if (button) obBurstFrom(button, event, { count: 20, up: true });
 
-    var content;
+      var done = false;
+      function leave() {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        overlay.classList.add("is-leaving");
+        setTimeout(commit, obCalm() ? 0 : 260);
+      }
 
-    if (current === "type") {
-      content = [
-        el("h1", { class: "display t-xl", text: "Vous habitez dans…" }),
-        el("p", { class: "lede", style: "margin-top:10px", text: "Cela nous sert à proposer les bons espaces." }),
-        el("div", { class: "tiles", style: "margin-top:30px" }, [
-          ["apartment", "h-appart", "Un appartement"], ["house", "h-maison", "Une maison"],
-          ["studio", "h-studio", "Un studio"], ["other", "h-autre", "Autre chose"]
-        ].map(function (option) {
-          return el("button", {
-            class: "tile", type: "button", "aria-pressed": wiz.type === option[0] ? "true" : "false",
-            onclick: function () { wiz.type = option[0]; wiz.step = 1; render(); }
-          }, [sym(option[1], 34), el("span", { text: option[2] })]);
-        }))
-      ];
+      var enterBtn = obCta("Ouvrir mon inventaire", { onclick: leave });
+      var overlay = el("div", { class: "ob-celebrate", role: "dialog", "aria-modal": "true", "aria-labelledby": "ob-cel-title" }, [
+        el("div", { class: "ob-cel-model" }, [obModel(d, { noDrop: true, materialize: true, labels: false })]),
+        // « prend vie » : neutre, quel que soit le genre du nom choisi.
+        el("h2", { class: "ob-cel-title", id: "ob-cel-title", text: d.name + " prend vie." }),
+        el("p", { class: "ob-cel-sub", text: plural(wiz.rooms.length, "pièce", "pièces") + ", " + plural(furn, "rangement", "rangements") + ". Il ne reste qu'à y ranger vos objets." }),
+        enterBtn
+      ]);
+      overlay.addEventListener("keydown", function (e) { if (e.key === "Escape") { e.preventDefault(); leave(); } });
+      var host = document.querySelector(".ob") || document.body;
+      host.appendChild(overlay);
+      enterBtn.focus({ preventScroll: true });
+      obAnnounce(d.name + " prend vie. " + plural(wiz.rooms.length, "pièce", "pièces") + ".");
+
+      if (!obCalm()) {
+        [0, 260, 620].forEach(function (delay, n) {
+          setTimeout(function () {
+            if (done) return;
+            var r = overlay.querySelector(".ob-cel-model").getBoundingClientRect();
+            obSpark(r.left + r.width * (0.3 + n * 0.2), r.top + r.height * 0.45, { count: 34, power: 7, up: true, confetti: true });
+          }, 380 + delay);
+        });
+      }
+      var timer = setTimeout(leave, obCalm() ? 4000 : 3400);
     }
 
-    else if (current === "name") {
-      content = [
-        el("h1", { class: "display t-xl", text: "Comment appelez-vous ce lieu ?" }),
-        el("p", { class: "lede", style: "margin-top:10px", text: "C'est le nom de votre foyer, visible par les membres que vous inviterez." }),
-        el("input", {
-          class: "input", style: "margin-top:30px;font-family:var(--display);font-size:clamp(1.5rem,5vw,2.2rem);font-weight:700;letter-spacing:-.03em;border:0;border-bottom:2px solid var(--line);border-radius:0;background:transparent;padding:10px 0",
-          value: wiz.name, maxlength: 80, autofocus: true,
-          oninput: function (event) { wiz.name = event.target.value; },
-          onkeydown: function (event) { if (event.key === "Enter") go(1); }
-        }),
-        el("div", { style: "margin-top:34px" }, [
-          el("button", { class: "btn btn-lg btn-volt", type: "button", onclick: function () { go(1); } }, ["Suivant", icon("arrow-right", 15)])
-        ])
-      ];
-    }
+    obKeys = { back: wiz.step > 0 ? function () { go(-1); } : null, primary: null };
 
-    else if (current === "floors") {
-      content = [
-        el("h1", { class: "display t-xl", text: "Combien de niveaux ?" }),
-        el("p", { class: "lede", style: "margin-top:10px", text: "Cave et grenier compris s'ils vous servent de rangement." }),
-        el("div", { class: "stepper", style: "margin-top:34px" }, [
-          el("button", { class: "round-btn", type: "button", "aria-label": "Retirer un niveau", disabled: wiz.floors <= 1, onclick: function () { wiz.floors = Math.max(1, wiz.floors - 1); render(); } }, [icon("minus", 18)]),
-          el("span", { class: "num", text: String(wiz.floors) }),
-          el("button", { class: "round-btn", type: "button", "aria-label": "Ajouter un niveau", disabled: wiz.floors >= 8, onclick: function () { wiz.floors = Math.min(8, wiz.floors + 1); render(); } }, [icon("plus", 18)])
-        ]),
-        el("div", { style: "margin-top:34px" }, [
-          el("button", { class: "btn btn-lg btn-volt", type: "button", onclick: function () { go(1); } }, ["Suivant", icon("arrow-right", 15)])
-        ])
-      ];
-    }
-
-    else if (current === "rooms") {
-      content = [
-        el("h1", { class: "display t-xl", text: "Quelles pièces ?" }),
-        el("p", { class: "lede", style: "margin-top:10px", text: "Touchez pour ajouter, plusieurs fois pour en avoir plusieurs. La croix en retire une." }),
-
-        el("div", { class: "pick-rows", style: "margin-top:26px" }, ROOMS.map(function (preset) {
-          var count = wiz.rooms.filter(function (r) { return r.key === preset.key; }).length;
-          return el("button", {
-            class: "pick-row" + (count > 0 ? " on" : ""), type: "button",
-            "aria-label": count > 0 ? "Ajouter une " + preset.label + " (" + count + " déjà)" : "Ajouter " + preset.label,
-            onclick: function () { addRoom(preset); }
-          }, [
-            sym(preset.icon, 20),
-            el("span", { class: "lbl", text: preset.label }),
-            count > 0 ? el("span", { class: "n", text: "×" + count }) : null,
-            el("span", { class: "add" }, [icon("plus", 16)])
-          ]);
-        })),
-
-        /* Le panier. Il porte les pièces dans l'ordre où elles ont été
-           ajoutées, chacune avec sa croix — y compris celles saisies à la
-           main, qui sinon ne pouvaient plus être annulées ici. */
-        el("div", { style: "margin-top:26px" }, [
-          el("p", { class: "label", style: "margin-bottom:10px",
-                    text: wiz.rooms.length === 0 ? "Votre sélection" : plural(wiz.rooms.length, "pièce sélectionnée", "pièces sélectionnées") }),
-          el("div", { class: "tray" }, wiz.rooms.length === 0
-            ? [el("span", { class: "tray-empty", text: "Rien pour l'instant. Touchez une pièce ci-dessus." })]
-            : wiz.rooms.map(function (room) {
-                return el("span", { class: "tray-chip accent" }, [
-                  sym(room.icon, 16),
-                  room.label,
-                  el("button", {
-                    class: "x", type: "button", "aria-label": "Retirer " + room.label, title: "Retirer",
-                    onclick: function () {
-                      if (room.key) { removeRoomById(room.id, room.key); }
-                      else { wiz.rooms = wiz.rooms.filter(function (r) { return r.id !== room.id; }); render(); }
-                    }
-                  }, [icon("x", 14)])
-                ]);
-              }))
-        ]),
-
-        (function () {
-          function addCustom() {
-            var label = wiz.custom.trim();
-            if (!label) return;
-            wiz.rooms.push({ id: uid("r"), key: null, icon: "r-piece", kind: "room", label: label.slice(0, 80), furniture: [] });
-            wiz.custom = "";
-            render();
-          }
-
-          var addButton = el("button", {
-            class: "btn btn-line", type: "button", disabled: !wiz.custom.trim(), onclick: addCustom
-          }, [icon("plus", 15), "Ajouter"]);
-
-          var input = el("input", {
-            class: "input", style: "flex:1;min-width:180px", placeholder: "Autre pièce ou zone", maxlength: 80,
-            value: wiz.custom,
-            oninput: function (event) {
-              wiz.custom = event.target.value;
-              // L'état du bouton est mis à jour EN PLACE : le redessiner à
-              // chaque frappe ferait perdre le curseur.
-              addButton.disabled = !wiz.custom.trim();
-            },
-            onkeydown: function (event) {
-              if (event.key !== "Enter") return;
-              event.preventDefault();
-              addCustom();
-            }
-          });
-
-          return el("div", { class: "inline", style: "margin-top:24px" }, [input, addButton]);
-        })(),
-
-        el("div", { style: "margin-top:30px" }, [
-          el("button", { class: "btn btn-lg btn-volt", type: "button", disabled: wiz.rooms.length === 0, onclick: function () { go(1); } }, ["Suivant", icon("arrow-right", 15)]),
-          wiz.rooms.length === 0 ? el("p", { class: "muted", style: "font-size:.8125rem;margin-top:12px", text: "Sélectionnez au moins une pièce pour continuer." }) : null
-        ])
-      ];
-    }
-
-    else if (current === "rename") {
-      content = [
-        el("h1", { class: "display t-xl", text: "Précisez les noms" }),
-        el("p", { class: "lede", style: "margin-top:10px", text: "« Chambre 2 » devient « Chambre de Léa ». Touchez l'icône pour la changer. Optionnel, mais très utile à la recherche." }),
-        el("ul", { class: "row-list", style: "margin-top:26px" }, wiz.rooms.map(function (room) {
-          return el("li", { class: "row" }, [
-            el("button", {
-              class: "mini icon-edit", type: "button",
-              "aria-label": "Changer l'icône de " + room.label, title: "Changer l'icône",
-              onclick: function () {
-                iconPicker({
-                  title: "Icône de " + room.label, current: room.icon,
-                  onPick: function (value) { room.icon = value || ICON_BY_KIND[room.kind]; render(); }
-                });
-              }
-            }, [sym(room.icon, 19)]),
-            el("input", {
-              class: "bare", value: room.label, maxlength: 80, "aria-label": room.label,
-              oninput: function (event) { room.label = event.target.value; }
-            }),
-            el("button", {
-              class: "mini", type: "button", "aria-label": "Retirer " + room.label, title: "Retirer",
-              onclick: function () { removeRoomById(room.id, room.key); }
-            }, [icon("x", 15)])
-          ]);
-        })),
-        el("div", { style: "margin-top:30px" }, [
-          el("button", { class: "btn btn-lg btn-volt", type: "button", onclick: function () { go(1); } }, ["Suivant", icon("arrow-right", 15)])
-        ])
-      ];
-    }
-
-    else {
-      content = [
-        el("h1", { class: "display t-xl", text: "Les meubles de rangement" }),
-        el("p", { class: "lede", style: "margin-top:10px", text: "Ajoutez les endroits où vous rangez vraiment des choses. Vous pourrez en ajouter d'autres à tout moment." }),
-        el("div", { class: "stack", style: "margin-top:28px" }, wiz.rooms.map(function (room) {
-          // Les meubles déjà retenus tiennent sur une ligne de puces ; le
-          // catalogue complet, lui, s'ouvre à la demande. Afficher vingt
-          // propositions par pièce noyait le choix.
-          var chips = room.furniture.map(function (name) {
-            var entry = furnitureByLabel(name);
-            return el("span", { class: "tray-chip accent" }, [
-              entry ? sym(entry.pic, 17) : sym("f-autre", 17),
-              name,
-              el("button", {
-                class: "x", type: "button", "aria-label": "Retirer " + name + " de " + room.label, title: "Retirer",
-                onclick: function () {
-                  room.furniture = room.furniture.filter(function (f) { return f !== name; });
-                  render();
-                }
-              }, [icon("x", 14)])
-            ]);
-          });
-
-          chips.push(el("button", {
-            class: "chip chip-sm", type: "button",
-            onclick: function () { furniturePicker(room, render); }
-          }, [icon("plus", 14), room.furniture.length === 0 ? "Ajouter un meuble" : "Ajouter"]));
-
-          return el("section", {}, [
-            el("h3", { class: "inline", style: "font-size:.9375rem;font-weight:600;margin:0;gap:9px;padding-bottom:9px;border-bottom:1.5px solid var(--line)" }, [
-              sym(room.icon, 18), room.label
-            ]),
-            el("div", { class: "tray", style: "margin-top:12px" }, chips),
-            room.furniture.length === 0
-              ? el("p", { class: "muted", style: "font-size:.8125rem;margin-top:8px", text: "Vous pouvez laisser vide et compléter plus tard." })
-              : null
-          ]);
-        })),
-        el("div", { style: "margin-top:34px" }, [
-          el("button", { class: "btn btn-lg btn-volt", type: "button", onclick: finish }, ["Terminer", icon("check", 15)])
-        ])
-      ];
-    }
-
-    return el("div", { class: "screen", style: "position:relative" }, [
-      el("div", { class: "halo", "aria-hidden": "true" }),
-      el("div", { class: "screen-head" }, [logo(22)]),
-      el("div", { class: "screen-body" }, [
-        el("div", { class: "screen-inner screen-wide" }, [head].concat(content))
+    var total = steps.length;
+    var head = el("header", { class: "ob-head" }, [
+      logo(22),
+      el("div", { class: "ob-head-right" }, [
+        wiz.step > 0 ? el("button", {
+          class: "ob-back", type: "button", "aria-keyshortcuts": "Escape",
+          onclick: function () { go(-1); }
+        }, [icon("arrow-left", 15), el("span", { text: "Retour" })]) : null,
+        el("p", { class: "ob-count tnum", text: "Étape " + (wiz.step + 1) + " sur " + total })
       ])
     ]);
+
+    /* La barre « éclair » : elle repart de là où elle était et file vers
+       la nouvelle valeur, étincelle en tête. */
+    var ratio = (wiz.step + 1) / total;
+    var from = typeof screenOnboarding.last === "number" ? screenOnboarding.last : 0;
+    var fill = el("i", { class: "ob-progress-fill" });
+    var progress = el("div", {
+      class: "ob-progress", role: "progressbar", "aria-label": "Progression de la configuration",
+      style: "--p:" + from.toFixed(4),
+      "aria-valuemin": "0", "aria-valuemax": String(total), "aria-valuenow": String(wiz.step + 1),
+      "aria-valuetext": "Étape " + (wiz.step + 1) + " sur " + total
+    }, [fill]);
+    screenOnboarding.last = ratio;
+    requestAnimationFrame(function () { requestAnimationFrame(function () { progress.style.setProperty("--p", ratio.toFixed(4)); }); });
+
+    function title(text, children) {
+      return el("h1", { class: "ob-title", id: "ob-step-title", tabindex: "-1" }, children || [text]);
+    }
+    function lede(text) { return el("p", { class: "ob-lede", text: text }); }
+
+    var stage, sidePanel = null;
+
+    /* ─── Formule ─── */
+    if (current === "plan") {
+      var planCta;
+      var chooser = obPlanChooser(state.plan, function (id) {
+        planCta.querySelector(".ob-cta-label").textContent = obPlanLabel(id);
+      });
+      var confirmPlan = function (event) {
+        state.plan = chooser.get();
+        state.planSeen = true;
+        save();
+        if (state.plan === "premium") {
+          obBurstFrom(planCta, event, { count: 30, power: 7, up: true });
+          toast("Éclair activé — gratuitement, en mode prototype.");
+        }
+        go(1);
+      };
+      planCta = obCta(obPlanLabel(chooser.get()), { onclick: confirmPlan });
+      obKeys.primary = function () { confirmPlan(null); };
+      stage = [
+        title("Choisissez votre formule"),
+        lede("Commencez gratuitement, passez à l'Éclair quand vous voulez. Sans engagement."),
+        chooser.node,
+        el("div", { class: "ob-actions ob-actions--plan ob-actions--sticky" }, [planCta]),
+        el("div", { class: "ob-plan-notes" }, [
+          el("p", { class: "ob-fine", text: OB_PLAN_NOTE }),
+          el("p", { class: "ob-fine", text: "Vous pourrez changer de formule à tout moment depuis les réglages." })
+        ])
+      ];
+    }
+
+    /* ─── Type de logement ─── */
+    else if (current === "type") {
+      var busy = false;
+      var tiles = [];
+      var pick = function (value, node, event) {
+        if (busy) return;
+        busy = true;
+        wiz.type = value;
+        if (value === "apartment" || value === "studio") wiz.floors = 1;
+        tiles.forEach(function (tile) { tile.setAttribute("aria-pressed", tile === node ? "true" : "false"); });
+        obBurstFrom(node, event, { count: 24, power: 6 });
+        repaintSide();
+        setTimeout(function () { go(1); }, obCalm() ? 0 : 440);
+      };
+      obKeys.primary = function () {
+        var on = tiles.filter(function (t) { return t.getAttribute("aria-pressed") === "true"; })[0];
+        if (on) pick(on.getAttribute("data-value"), on, null);
+      };
+      stage = [
+        title("Vous habitez dans…"),
+        lede("Cela nous sert à proposer les bons espaces. Touchez votre logement pour continuer."),
+        el("div", { class: "ob-types", role: "group", "aria-label": "Type de logement" }, [
+          ["apartment", "h-appart", "Un appartement", "Un seul niveau"],
+          ["house", "h-maison", "Une maison", "Étages, cave, garage"],
+          ["studio", "h-studio", "Un studio", "Une pièce principale"],
+          ["other", "h-autre", "Autre chose", "Loft, péniche, local"]
+        ].map(function (option) {
+          var tile = el("button", {
+            class: "ob-type", type: "button", "data-value": option[0],
+            "aria-pressed": wiz.type === option[0] ? "true" : "false",
+            onclick: function (event) { pick(option[0], tile, event); }
+          }, [
+            el("span", { class: "ob-type-shine", "aria-hidden": "true" }),
+            el("span", { class: "ob-type-ic" }, [sym(option[1], 40)]),
+            el("span", { class: "ob-type-name", text: option[2] }),
+            el("span", { class: "ob-type-sub", text: option[3] }),
+            el("span", { class: "ob-tick", "aria-hidden": "true" }, [obCheck(15)])
+          ]);
+          tiles.push(tile);
+          return obTilt(tile, 12);
+        }))
+      ];
+      sidePanel = side(false);
+    }
+
+    /* ─── Nom ─── */
+    else if (current === "name") {
+      var typing = 0;
+      var chips = [];
+      var nameInput = el("input", {
+        class: "ob-bigname", id: "ob-name", value: wiz.name, maxlength: 80, autocomplete: "off",
+        spellcheck: "false", "aria-labelledby": "ob-step-title", "aria-describedby": "ob-name-help",
+        "data-ob-focus": "1", "data-ob-own-enter": "1",
+        oninput: function (event) { clearInterval(typing); wiz.name = event.target.value; syncName(); },
+        onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); go(1); } }
+      });
+      var syncName = function () {
+        var sign = sideNode && sideNode.querySelector(".ob-sign-name");
+        if (sign) sign.textContent = nameInput.value.trim() || "La maison";
+        chips.forEach(function (chip) { chip.setAttribute("aria-pressed", chip.getAttribute("data-value") === wiz.name ? "true" : "false"); });
+      };
+      obKeys.primary = function () { go(1); };
+      stage = [
+        title("Comment appelez-vous ce lieu ?"),
+        lede("C'est le nom de votre foyer, visible par les membres que vous inviterez."),
+        el("div", { class: "ob-namebox" }, [nameInput, el("span", { class: "ob-name-line", "aria-hidden": "true" })]),
+        el("div", { class: "ob-ideas", role: "group", "aria-label": "Suggestions de nom", id: "ob-name-help" }, obNameIdeas(wiz.type).map(function (idea) {
+          var chip = el("button", {
+            class: "ob-idea", type: "button", "data-value": idea,
+            "aria-pressed": wiz.name === idea ? "true" : "false",
+            onclick: function (event) {
+              clearInterval(typing);
+              wiz.name = idea;
+              obBurstFrom(chip, event, { count: 8, power: 3 });
+              // Le focus revient au champ : Entrée continue, on peut retoucher le nom.
+              // Pas au doigt : le clavier virtuel masquerait le bouton Continuer.
+              if (obFine()) nameInput.focus({ preventScroll: true });
+              if (obCalm()) { nameInput.value = idea; syncName(); return; }
+              // Le nom s'écrit sous vos yeux, lettre à lettre.
+              var i = 0;
+              typing = setInterval(function () {
+                i += 1;
+                nameInput.value = idea.slice(0, i);
+                var sign = sideNode && sideNode.querySelector(".ob-sign-name");
+                if (sign) sign.textContent = nameInput.value;
+                if (i >= idea.length) { clearInterval(typing); syncName(); }
+              }, 28);
+              chips.forEach(function (c) { c.setAttribute("aria-pressed", c === chip ? "true" : "false"); });
+            }
+          }, [idea]);
+          chips.push(chip);
+          return chip;
+        })),
+        el("div", { class: "ob-actions" }, [obCta("Continuer", { onclick: function () { go(1); } })])
+      ];
+      sidePanel = side(false);
+    }
+
+    /* ─── Niveaux ─── */
+    else if (current === "floors") {
+      var reel = el("span", { class: "ob-odo-reel", style: "--n:" + wiz.floors }, [1, 2, 3, 4, 5, 6, 7, 8].map(function (n) {
+        return el("span", { text: String(n) });
+      }));
+      var odo = el("span", { class: "ob-odo tnum", "aria-hidden": "true" }, [reel]);
+      var unit = el("span", { class: "ob-odo-unit", "aria-hidden": "true", text: wiz.floors > 1 ? "niveaux" : "niveau" });
+      var out = el("output", { class: "ob-sr", "aria-live": "polite", text: plural(wiz.floors, "niveau", "niveaux") });
+      var desc = el("p", { class: "ob-floors-desc", text: obFloorsText(wiz.floors) });
+      var art = el("div", { class: "ob-house" }, [obHouseArt(wiz.floors, 0)]);
+      var minus, plus;
+      var setFloors = function (n) {
+        n = Math.max(1, Math.min(8, n));
+        if (n === wiz.floors) return;
+        var delta = n > wiz.floors ? 1 : -1;
+        wiz.floors = n;
+        reel.style.setProperty("--n", n);
+        unit.textContent = n > 1 ? "niveaux" : "niveau";
+        out.textContent = plural(n, "niveau", "niveaux");
+        desc.textContent = obFloorsText(n);
+        var focused = document.activeElement;
+        minus.disabled = n <= 1;
+        plus.disabled = n >= 8;
+        // Un bouton qui se désactive sous le focus le perdrait : on le passe à l'autre.
+        if (focused === minus && minus.disabled) plus.focus();
+        if (focused === plus && plus.disabled) minus.focus();
+        art.replaceChildren(obHouseArt(n, delta));
+        obPop(odo);
+        repaintSide({ levelNew: delta > 0 ? n - 1 : null });
+      };
+      minus = el("button", { class: "ob-round", type: "button", "aria-label": "Retirer un niveau", disabled: wiz.floors <= 1, onclick: function () { setFloors(wiz.floors - 1); } }, [icon("minus", 20)]);
+      plus = el("button", { class: "ob-round", type: "button", "aria-label": "Ajouter un niveau", disabled: wiz.floors >= 8, onclick: function (event) { setFloors(wiz.floors + 1); obBurstFrom(plus, event, { count: 8, power: 3 }); } }, [icon("plus", 20)]);
+      obKeys.primary = function () { go(1); };
+      stage = [
+        title("Combien de niveaux ?"),
+        lede("Cave et grenier compris s'ils vous servent de rangement."),
+        el("div", { class: "ob-floors" }, [
+          el("div", { class: "ob-floors-ctrl" }, [
+            el("div", {
+              class: "ob-stepper", role: "group", "aria-label": "Nombre de niveaux",
+              onkeydown: function (event) {
+                if (event.key === "ArrowUp" || event.key === "ArrowRight" || event.key === "+") { event.preventDefault(); setFloors(wiz.floors + 1); }
+                if (event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "-") { event.preventDefault(); setFloors(wiz.floors - 1); }
+              }
+            }, [minus, el("span", { class: "ob-odo-wrap" }, [odo, unit]), plus, out]),
+            desc
+          ]),
+          art
+        ]),
+        el("div", { class: "ob-actions" }, [obCta("Continuer", { onclick: function () { go(1); } })])
+      ];
+      sidePanel = side(false);
+    }
+
+    /* ─── Pièces ─── */
+    else if (current === "rooms") {
+      var tilesByKey = {};
+      var tray = el("div", { class: "ob-tray", role: "list", "aria-label": "Pièces sélectionnées" });
+      var trayHead = el("p", { class: "ob-tray-head" });
+      var bagCount = el("span", { class: "ob-bag-n tnum" });
+      var bag = el("span", { class: "ob-bag", "aria-hidden": "true" }, [icon("box", 16), bagCount]);
+      var roomsCta = obCta("Continuer", { onclick: function () { if (wiz.rooms.length) go(1); } });
+      var hint = el("p", { class: "ob-hint", text: "Sélectionnez au moins une pièce pour continuer." });
+      var customInput, customAdd;
+
+      var countOf = function (key) { return wiz.rooms.filter(function (r) { return r.key === key; }).length; };
+      var ariaOf = function (preset, count) {
+        return count > 0 ? "Ajouter : " + preset.label + " (" + count + " déjà)" : "Ajouter : " + preset.label;
+      };
+
+      var chipOf = function (room, isNew) {
+        var node = el("span", { class: "ob-chip" + (isNew ? " is-new" : ""), role: "listitem", "data-id": room.id }, [
+          sym(room.icon, 16),
+          el("span", { class: "ob-chip-lbl", text: room.label }),
+          el("button", {
+            class: "ob-x", type: "button", "aria-label": "Retirer " + room.label, title: "Retirer",
+            onclick: function () { dropRoom(room, node); }
+          }, [icon("x", 13)])
+        ]);
+        return node;
+      };
+
+      var paintRooms = function (newId, popKey) {
+        ROOMS.forEach(function (preset) {
+          var tile = tilesByKey[preset.key], count = countOf(preset.key);
+          tile.node.classList.toggle("is-on", count > 0);
+          tile.node.setAttribute("aria-label", ariaOf(preset, count));
+          tile.badge.textContent = count ? "×" + count : "";
+          if (popKey === preset.key) obPop(tile.badge);
+        });
+        tray.replaceChildren.apply(tray, wiz.rooms.length
+          ? wiz.rooms.map(function (room) { return chipOf(room, room.id === newId); })
+          : [el("span", { class: "ob-tray-empty", text: "Rien pour l'instant. Touchez une pièce ci-dessus." })]);
+        trayHead.textContent = wiz.rooms.length ? plural(wiz.rooms.length, "pièce sélectionnée", "pièces sélectionnées") : "Votre sélection";
+        bagCount.textContent = String(wiz.rooms.length);
+        roomsCta.disabled = wiz.rooms.length === 0;
+        hint.hidden = wiz.rooms.length > 0;
+        repaintSide();
+      };
+
+      var dropRoom = function (room, node) {
+        var index = wiz.rooms.indexOf(room);
+        node.classList.add("is-out");
+        setTimeout(function () {
+          removeRoomById(room.id, room.key);
+          paintRooms(null, room.key);
+          var xs = tray.querySelectorAll(".ob-x");
+          var next = xs[Math.min(index, xs.length - 1)];
+          (next || customInput).focus({ preventScroll: true });
+          obAnnounce("Pièce retirée : " + room.label + ".");
+        }, obCalm() ? 0 : 170);
+      };
+
+      var addCustom = function () {
+        var label = wiz.custom.trim();
+        if (!label) return;
+        var room = { id: uid("r"), key: null, icon: "r-piece", kind: "room", label: label.slice(0, 80), furniture: [] };
+        wiz.rooms.push(room);
+        wiz.custom = "";
+        customInput.value = "";
+        customAdd.disabled = true;
+        paintRooms(room.id, null);
+        obAnnounce("Pièce ajoutée : " + room.label + ".");
+      };
+
+      customAdd = el("button", { class: "ob-line-btn", type: "button", disabled: !wiz.custom.trim(), onclick: addCustom }, [icon("plus", 15), "Ajouter"]);
+      customInput = el("input", {
+        class: "ob-input ob-input--plain", placeholder: "Autre pièce ou zone…", maxlength: 80,
+        "aria-label": "Ajouter une pièce qui n'est pas dans la liste", value: wiz.custom, "data-ob-own-enter": "1",
+        oninput: function (event) {
+          wiz.custom = event.target.value;
+          // Mis à jour EN PLACE : redessiner à chaque frappe ferait perdre le curseur.
+          customAdd.disabled = !wiz.custom.trim();
+        },
+        onkeydown: function (event) {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          addCustom();
+        }
+      });
+
+      var grid = el("div", { class: "ob-rooms" }, ROOMS.map(function (preset) {
+        var count = countOf(preset.key);
+        var badge = el("span", { class: "ob-room-n tnum", "aria-hidden": "true", text: count ? "×" + count : "" });
+        var ic = el("span", { class: "ob-room-ic" }, [sym(preset.icon, 26)]);
+        var node = el("button", {
+          class: "ob-room" + (count ? " is-on" : ""), type: "button", "aria-label": ariaOf(preset, count),
+          onclick: function (event) {
+            var room = addRoom(preset);
+            paintRooms(room.id, preset.key);
+            obPop(node);
+            obBurstFrom(node, event, { count: 10, power: 3.5 });
+            var target = tray.querySelector('[data-id="' + room.id + '"]');
+            obFly(ic, obInView(target) ? target : bag);
+            if (!obInView(target)) obPop(bag);
+            obAnnounce("Pièce ajoutée : " + room.label + ".");
+          }
+        }, [ic, el("span", { class: "ob-room-lbl", text: preset.label }), badge, el("span", { class: "ob-room-plus", "aria-hidden": "true" }, [icon("plus", 13)])]);
+        tilesByKey[preset.key] = { node: node, badge: badge };
+        return obTilt(node, 10);
+      }));
+
+      obKeys.primary = function () { if (wiz.rooms.length) go(1); };
+      stage = [
+        title("Quelles pièces ?"),
+        lede("Touchez pour ajouter, plusieurs fois pour en avoir plusieurs. La croix en retire une."),
+        grid,
+        el("div", { class: "ob-custom" }, [customInput, customAdd]),
+        el("div", { class: "ob-basket" }, [trayHead, tray]),
+        el("div", { class: "ob-actions ob-actions--sticky" }, [bag, roomsCta, hint])
+      ];
+      sidePanel = side(true);
+      paintRooms(null, null);
+    }
+
+    /* ─── Noms ─── */
+    else if (current === "rename") {
+      var focusRoom = function (id) {
+        if (!sideNode) return;
+        Array.prototype.forEach.call(sideNode.querySelectorAll("[data-room]"), function (g) {
+          g.classList.toggle("is-focus", g.getAttribute("data-room") === id);
+        });
+      };
+      var rows = wiz.rooms.map(function (room, index) {
+        var input = el("input", {
+          class: "ob-rename-input", value: room.label, maxlength: 80,
+          "aria-label": "Nom de la pièce " + (index + 1) + " sur " + wiz.rooms.length, "data-ob-own-enter": "1",
+          oninput: function (event) {
+            room.label = event.target.value;
+            var label = sideNode && sideNode.querySelector('[data-label="' + room.id + '"]');
+            if (label) label.textContent = obShort(room.label);
+          },
+          onfocus: function () { focusRoom(room.id); },
+          onblur: function () { focusRoom(null); },
+          onkeydown: function (event) {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            var all = document.querySelectorAll(".ob-rename-input");
+            if (all[index + 1]) all[index + 1].focus();
+            else go(1);
+          }
+        });
+        return el("li", { class: "ob-rename-row", style: "--i:" + Math.min(index, 10) }, [
+          el("button", {
+            class: "ob-icon-btn", type: "button",
+            "aria-label": "Changer l'icône de " + room.label, title: "Changer l'icône",
+            onclick: function () {
+              iconPicker({
+                title: "Icône de " + room.label, current: room.icon,
+                onPick: function (value) {
+                  room.icon = value || ICON_BY_KIND[room.kind];
+                  render();
+                  var buttons = document.querySelectorAll(".ob-rename-row .ob-icon-btn");
+                  if (buttons[index]) buttons[index].focus();
+                }
+              });
+            }
+          }, [sym(room.icon, 20)]),
+          input,
+          el("button", {
+            class: "ob-x ob-x--row", type: "button", "aria-label": "Retirer " + room.label, title: "Retirer",
+            onclick: function () {
+              removeRoomById(room.id, room.key);
+              render();
+              var inputs = document.querySelectorAll(".ob-rename-input");
+              var next = inputs[Math.min(index, inputs.length - 1)];
+              if (next) next.focus(); else { var t = document.getElementById("ob-step-title"); if (t) t.focus(); }
+              obAnnounce("Pièce retirée : " + room.label + ".");
+            }
+          }, [icon("x", 15)])
+        ]);
+      });
+      obKeys.primary = function () { go(1); };
+      stage = [
+        title("Précisez les noms"),
+        lede("« Chambre 2 » devient « Chambre de Léa ». Touchez l'icône pour la changer. Facultatif, mais très utile à la recherche."),
+        rows.length
+          ? el("ul", { class: "ob-rename" }, rows)
+          : el("p", { class: "ob-hint", text: "Aucune pièce pour l'instant. Revenez à l'étape précédente pour en ajouter." }),
+        el("div", { class: "ob-actions ob-actions--sticky" }, [obCta("Continuer", { onclick: function () { go(1); } })])
+      ];
+      sidePanel = side(false);
+    }
+
+    /* ─── Meubles ─── */
+    else {
+      var furnChip = function (room, name, isNew, paint) {
+        var entry = furnitureByLabel(name);
+        var node = el("span", { class: "ob-chip ob-chip--furn" + (isNew ? " is-new" : ""), role: "listitem" }, [
+          el("span", { class: "ob-chip-pic", "aria-hidden": "true" }, [sym(entry ? entry.pic : "f-autre", 20)]),
+          el("span", { class: "ob-chip-lbl", text: name }),
+          el("button", {
+            class: "ob-x", type: "button", "aria-label": "Retirer " + name + " de " + room.label, title: "Retirer",
+            onclick: function () {
+              var index = room.furniture.indexOf(name);
+              node.classList.add("is-out");
+              setTimeout(function () {
+                room.furniture = room.furniture.filter(function (f) { return f !== name; });
+                paint([]);
+                repaintSide();
+                var xs = paint.list.querySelectorAll(".ob-x");
+                var next = xs[Math.min(index, xs.length - 1)];
+                (next || paint.add).focus({ preventScroll: true });
+                obAnnounce(name + " retiré de " + room.label + ".");
+              }, obCalm() ? 0 : 170);
+            }
+          }, [icon("x", 13)])
+        ]);
+        return node;
+      };
+
+      var sections = wiz.rooms.map(function (room) {
+        var list = el("div", { class: "ob-tray", role: "list", "aria-label": "Rangements de " + room.label });
+        var count = el("span", { class: "ob-furn-n tnum" });
+        var add = el("button", {
+          class: "ob-add-chip", type: "button",
+          onclick: function () {
+            var before = room.furniture.slice();
+            furniturePicker(room, function () {
+              var added = room.furniture.filter(function (f) { return before.indexOf(f) === -1; });
+              paint(added);
+              repaintSide();
+              if (added.length) obAnnounce(plural(added.length, "rangement ajouté", "rangements ajoutés") + " à " + room.label + ".");
+            });
+          }
+        }, [icon("plus", 14), el("span", { text: "Ajouter" })]);
+        var paint = function (fresh) {
+          var chips = room.furniture.map(function (name) { return furnChip(room, name, fresh.indexOf(name) !== -1, paint); });
+          chips.push(add);
+          list.replaceChildren.apply(list, chips);
+          count.textContent = room.furniture.length ? plural(room.furniture.length, "rangement", "rangements") : "Aucun rangement";
+        };
+        paint.list = list;
+        paint.add = add;
+        paint([]);
+        return el("section", { class: "ob-furn" }, [
+          el("h2", { class: "ob-furn-head" }, [
+            el("span", { class: "ob-furn-ic", "aria-hidden": "true" }, [sym(room.icon, 18)]),
+            el("span", { class: "ob-furn-name", text: room.label }),
+            count
+          ]),
+          list
+        ]);
+      });
+
+      var finishCta;
+      var onFinish = function (event) { finish(event, finishCta); };
+      finishCta = obCta("Créer mon logement", { onclick: onFinish }, "check");
+      obKeys.primary = function () { onFinish(null); };
+      stage = [
+        title("Les meubles de rangement"),
+        lede("Nous avons prévu l'essentiel. Ajoutez les endroits où vous rangez vraiment ; le reste pourra venir plus tard."),
+        sections.length ? el("div", { class: "ob-furns" }, sections) : el("p", { class: "ob-hint", text: "Aucune pièce : vous pourrez tout créer depuis l'application." }),
+        el("div", { class: "ob-actions ob-actions--sticky" }, [finishCta])
+      ];
+      sidePanel = side(true);
+    }
+
+    return obShell("onb", head, stage, sidePanel, progress);
   }
+
+  /* ─── Ancres d'entrée ─────────────────────────────────────────────────
+     app.html#demo : directement dans le logement d'exemple — sauf si un
+     logement existe déjà ici, qu'on n'écrase jamais.
+     app.html#signup : l'inscription, ou l'application si un compte existe
+     déjà (c'est le comportement par défaut du rendu). */
+  function obRoute() {
+    var hash = String(location.hash || "").toLowerCase();
+    if (hash !== "#demo" && hash !== "#signup") return;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    if (hash === "#demo" && !state.household) enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true);
+  }
+  window.addEventListener("hashchange", function () { obRoute(); render(); });
 
   /* ═══ Écran 3 — Application ═════════════════════════════════════════ */
 
   var TABS = [
     { id: "search",   icon: "search", label: "Rechercher" },
     { id: "places",   icon: "grid",   label: "Mes lieux" },
-    { id: "scan",     icon: "scan",   label: "Scan Éclair",  premium: true },
+    { id: "scan",     icon: "scan",   label: "Scan Éclair", short: "Scan", premium: true },
     { id: "map",      icon: "map",    label: "Plan",  premium: true },
     { id: "alerts",   icon: "bell",   label: "Alertes" },
     { id: "settings", icon: "cog",    label: "Réglages" }
@@ -1786,67 +3211,93 @@
 
   function screenApp() {
     var premium = state.plan === "premium";
-
-    var rail = el("nav", { class: "rail", "aria-label": "Navigation" }, [
-      el("div", { class: "rail-head" }, [logo(21)]),
-
-      /* Le foyer et la formule en tête : on sait chez qui on est, et avec
-         quoi, sans aller dans les réglages. */
-      el("button", {
-        class: "rail-home", type: "button",
-        onclick: function () { state.tab = "settings"; save(); render(); }
-      }, [
-        el("span", { class: "fig" }, [sym(state.household && state.household.type === "house" ? "h-maison" : "h-appart", 26)]),
-        el("span", { class: "txt" }, [
-          el("span", { class: "nm", text: state.household ? state.household.name : "Mon logement" }),
-          el("span", { class: "pl" + (premium ? " on" : ""), text: premium ? "FULMO Éclair" : "Formule Libre" })
-        ])
-      ])
-    ].concat(
-      TABS.map(function (tab) {
-        return el("button", {
-          class: "rail-btn", type: "button",
-          "aria-current": state.tab === tab.id ? "page" : null,
-          onclick: function () { state.tab = tab.id; save(); render(); }
-        }, [
-          icon(tab.icon, 19),
-          el("span", { class: "lbl", text: tab.label }),
-          tab.premium ? el("span", { class: "rail-bolt", title: "Fonction Éclair" }, [icon("bolt", 15)]) : null
-        ]);
-      })
-    ).concat([
-      el("div", { class: "rail-foot" }, [
-        el("button", {
-          class: "rail-btn", type: "button",
-          onclick: function () { toast("Le prototype est en français. L'anglais existe dans le dépôt."); }
-        }, [icon("globe", 18), el("span", { class: "lbl", text: "English" })])
-      ])
-    ]));
-
-    var tabbar = el("nav", { class: "tabbar", "aria-label": "Navigation" }, TABS.slice(0, 5).map(function (tab) {
-      return el("button", {
-        class: "tab", type: "button",
-        "aria-current": state.tab === tab.id ? "page" : null,
-        onclick: function () { state.tab = tab.id; save(); render(); }
-      }, [icon(tab.icon, 20), tab.label]);
-    }));
-
     var views = {
       search: viewSearch, places: viewPlaces, scan: viewScan,
       map: viewMap, alerts: viewAlerts, settings: viewSettings
     };
+    // Un onglet inconnu (état enregistré par une autre version) ne doit pas
+    // planter le rendu.
+    if (!views[state.tab]) state.tab = "search";
+    var alertCount = alerts().length;
+    var homeIcon = state.household && state.household.type === "house" ? "h-maison" : "h-appart";
+    var homeName = state.household ? state.household.name : "Mon logement";
+
+    function planLine(cls) {
+      return el("span", { class: cls + (premium ? " on" : "") }, premium
+        ? [icon("bolt", 12), "Formule Éclair"]
+        : ["Formule Libre"]);
+    }
+
+    /* Le rail : le foyer et sa formule en tête — on sait chez qui on est, et
+       avec quoi — puis les onglets, sous lesquels glisse un seul indicateur. */
+    var rail = el("nav", { class: "rail", "aria-label": "Navigation principale" }, [
+      el("div", { class: "rail-head" }, [
+        logo(21),
+        el("span", { class: "kbd-hint", title: "Chercher depuis n'importe quel écran" }, [el("kbd", { class: "kbd", text: "⌘K" })])
+      ]),
+      el("button", {
+        class: "rail-home", type: "button", "aria-label": homeName + " — réglages du foyer",
+        onclick: function () { goTab("settings"); }
+      }, [
+        el("span", { class: "fig" }, [sym(homeIcon, 24)]),
+        el("span", { class: "txt" }, [
+          el("span", { class: "nm", text: homeName }),
+          planLine("pl")
+        ]),
+        icon("chev", 14)
+      ]),
+      el("div", { class: "rail-nav" }, TABS.map(function (tab) {
+        var on = state.tab === tab.id;
+        return el("button", {
+          class: "rail-btn", type: "button", "data-tab": tab.id,
+          "aria-current": on ? "page" : null,
+          onclick: function () { goTab(tab.id); }
+        }, [
+          on ? el("span", { class: "rail-ind", "aria-hidden": "true" }) : null,
+          icon(tab.icon, 19),
+          el("span", { class: "lbl", text: tab.label }),
+          tab.id === "alerts" && alertCount > 0 ? el("span", { class: "rail-count", "aria-label": plural(alertCount, "alerte", "alertes"), text: String(alertCount) }) : null,
+          tab.premium && !premium ? el("span", { class: "rail-bolt", title: "Fonction Éclair" }, [icon("bolt", 14)]) : null
+        ]);
+      })),
+      el("div", { class: "rail-foot" }, [
+        el("button", {
+          class: "rail-btn", type: "button", onclick: toggleTheme,
+          "aria-label": state.theme === "dark" ? "Passer au thème clair" : "Passer au thème sombre"
+        }, [icon(state.theme === "dark" ? "sun" : "moon", 18), el("span", { class: "lbl", text: state.theme === "dark" ? "Thème clair" : "Thème sombre" })])
+      ])
+    ]);
+
+    /* Mobile : cinq onglets en bas ; les réglages passent par le foyer, en
+       haut à droite, comme un avatar. */
+    var tabbar = el("nav", { class: "tabbar", "aria-label": "Navigation principale" }, TABS.slice(0, 5).map(function (tab) {
+      var on = state.tab === tab.id;
+      return el("button", {
+        class: "tab", type: "button", "data-tab": tab.id,
+        "aria-current": on ? "page" : null,
+        "aria-label": tab.id === "alerts" && alertCount > 0 ? tab.label + ", " + plural(alertCount, "alerte", "alertes") : null,
+        onclick: function () { goTab(tab.id); }
+      }, [
+        el("span", { class: "tab-icon" }, [
+          on ? el("span", { class: "tab-ind", "aria-hidden": "true" }) : null,
+          icon(tab.icon, 21),
+          tab.id === "alerts" && alertCount > 0 ? el("span", { class: "tab-badge", "aria-hidden": "true", text: String(alertCount) }) : null
+        ]),
+        el("span", { class: "tab-lbl", text: tab.short || tab.label })
+      ]);
+    }));
 
     return el("div", { class: "app" }, [
       rail,
       el("div", { class: "app-main" }, [
         el("header", { class: "app-head" }, [
-          logoMarkOnly(26),
-          /* La recherche est le produit : elle est accessible depuis chaque
-             onglet, pas seulement depuis le sien. */
+          logoMarkOnly(28),
+          /* La recherche est le produit : accessible depuis chaque onglet. Sur
+             le sien, l'en-tête dit simplement chez qui l'on est. */
           state.tab === "search"
-            ? el("span", { style: "flex:1;font-size:.875rem;font-weight:500", text: state.household ? state.household.name : "FULMO" })
+            ? el("span", { class: "home-name" }, [el("b", { text: homeName }), planLine("")])
             : el("button", {
-                class: "cmdk-trigger", type: "button", style: "max-width:420px",
+                class: "cmdk-trigger", type: "button",
                 onclick: function () { openPalette(); }
               }, [
                 icon("search", 17),
@@ -1854,11 +3305,11 @@
                 el("kbd", { class: "kbd", text: "⌘K" })
               ]),
           el("button", {
-            class: "icon-btn", type: "button", "aria-label": premium ? "Éclair actif" : "Passer Éclair",
-            title: premium ? "Éclair actif" : "Passer Éclair",
-            style: premium ? "color:var(--accent)" : "background:var(--volt);color:var(--ink)",
-            onclick: function () { state.tab = "settings"; save(); render(); }
-          }, [icon("bolt", 16)])
+            class: "head-avatar", type: "button", "data-nav": "settings",
+            "aria-label": "Réglages du foyer", title: "Réglages",
+            "aria-current": state.tab === "settings" ? "page" : null,
+            onclick: function () { goTab("settings"); }
+          }, [sym(homeIcon, 20), el("span", { class: "cog", "aria-hidden": "true" }, [icon("cog", 11)])])
         ]),
         views[state.tab]()
       ]),
@@ -1909,28 +3360,44 @@
     render();
   }
 
+  /* La clé de la liste affichée au rendu précédent : l'apparition échelonnée
+     ne se joue que si la requête change, jamais à chaque rendu. */
+  var lastResultsKey = null;
+
   function viewSearch() {
-    var hasQuery = searchState.query.trim().length > 0;
+    var query = searchState.query.trim();
+    var hasQuery = query.length > 0;
     var premium = state.plan === "premium";
+
+    // Les résultats de la recherche IA étaient calculés puis jamais affichés :
+    // tant que la phrase interprétée est celle du champ, ce sont eux qu'on montre.
+    var aiActive = !!(aiResults && searchState.aiTried && searchState.aiTried === query);
 
     // « À ranger » n'est pas un mot-clé : c'est l'absence d'emplacement.
     var unsorted = state.items.filter(function (item) { return !item.locationId; }).length;
     var results = searchState.filter === "__unsorted"
       ? state.items.filter(function (item) { return !item.locationId; })
           .map(function (item) { return { item: item, score: 0, reason: "recent" }; })
-      : search(searchState.query);
+      : aiActive ? aiResults : search(searchState.query);
     var shown = results;
 
+    var resultsKey = (searchState.filter || "") + "|" + (aiActive ? "ai|" : "") + norm(query) + "|" + results.length;
+    var stagger = resultsKey !== lastResultsKey;
+    lastResultsKey = resultsKey;
+    // La trouvaille : un seul résultat pour une vraie requête, il pulse une fois.
+    var singleFound = hasQuery && stagger && results.length === 1 ? results[0].item.id : null;
+    var highlight = aiActive || searchState.filter === "__unsorted" ? "" : query;
+
     var input = el("input", {
-      type: "search", value: searchState.query,
-      placeholder: "Chercher un objet…",
-      "aria-label": "Qu'est-ce que vous cherchez ?",
+      type: "search", value: searchState.query, "data-graft": "",
+      placeholder: "Clés, passeport, guirlande…",
+      "aria-label": "Chercher un objet",
       autocomplete: "off", spellcheck: "false", enterkeyhint: "search",
       oninput: function (event) {
         searchState.query = event.target.value;
         searchState.filter = null;
-        if (searchState.aiTried !== null) { searchState.ai = null; searchState.aiTried = null; }
-        redrawSearch(event.target.selectionStart);
+        if (searchState.aiTried !== null) { searchState.ai = null; searchState.aiTried = null; aiResults = null; }
+        redrawSearch();
       },
       // Enregistré à la validation, pas à la frappe : sinon « p », « pa »,
       // « pas » rempliraient l'historique avant « passeport ».
@@ -1938,9 +3405,12 @@
         if (event.key !== "Enter") return;
         event.preventDefault();
         rememberSearch(searchState.query);
-        render();
+        // Sur téléphone, « Rechercher » range le clavier : les résultats sont dessous.
+        if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) event.target.blur();
       },
-      onblur: function () { rememberSearch(searchState.query); }
+      // Un champ retiré du document par un rendu reçoit aussi un « blur » :
+      // c'est ce qui remplissait l'historique de « p », « pa », « pas »…
+      onblur: function (event) { if (event.target.isConnected) rememberSearch(searchState.query); }
     });
 
     // Mots-clés les plus présents : ce sont les recherches que l'on refera.
@@ -1954,7 +3424,7 @@
 
     if (state.items.length === 0) {
       body = el("div", { class: "empty" }, [
-        el("div", { class: "blob" }, [icon("box", 26)]),
+        emptyArt(),
         el("h2", { class: "display t-md", text: "Votre logement est vide pour l'instant" }),
         el("p", { class: "lede", style: "max-width:42ch", text: "Référencez un premier objet : c'est la seule chose à faire avant de pouvoir le retrouver." }),
         el("div", { class: "inline", style: "justify-content:center;margin-top:10px" }, [
@@ -1964,8 +3434,8 @@
       ]);
     } else if (results.length === 0) {
       body = el("div", { class: "empty" }, [
-        el("div", { class: "blob" }, [icon("pin", 24)]),
-        el("h2", { class: "display t-md", text: searchState.aiTried ? "Même en interprétant, rien ne correspond." : "Aucun objet ne correspond." }),
+        emptyArt(),
+        el("h2", { class: "display t-md", text: searchState.aiTried ? "Même en interprétant, rien ne correspond." : "Rien ne correspond à « " + query + " »" }),
         el("p", { class: "lede", style: "max-width:42ch", text: "Vérifiez l'orthographe, essayez un mot plus court, ou référencez-le maintenant." }),
         el("div", { class: "inline", style: "justify-content:center;margin-top:10px" }, [
           // La recherche IA se déclenche à la demande, jamais à chaque frappe :
@@ -1987,52 +3457,68 @@
           el("span", { class: "muted", text: searchState.ai })
         ]) : null,
 
-        !hasQuery && !searchState.filter
-          ? el("p", { class: "label", style: "margin-top:26px", text: "Tout votre logement" })
-          : null,
+        el("div", { class: "results-head" }, [
+          el("h2", { class: "label", text: aiActive ? "Trouvé en interprétant votre phrase"
+            : searchState.filter === "__unsorted" ? "À ranger"
+            : hasQuery || searchState.filter ? "Résultats" : "Tout votre logement, du plus récent" }),
+          el("span", { class: "count", "aria-live": "polite", text: plural(shown.length, "objet", "objets") })
+        ]),
 
-        el("ul", { class: "results", style: "margin-top:14px" }, results.slice(0, 60).map(function (row) {
+        el("ul", { class: "results" + (stagger ? " stagger" : "") }, results.slice(0, 60).map(function (row, index) {
           var item = row.item;
-          var path = pathOf(item.locationId);
-          return el("li", { class: "result" + (row.reason === "tag" ? " tagmatch" : "") }, [
+          var li = el("li", {
+            class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (item.id === singleFound ? " found" : ""),
+            style: "--i:" + index
+          }, [
             el("span", { class: "thumb" }, [sym(rootIconOf(item.locationId), 20)]),
             el("button", { class: "body", type: "button", onclick: function () { itemSheet(item); } }, [
-              el("div", { class: "name", text: item.name + (item.quantity > 1 ? "  ×" + item.quantity : "") }),
-              el("div", { class: "path where" }, path.length
-                ? [path.join(" / "), item.spot ? el("span", { class: "spot", text: " · " + item.spot }) : null]
-                : [el("span", { style: "color:var(--warn)", text: "À ranger" })])
+              el("span", { class: "name" }, [
+                markMatch(item.name, highlight),
+                item.quantity > 1 ? el("span", { class: "qty", text: "×" + item.quantity }) : null
+              ]),
+              crumbs(item.locationId, item.spot)
             ]),
             el("div", { class: "tags" }, (item.tags || []).slice(0, 2).map(function (tag) {
-              return el("span", { class: "label tagpill", text: tag });
+              return el("span", { class: "tagpill", text: tag });
             })),
             el("button", {
-              class: "mini", type: "button", title: "Je l'ai trouvé", "aria-label": "Confirmer l'emplacement de " + item.name,
+              class: "mini", type: "button", title: "Je l'ai trouvé", "aria-label": "Je l'ai trouvé : confirmer l'emplacement de " + item.name,
               onclick: function () {
                 item.lastSeenAt = Date.now(); save();
+                // Le moment « trouvaille » : la ligne pulse une fois en volt.
+                li.classList.remove("found");
+                void li.offsetWidth;
+                li.classList.add("found");
                 toast("Emplacement confirmé.");
               }
             }, [icon("check", 17)])
           ]);
+          return li;
         }))
       ]);
     }
 
     var history = (state.history || []);
 
-    return el("div", { class: "page" }, [
-      el("div", { class: "search-head" }, [
-        el("p", { class: "label search-kicker", text: "La mémoire de votre maison" }),
-        el("h1", { class: "search-title", text: "Rechercher" }),
+    function clearAi() { searchState.ai = null; searchState.aiTried = null; aiResults = null; }
 
-        el("div", { class: "search-row" }, [
-          el("div", { class: "search-box" }, [
+    return el("div", { class: "page search-page" }, [
+      el("div", { class: "search-head", "data-graft": "" }, [
+        el("h1", { class: "search-title", text: "Que cherchez-vous ?" }),
+        el("p", { class: "search-sub" }, [
+          el("b", { text: String(state.items.length) }),
+          (state.items.length < 2 ? " objet référencé" : " objets référencés") + (state.household ? " dans « " + state.household.name + " »" : "") + "."
+        ]),
+
+        el("div", { class: "search-row", "data-graft": "" }, [
+          el("div", { class: "search-box", "data-graft": "" }, [
             icon("search", 24),
             input,
             searchState.query ? el("button", {
-              class: "icon-btn", type: "button", "aria-label": "Effacer",
+              class: "icon-btn", type: "button", "aria-label": "Effacer la recherche",
               onclick: function () {
-                searchState.query = ""; searchState.ai = null; searchState.aiTried = null;
-                redrawSearch();
+                searchState.query = ""; searchState.filter = null; clearAi();
+                redrawSearch(true);
               }
             }, [icon("x", 18)]) : el("kbd", { class: "kbd", title: "Ouvrir la palette depuis n'importe quel écran", text: "⌘K" })
           ]),
@@ -2042,9 +3528,10 @@
              suffit presque toujours. */
           el("button", {
             class: "search-ai", type: "button",
-            disabled: !premium || !hasQuery || searchState.aiBusy,
-            title: premium ? "Interpréter votre phrase (l'inventaire ne sort jamais)" : "Fonction Éclair",
-            onclick: premium ? runAiSearch : function () { state.tab = "settings"; save(); render(); }
+            disabled: premium ? (!hasQuery || searchState.aiBusy) : false,
+            "aria-busy": searchState.aiBusy ? "true" : null,
+            title: premium ? "Interpréter votre phrase (l'inventaire ne sort jamais)" : "Fonction Éclair : voir la formule",
+            onclick: premium ? runAiSearch : function () { goTab("settings"); }
           }, [
             icon(searchState.aiBusy ? "loop" : "spark", 17),
             searchState.aiBusy ? "Interprétation…" : "Avec mes mots",
@@ -2052,43 +3539,45 @@
           ])
         ]),
 
-        el("div", { class: "search-filters" }, [
+        el("div", { class: "search-filters", role: "group", "aria-label": "Filtres par mot-clé" }, [
           el("button", {
             class: "chip chip-sm" + (searchState.filter ? "" : " on"), type: "button",
-            onclick: function () { searchState.filter = null; searchState.query = ""; redrawSearch(); }
+            "aria-pressed": searchState.filter ? "false" : "true",
+            onclick: function () { searchState.filter = null; searchState.query = ""; clearAi(); render(); }
           }, ["Tous"])
         ].concat(topTags.slice(0, 5).map(function (tag) {
           var on = searchState.filter === tag;
           return el("button", {
-            class: "chip chip-sm" + (on ? " on" : ""), type: "button",
+            class: "chip chip-sm" + (on ? " on" : ""), type: "button", "aria-pressed": on ? "true" : "false",
             onclick: function () {
               searchState.filter = on ? null : tag;
               searchState.query = on ? "" : tag;
-              redrawSearch();
+              clearAi();
+              render();
             }
           }, [tag, el("b", { text: String(counts[tag]) })]);
         })).concat([
           unsorted > 0 ? el("button", {
             class: "chip chip-sm" + (searchState.filter === "__unsorted" ? " on" : ""), type: "button",
+            "aria-pressed": searchState.filter === "__unsorted" ? "true" : "false",
             onclick: function () {
               var on = searchState.filter === "__unsorted";
               searchState.filter = on ? null : "__unsorted";
               searchState.query = "";
-              redrawSearch();
+              clearAi();
+              render();
             }
-          }, ["À ranger", el("b", { text: String(unsorted) })]) : null,
-          el("p", { class: "label count", "aria-live": "polite",
-                    text: hasQuery || searchState.filter ? plural(shown.length, "résultat", "résultats") : "" })
+          }, ["À ranger", el("b", { text: String(unsorted) })]) : null
         ]))
       ]),
 
       /* L'historique prend la place des « récemment référencés » : on
          l'affiche tant qu'aucune recherche n'est en cours. */
-      !hasQuery && !searchState.filter && history.length > 0 ? el("div", { style: "margin-top:26px" }, [
+      !hasQuery && !searchState.filter && history.length > 0 ? el("div", { style: "margin-top:28px" }, [
         el("div", { class: "inline", style: "justify-content:space-between" }, [
-          el("p", { class: "label", text: "Vos recherches" }),
+          el("h2", { class: "label", text: "Vos recherches" }),
           el("button", {
-            class: "btn btn-sm btn-quiet", type: "button", style: "padding:0;font-size:.8125rem",
+            class: "btn btn-sm btn-quiet", type: "button",
             onclick: function () { state.history = []; save(); render(); }
           }, "Effacer l'historique")
         ]),
@@ -2096,7 +3585,7 @@
           return el("span", { class: "hist-chip" }, [
             el("button", {
               class: "go", type: "button", "aria-label": "Rechercher " + entry.q,
-              onclick: function () { searchState.query = entry.q; redrawSearch(); }
+              onclick: function () { searchState.query = entry.q; searchState.filter = null; clearAi(); render(); }
             }, [
               icon("clock", 14),
               entry.q,
@@ -2114,15 +3603,46 @@
     ]);
   }
 
-  // Redessine sans perdre le focus ni la position du curseur : un render()
-  // complet à chaque frappe ferait sauter le champ.
-  function redrawSearch(caret) {
+  /* Redessine la recherche à la frappe SANS toucher au champ.
+
+     Un render() complet retirait le champ du document à chaque touche : le
+     navigateur lui envoyait un « blur » (qui enregistrait « p », « pa »,
+     « pas »… dans l'historique), la composition d'un accent était coupée, et
+     sur téléphone le clavier clignotait. On greffe donc la nouvelle vue
+     autour de l'ancien champ : tout ce qui n'est pas sur le chemin
+     page › en-tête › rangée › boîte › champ est remplacé, le champ reste. */
+  function graft(oldParent, newParent) {
+    var oldKeep = oldParent.querySelector(":scope > [data-graft]");
+    var newKeep = newParent.querySelector(":scope > [data-graft]");
+    if (!oldKeep || !newKeep) {
+      oldParent.replaceChildren.apply(oldParent, Array.prototype.slice.call(newParent.childNodes));
+      return;
+    }
+    while (oldKeep.previousSibling) oldKeep.previousSibling.remove();
+    while (oldKeep.nextSibling) oldKeep.nextSibling.remove();
+    var seen = false;
+    Array.prototype.slice.call(newParent.childNodes).forEach(function (node) {
+      if (node === newKeep) { seen = true; return; }
+      if (seen) oldParent.appendChild(node); else oldParent.insertBefore(node, oldKeep);
+    });
+    if (oldKeep.tagName === "INPUT") return;
+    oldKeep.className = newKeep.className;
+    graft(oldKeep, newKeep);
+  }
+
+  function redrawSearch(focusInput) {
+    var page = document.querySelector(".app-main > .search-page");
+    var input = page && page.querySelector(".search-box input");
+    if (page && input && document.activeElement === input) {
+      graft(page, viewSearch());
+      return;
+    }
     render();
-    var input = document.querySelector(".search-box input");
-    if (!input) return;
-    input.focus();
-    var position = caret == null ? input.value.length : caret;
-    try { input.setSelectionRange(position, position); } catch (e) {}
+    if (!focusInput) return;
+    var fresh = document.querySelector(".search-box input");
+    if (!fresh) return;
+    fresh.focus();
+    try { fresh.setSelectionRange(fresh.value.length, fresh.value.length); } catch (e) {}
   }
 
   function runAiSearch() {
@@ -2136,6 +3656,7 @@
 
     searchState.aiBusy = true;
     searchState.aiTried = query;
+    aiResults = null;
     render();
 
     var prompt =
@@ -2221,67 +3742,112 @@
       var kids = childrenOf(node.id);
       var count = countIn(node.id);
 
-      var rows = [el("div", { class: "node", style: "padding-left:" + (depth * 18 + 8) + "px" }, [
+      function startAdd() { adding = node.id; expanded[node.id] = true; render(); }
+      function startRename() { editing = node.id; render(); }
+      function changeIcon() {
+        iconPicker({
+          title: "Icône de " + node.name, current: node.icon,
+          onPick: function (value) { node.icon = value; save(); render(); }
+        });
+      }
+      function remove() {
+        var ids = descendantIds(node.id);
+        var parent = node.parentId ? locById(node.parentId) : null;
+        confirmSheet({
+          title: "Supprimer « " + node.name + " » ?",
+          body: count > 0
+            ? plural(count, "objet rangé ici remontera", "objets rangés ici remonteront") + (parent ? " dans « " + parent.name + " »" : " dans « À ranger »") + ". Rien n'est perdu."
+            : (ids.length > 1 ? "Ce lieu et les rangements qu'il contient seront supprimés." : "Ce lieu est vide : rien d'autre ne change."),
+          confirmLabel: "Supprimer",
+          danger: true,
+          onConfirm: function () {
+            // Les objets remontent au parent : supprimer un meuble ne doit
+            // jamais faire disparaître ce qu'il contenait.
+            state.items.forEach(function (item) {
+              if (ids.indexOf(item.locationId) !== -1) item.locationId = node.parentId;
+            });
+            state.locations = state.locations.filter(function (l) { return ids.indexOf(l.id) === -1; });
+            state.scans = (state.scans || []).filter(function (sc) { return ids.indexOf(sc.locationId) === -1; });
+            save(); render();
+            toast("« " + node.name + " » supprimé.");
+          }
+        });
+      }
+
+      var rows = [el("div", {
+        class: "node" + (depth === 0 ? " is-root" : ""),
+        style: "--depth:" + depth + ";padding-left:" + (depth * 22 + 6) + "px"
+      }, [
         el("button", {
           class: "twist" + (kids.length ? "" : " hidden"), type: "button",
-          "aria-expanded": open ? "true" : "false", "aria-label": node.name,
+          "aria-expanded": open ? "true" : "false", "aria-label": (open ? "Replier " : "Déplier ") + node.name,
           onclick: function () { expanded[node.id] = !open; render(); }
-        }, [(function () { var i = icon("chev", 15); if (open) i.style.transform = "rotate(90deg)"; return i; })()]),
+        }, [icon("chev", 15)]),
 
         el("button", {
           class: "mini icon-edit", type: "button",
           "aria-label": "Changer l'icône de " + node.name, title: "Changer l'icône",
-          onclick: function () {
-            iconPicker({
-              title: "Icône de " + node.name, current: node.icon,
-              onPick: function (value) { node.icon = value; save(); render(); }
-            });
-          }
-        }, [sym(node.icon || ICON_BY_KIND[node.kind], 17)]),
+          onclick: changeIcon
+        }, [sym(node.icon || ICON_BY_KIND[node.kind], 18)]),
 
         editing === node.id
           ? el("input", {
-              class: "input", style: "padding:5px 9px;font-size:.9375rem", value: node.name, maxlength: 80, autofocus: true,
-              onblur: function (event) { node.name = event.target.value.trim() || node.name; editing = null; save(); render(); },
+              class: "input", value: node.name, maxlength: 80, autofocus: true, "aria-label": "Nouveau nom de " + node.name,
+              // Échap annule : le « blur » qui suit la disparition du champ ne
+              // doit pas enregistrer ce qu'Échap vient d'abandonner.
+              onblur: function (event) {
+                if (editing !== node.id) return;
+                node.name = event.target.value.trim().slice(0, 80) || node.name;
+                editing = null; save(); render();
+              },
               onkeydown: function (event) {
                 if (event.key === "Enter") event.target.blur();
-                if (event.key === "Escape") { editing = null; render(); }
+                if (event.key === "Escape") { event.stopPropagation(); editing = null; render(); }
               }
             })
           : el("span", { class: "nm", text: node.name }),
 
-        el("span", { class: "label", style: "flex-shrink:0", text: count > 0 ? String(count) : "" }),
+        count > 0 ? el("span", { class: "count", "aria-label": plural(count, "objet", "objets"), text: String(count) }) : null,
 
         el("div", { class: "acts" }, [
-          el("button", { class: "mini", type: "button", "aria-label": "Ajouter dans " + node.name, onclick: function () { adding = node.id; expanded[node.id] = true; render(); } }, [icon("plus", 15)]),
-          el("button", { class: "mini", type: "button", "aria-label": "Renommer " + node.name, onclick: function () { editing = node.id; render(); } }, [icon("pencil", 14)]),
-          el("button", {
-            class: "mini warn", type: "button", "aria-label": "Supprimer " + node.name,
-            onclick: function () {
-              if (count > 0 && !confirm("« " + node.name + " » contient " + count + " objet(s). Ils remonteront au niveau supérieur. Continuer ?")) return;
-              var ids = descendantIds(node.id);
-              // Les objets remontent au parent : supprimer un meuble ne doit
-              // jamais faire disparaître ce qu'il contenait.
-              state.items.forEach(function (item) {
-                if (ids.indexOf(item.locationId) !== -1) item.locationId = node.parentId;
-              });
-              state.locations = state.locations.filter(function (l) { return ids.indexOf(l.id) === -1; });
-              save(); render();
+          el("button", { class: "mini", type: "button", "aria-label": "Ajouter dans " + node.name, title: "Ajouter dedans", onclick: startAdd }, [icon("plus", 15)]),
+          el("button", { class: "mini", type: "button", "aria-label": "Renommer " + node.name, title: "Renommer", onclick: startRename }, [icon("pencil", 14)]),
+          el("button", { class: "mini warn", type: "button", "aria-label": "Supprimer " + node.name, title: "Supprimer", onclick: remove }, [icon("trash", 14)])
+        ]),
+
+        /* Au doigt, pas de survol : les actions passent par un menu. */
+        el("button", {
+          class: "mini node-more", type: "button", "aria-label": "Actions pour " + node.name,
+          onclick: function () {
+            function act(label, ic, run, danger) {
+              return el("button", { type: "button", class: danger ? "danger" : null, onclick: function () { closeSheet(); run(); } }, [icon(ic, 19), label]);
             }
-          }, [icon("trash", 14)])
-        ])
+            sheet({
+              title: node.name,
+              body: [el("div", { class: "action-list" }, [
+                act("Ajouter dedans", "plus", startAdd),
+                act("Renommer", "pencil", startRename),
+                act("Changer l'icône", "grid", changeIcon),
+                act("Supprimer", "trash", remove, true)
+              ])]
+            });
+          }
+        }, [icon("more", 18)])
       ])];
 
       if (adding === node.id) {
-        rows.push(el("div", { class: "inline", style: "padding:6px 8px 6px " + ((depth + 1) * 18 + 34) + "px;gap:6px" }, [
-          el("input", {
-            class: "input", style: "flex:1;padding:7px 12px;font-size:.875rem", autofocus: true,
-            placeholder: childKind(node.kind) === "furniture" ? "Nouveau meuble" : "Nouveau contenant",
-            onkeydown: function (event) {
-              if (event.key === "Enter") addNode(node, event.target.value);
-              if (event.key === "Escape") { adding = null; render(); }
-            }
-          }),
+        var addInput = el("input", {
+          class: "input", autofocus: true, maxlength: 80, enterkeyhint: "done",
+          "aria-label": (childKind(node.kind) === "furniture" ? "Nouveau meuble dans " : "Nouveau contenant dans ") + node.name,
+          placeholder: childKind(node.kind) === "furniture" ? "Nouveau meuble" : "Nouveau contenant",
+          onkeydown: function (event) {
+            if (event.key === "Enter") addNode(node, event.target.value);
+            if (event.key === "Escape") { event.stopPropagation(); adding = null; render(); }
+          }
+        });
+        rows.push(el("div", { class: "node-add", style: "padding-left:" + ((depth + 1) * 22 + 40) + "px" }, [
+          addInput,
+          el("button", { class: "btn btn-sm btn-volt", type: "button", onclick: function () { addNode(node, addInput.value); } }, [icon("plus", 14), "Ajouter"]),
           childKind(node.kind) === "furniture"
             ? el("button", {
                 class: "btn btn-sm btn-line", type: "button",
@@ -2316,23 +3882,27 @@
     var treeRows = [];
     roots.forEach(function (node) { treeRows = treeRows.concat(renderNode(node, 0)); });
 
+    var rootInput = adding === "root" ? el("input", {
+      class: "input", style: "flex:1 1 200px", placeholder: "Nouvelle pièce ou zone", autofocus: true, maxlength: 80,
+      "aria-label": "Nom de la nouvelle pièce ou zone", enterkeyhint: "done",
+      onkeydown: function (event) {
+        if (event.key === "Enter") addNode(null, event.target.value);
+        if (event.key === "Escape") { adding = null; render(); }
+      }
+    }) : null;
+
     return el("div", { class: "page" }, [
       el("h1", { class: "display t-lg", text: "Mes lieux" }),
-      el("p", { class: "lede", style: "margin-top:10px", text: "L'architecture de votre logement. Ajoutez, renommez, réorganisez à tout moment." }),
+      el("p", { class: "lede", style: "margin-top:8px", text: "Pièce, meuble, contenant : l'architecture de votre logement. Ajoutez, renommez, réorganisez à tout moment." }),
 
       el("div", { class: "tree", style: "margin-top:22px" }, treeRows.length ? treeRows : [
-        el("p", { class: "muted", style: "padding:18px;text-align:center;font-size:.9375rem", text: "Aucun lieu. Ajoutez une pièce pour commencer." })
+        el("p", { class: "tree-empty", text: "Aucun lieu pour l'instant. Ajoutez une pièce pour commencer." })
       ]),
 
       adding === "root"
         ? el("div", { class: "inline", style: "margin-top:14px" }, [
-            el("input", {
-              class: "input", style: "flex:1;min-width:180px", placeholder: "Nouvelle pièce ou zone", autofocus: true,
-              onkeydown: function (event) {
-                if (event.key === "Enter") addNode(null, event.target.value);
-                if (event.key === "Escape") { adding = null; render(); }
-              }
-            }),
+            rootInput,
+            el("button", { class: "btn btn-volt", type: "button", onclick: function () { addNode(null, rootInput.value); } }, [icon("plus", 15), "Ajouter"]),
             el("button", { class: "btn btn-line", type: "button", onclick: function () { adding = null; render(); } }, "Annuler")
           ])
         : el("button", {
@@ -2509,7 +4079,7 @@
     return el("div", { class: "page" }, [
       el("div", { class: "inline", style: "gap:12px" }, [
         el("h1", { class: "display t-lg", text: "Scan Éclair" }),
-        el("span", { class: "label badge", text: "Éclair" })
+        el("span", { class: "badge" }, [icon("bolt", 12), "Éclair"])
       ]),
       el("p", { class: "lede", style: "margin-top:10px", text: "Photographiez une étagère ou un tiroir. L'IA identifie les objets et pré-remplit le référencement." }),
 
@@ -2524,14 +4094,15 @@
         return field;
       })(),
 
-      el("div", { class: "scan-stage", style: "margin-top:16px" }, [
+      el("div", { class: "scan-stage" + (scanState.image ? " has-image" : ""), style: "margin-top:16px", "aria-busy": scanState.busy ? "true" : null }, [
         scanState.image
           ? el("img", { src: scanState.image, alt: "Photo à analyser" })
-          : el("div", { class: "stack-sm", style: "text-align:center;padding:24px;align-items:center" }, [
-              icon("scan", 30),
-              el("p", { class: "muted", style: "font-size:.875rem;max-width:34ch", text: photoAvailable ? "Prenez une photo d'un rangement, ou importez-en une depuis votre appareil." : "Démonstration : le résultat d'une analyse d'étagère, à corriger puis enregistrer." })
+          : el("div", { class: "scan-empty" }, [
+              el("span", { class: "corners", "aria-hidden": "true" }),
+              el("span", { class: "fig" }, [icon("scan", 30)]),
+              el("p", { class: "muted", style: "font-size:.9375rem;max-width:34ch", text: photoAvailable ? "Prenez une photo d'un rangement, ou importez-en une depuis votre appareil." : "Démonstration : le résultat d'une analyse d'étagère, à corriger puis enregistrer." })
             ]),
-        scanState.busy ? el("div", { class: "scan-overlay" }, [
+        scanState.busy ? el("div", { class: "scan-overlay", role: "status" }, [
           el("div", { class: "spin", "aria-hidden": "true" }),
           el("p", { style: "font-size:.9375rem", text: "Analyse en cours…" })
         ]) : null
@@ -2575,19 +4146,18 @@
         el("p", { class: "muted", style: "font-size:.8125rem;margin-top:8px", text: "Décochez ce que vous ne voulez pas, corrigez les noms, puis validez." }),
 
         el("ul", { class: "row-list", style: "margin-top:14px" }, scanState.detected.map(function (item, index) {
-          return el("li", { class: "row", style: item.keep ? "" : "opacity:.45" }, [
+          return el("li", { class: "row" + (item.keep ? "" : " off") }, [
             el("button", {
-              class: "mini", type: "button", role: "checkbox",
-              "aria-checked": item.keep ? "true" : "false", "aria-label": item.name,
-              style: "border:2px solid " + (item.keep ? "var(--volt)" : "var(--line)") + ";background:" + (item.keep ? "var(--volt)" : "transparent") + ";color:var(--ink);width:22px;height:22px;border-radius:6px",
+              class: "check", type: "button", role: "checkbox",
+              "aria-checked": item.keep ? "true" : "false", "aria-label": "Garder « " + item.name + " »",
               onclick: function () { scanState.detected[index].keep = !item.keep; render(); }
-            }, [item.keep ? icon("check", 12) : null]),
+            }, [el("span", { class: "box" }, [item.keep ? icon("check", 14) : null])]),
             el("input", {
               class: "bare", value: item.name, maxlength: 120, "aria-label": "Nom de l'objet",
               oninput: function (event) { scanState.detected[index].name = event.target.value; }
             }),
-            item.quantity > 1 ? el("span", { class: "label", text: "×" + item.quantity }) : null,
-            item.confidence === "medium" ? el("span", { class: "label", style: "color:var(--warn)", text: "?" }) : null
+            item.quantity > 1 ? el("span", { class: "qty-tag", text: "×" + item.quantity }) : null,
+            item.confidence === "medium" ? el("span", { class: "conf", title: "L'IA n'en est pas certaine : vérifiez le nom", text: "À vérifier" }) : null
           ]);
         })),
 
@@ -3444,6 +5014,9 @@
           gl.deleteBuffer(posBuf); gl.deleteBuffer(colBuf);
           gl.deleteVertexArray(vao); gl.deleteProgram(program);
         } catch (e) {}
+        // Le canevas est recréé à chaque rendu : on rend aussi le contexte,
+        // sinon le navigateur en accumule jusqu'à perdre les plus anciens.
+        try { var lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); } catch (e) {}
       }
     };
   }
@@ -4071,7 +5644,13 @@
       setPins: function (points) { pinPoints = points || []; },
       setPicking: function (on) { picking = !!on; canvas.style.cursor = on ? "crosshair" : ""; },
       pick: pick,
-      dispose: function () { running = false; cancelAnimationFrame(raf); }
+      dispose: function () {
+        running = false;
+        cancelAnimationFrame(raf);
+        // Même ménage que le nuage de points : un contexte WebGL par visite
+        // de l'Espace 3D, jamais rendu, finissait par évincer les autres.
+        try { var lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); } catch (e) {}
+      }
     };
   }
 
@@ -4566,9 +6145,17 @@
       render();
     }
 
-    function saveReview() {
+    function saveReview(confirmed) {
       var previous = scanOf(review.locationId);
-      if (previous && !confirm("Remplacer le relevé de « " + (locById(review.locationId) || {}).name + " » ? Les rangements déjà situés devront être reposés.")) return;
+      if (previous && confirmed !== true) {
+        confirmSheet({
+          title: "Remplacer le relevé ?",
+          body: "Le relevé actuel de « " + (locById(review.locationId) || {}).name + " » sera remplacé. Les rangements déjà situés devront être reposés.",
+          confirmLabel: "Remplacer",
+          onConfirm: function () { saveReview(true); }
+        });
+        return;
+      }
 
       var id = uid("scan");
       var target = review.locationId;
@@ -4620,7 +6207,7 @@
     var head = [
       el("div", { class: "inline", style: "gap:12px" }, [
         el("h1", { class: "display t-lg", text: "Votre logement" }),
-        el("span", { class: "label badge", text: "Éclair" })
+        el("span", { class: "badge" }, [icon("bolt", 12), "Éclair"])
       ]),
       modeSwitch(),
       spaceRooms().length > 1 ? rail : null
@@ -4754,15 +6341,22 @@
         scan.source !== "demo" ? el("button", {
           class: "btn btn-sm btn-quiet", type: "button",
           onclick: function () {
-            if (!confirm("Supprimer le relevé de « " + room.name + " » ? Les rangements situés perdront leur point.")) return;
-            scanStore.del(scan.id);
-            state.scans = state.scans.filter(function (sc) { return sc.id !== scan.id; });
-            descendantIds(room.id).forEach(function (lid) {
-              var node = locById(lid);
-              if (node) node.space = null;
+            confirmSheet({
+              title: "Supprimer le relevé ?",
+              body: "Le relevé de « " + room.name + " » sera effacé de cet appareil. Les rangements situés perdront leur point.",
+              confirmLabel: "Supprimer",
+              danger: true,
+              onConfirm: function () {
+                scanStore.del(scan.id);
+                state.scans = state.scans.filter(function (sc) { return sc.id !== scan.id; });
+                descendantIds(room.id).forEach(function (lid) {
+                  var node = locById(lid);
+                  if (node) node.space = null;
+                });
+                dropScene(); save(); render();
+                toast("Relevé supprimé.");
+              }
             });
-            dropScene(); save(); render();
-            toast("Relevé supprimé.");
           }
         }, [icon("trash", 14), "Supprimer"]) : null
       ]),
@@ -4845,6 +6439,8 @@
     });
     var floors = Object.keys(byFloor).map(Number).sort(function (a, b) { return b - a; });
 
+    var cardIndex = 0;
+
     function roomCard(room) {
       var count = total(room.id);
       var kids = childrenOf(room.id);
@@ -4852,13 +6448,20 @@
       // cliquable, une pièce pleine ne mange pas toute la rangée.
       var weight = 0.55 + (count / max) * 1.6;
 
+      var order = cardIndex++;
       return el("button", {
-        class: "room-card" + (mapHover === room.id ? " hot" : ""),
+        class: "room-card",
         type: "button",
-        style: "flex:" + weight.toFixed(2) + " 1 190px",
+        style: "flex:" + weight.toFixed(2) + " 1 190px;--i:" + order,
+        "aria-pressed": mapFocus === room.id ? "true" : "false",
         "aria-label": room.name + ", " + plural(count, "objet", "objets"),
-        onmouseenter: function () { mapHover = room.id; },
-        onclick: function () { mapFocus = mapFocus === room.id ? null : room.id; render(); }
+        onclick: function () {
+          mapFocus = mapFocus === room.id ? null : room.id;
+          render();
+          // Le détail s'ouvre sous l'étage de la pièce : on l'amène à l'écran.
+          var panel = document.querySelector(".focus-panel");
+          if (panel) panel.scrollIntoView({ block: "nearest", behavior: reduceMotion() ? "auto" : "smooth" });
+        }
       }, [
         el("span", { class: "rc-head" }, [
           el("span", { class: "rc-icon" }, [sym(room.icon || ICON_BY_KIND[room.kind], 19)]),
@@ -4868,7 +6471,7 @@
 
         /* La jauge : elle dit d'un trait ce que le treemap disait par la
            surface, sans déformer la pièce. */
-        el("span", { class: "rc-bar" }, [
+        el("span", { class: "rc-bar", "aria-hidden": "true" }, [
           el("i", { style: "width:" + Math.round((count / max) * 100) + "%" })
         ]),
 
@@ -4886,57 +6489,63 @@
     }
 
     var focus = mapFocus ? locById(mapFocus) : null;
+    if (mapFocus && !focus) mapFocus = null;
+
+    function focusPanel() {
+      var ids = descendantIds(focus.id);
+      var inside = state.items.filter(function (item) { return ids.indexOf(item.locationId) !== -1; });
+      return el("div", { class: "focus-panel", role: "region", "aria-label": "Contenu de " + focus.name }, [
+        el("div", { class: "inline", style: "justify-content:space-between;flex-wrap:nowrap" }, [
+          el("h2", {}, [sym(focus.icon || ICON_BY_KIND[focus.kind], 20), focus.name]),
+          el("button", { class: "icon-btn", type: "button", "aria-label": "Fermer le détail de " + focus.name,
+                         onclick: function () { mapFocus = null; render(); } }, [icon("x", 17)])
+        ]),
+        inside.length === 0
+          ? el("p", { class: "muted", style: "font-size:.875rem;margin-top:10px", text: "Rien de référencé ici pour l'instant." })
+          : el("ul", { class: "results" }, inside.slice(0, 12).map(function (item) {
+              return el("li", { class: "result" }, [
+                el("span", { class: "thumb" }, [sym(rootIconOf(item.locationId), 19)]),
+                el("button", { class: "body", type: "button", onclick: function () { itemSheet(item); } }, [
+                  el("span", { class: "name", text: item.name }),
+                  crumbs(item.locationId, item.spot)
+                ])
+              ]);
+            })),
+        inside.length > 12 ? el("button", {
+          class: "btn btn-sm btn-quiet", type: "button", style: "margin-top:10px",
+          onclick: function () { searchState.query = focus.name; searchState.filter = null; aiResults = null; goTab("search"); }
+        }, ["Voir les " + inside.length + " objets", icon("arrow-right", 14)]) : null
+      ]);
+    }
 
     return el("div", { class: "page page-wide" }, [
-      el("div", { class: "inline", style: "gap:12px" }, [
+      el("div", { class: "page-head" }, [
         el("h1", { class: "display t-lg", text: "Votre logement" }),
-        el("span", { class: "label badge", text: "Éclair" })
+        el("span", { class: "badge" }, [icon("bolt", 12), "Éclair"])
       ]),
       modeSwitch(),
 
       state.locations.length === 0
-        ? el("p", { class: "muted", style: "margin-top:40px;text-align:center", text: "Ajoutez des pièces pour construire votre plan." })
+        ? el("div", { class: "empty" }, [
+            emptyArt(),
+            el("h2", { class: "display t-md", text: "Pas encore de pièces" }),
+            el("p", { class: "lede", text: "Ajoutez des pièces dans « Mes lieux » pour construire votre plan." }),
+            el("button", { class: "btn btn-volt", type: "button", onclick: function () { goTab("places"); } }, [icon("grid", 15), "Aller à Mes lieux"])
+          ])
         : el("div", { class: "floors" }, floors.map(function (floor) {
-            return el("section", { class: "floor" }, [
+            var rooms = byFloor[String(floor)];
+            var hasFocus = focus && rooms.some(function (r) { return r.id === focus.id; });
+            return el("section", { class: "floor", "aria-label": floorLabel(floor) }, [
               el("div", { class: "floor-tag" }, [
-                el("span", { class: "label", text: floorLabel(floor) }),
-                el("span", { class: "label", style: "color:var(--faint)",
-                             text: plural(byFloor[String(floor)].reduce(function (n, r) { return n + total(r.id); }, 0), "objet", "objets") })
+                el("h2", { text: floorLabel(floor) }),
+                el("span", { class: "n", text: plural(rooms.reduce(function (n, r) { return n + total(r.id); }, 0), "objet", "objets") })
               ]),
-              el("div", { class: "floor-rooms" }, byFloor[String(floor)].map(roomCard))
+              el("div", { class: "floor-rooms" }, rooms.map(roomCard)),
+              hasFocus ? focusPanel() : null
             ]);
           })),
 
-      focus ? el("div", { class: "focus-panel" }, [
-        el("div", { class: "inline", style: "justify-content:space-between" }, [
-          el("h2", { class: "inline", style: "font-family:var(--display);font-size:1.125rem;margin:0;gap:10px" }, [
-            sym(focus.icon || ICON_BY_KIND[focus.kind], 20), focus.name
-          ]),
-          el("button", { class: "icon-btn", type: "button", "aria-label": "Fermer",
-                         onclick: function () { mapFocus = null; render(); } }, [icon("x", 17)])
-        ]),
-        el("ul", { class: "results", style: "margin-top:14px" },
-          (function () {
-            var ids = descendantIds(focus.id);
-            var inside = state.items.filter(function (item) { return ids.indexOf(item.locationId) !== -1; }).slice(0, 12);
-            if (inside.length === 0) return [el("p", { class: "muted", style: "font-size:.875rem", text: "Rien de référencé ici pour l'instant." })];
-            return inside.map(function (item) {
-              return el("li", { class: "result" }, [
-                el("span", { class: "thumb" }, [sym(rootIconOf(item.locationId), 19)]),
-                el("button", { class: "body", type: "button", onclick: function () { itemSheet(item); } }, [
-                  el("div", { class: "name", text: item.name }),
-                  el("div", { class: "path where", text: pathOf(item.locationId).slice(1).join(" / ") || "—" })
-                ])
-              ]);
-            });
-          })())
-      ]) : null,
-
-      el("p", {
-        class: "label",
-        style: "text-transform:none;letter-spacing:.04em;font-size:.75rem;line-height:1.7;margin-top:22px;color:var(--faint)",
-        text: "Chaque étage montre ses pièces côte à côte ; la largeur et la jauge suivent ce qu'elles contiennent. Touchez une pièce pour voir ce qu'il y a dedans."
-      })
+      el("p", { class: "footnote", text: "Chaque étage montre ses pièces côte à côte ; la largeur et la jauge suivent ce qu'elles contiennent. Touchez une pièce pour voir ce qu'il y a dedans." })
     ]);
   }
 
@@ -4946,9 +6555,45 @@
   function viewAlerts() {
     var rows = alerts();
 
+    function days(n) { return n === 0 ? "aujourd'hui" : n === 1 ? "demain" : "dans " + n + " jours"; }
+
+    function alertRow(row) {
+      var late = row.kind === "expiry" && row.days < 0;
+      var text = row.kind === "expiry"
+        ? (late ? "Périmé depuis " + plural(Math.abs(row.days), "jour", "jours") : "Périme " + days(row.days))
+        : row.kind === "warranty"
+          ? "Garantie : fin " + days(row.days)
+          : "Chez " + row.item.lentTo + " depuis " + row.days + " j";
+
+      return el("li", { class: "alert-row" + (late ? " is-late" : "") + (row.kind === "lent" ? " is-lent" : "") }, [
+        el("span", { class: "state", "aria-hidden": "true" }, [icon(row.kind === "expiry" ? "warn" : row.kind === "warranty" ? "shield" : "loop", 19)]),
+        el("button", { class: "body", type: "button", onclick: function () { itemSheet(row.item); } }, [
+          el("span", { class: "name", text: row.item.name }),
+          crumbs(row.item.locationId, row.item.spot)
+        ]),
+        el("span", { class: "due", text: text }),
+        // Un prêt se clôt d'un geste : c'est l'action que l'alerte appelle.
+        row.kind === "lent" ? el("button", {
+          class: "btn btn-sm btn-line", type: "button", "aria-label": "Marquer « " + row.item.name + " » comme rendu",
+          onclick: function () {
+            row.item.lentTo = null; row.item.lentAt = null; row.item.lastSeenAt = Date.now();
+            save(); render(); toast("« " + row.item.name + " » est de retour.");
+          }
+        }, [icon("check", 14), "Rendu"]) : null
+      ]);
+    }
+
+    var groups = [
+      { title: "À traiter", rows: rows.filter(function (r) { return r.kind === "expiry" && r.days < 0; }) },
+      { title: "Échéances proches", rows: rows.filter(function (r) { return (r.kind === "expiry" && r.days >= 0) || r.kind === "warranty"; }) },
+      { title: "Objets prêtés", rows: rows.filter(function (r) { return r.kind === "lent"; }) }
+    ];
+
     return el("div", { class: "page" }, [
       el("h1", { class: "display t-lg", text: "Alertes" }),
-      el("p", { class: "lede", style: "margin-top:10px", text: "Ce qui demande votre attention." }),
+      el("p", { class: "lede", style: "margin-top:8px", text: rows.length
+        ? plural(rows.length, "chose demande", "choses demandent") + " votre attention : péremptions, garanties, prêts."
+        : "Péremptions, fins de garantie, objets prêtés : tout ce qui a une date apparaît ici." }),
 
       // Les alertes sont calculées pour tout le monde ; seule leur remontée par
       // email est réservée à l'Éclair. On ne cache pas derrière un paiement une
@@ -4959,30 +6604,15 @@
       ]) : null,
 
       rows.length === 0
-        ? el("p", { class: "muted", style: "text-align:center;margin-top:56px", text: "Rien à signaler. Tout est à jour." })
-        : el("ul", { class: "row-list", style: "margin-top:20px" }, rows.map(function (row) {
-            var overdue = row.days < 0;
-            var text = row.kind === "expiry"
-              ? (overdue ? "Périmé depuis " + Math.abs(row.days) + " j" : "Périme dans " + row.days + " j")
-              : row.kind === "warranty"
-                ? "Garantie expire dans " + row.days + " j"
-                : "Prêté à " + row.lentTo + " depuis " + row.days + " j";
-            if (row.kind === "lent") text = "Prêté à " + row.item.lentTo + " depuis " + row.days + " j";
-
-            return el("li", { class: "alert-row" }, [
-              (function () {
-                var i = icon(row.kind === "expiry" ? "warn" : row.kind === "warranty" ? "shield" : "loop", 19);
-                i.style.color = overdue ? "var(--danger)" : "var(--warn)";
-                return i;
-              })(),
-              el("button", {
-                class: "body", type: "button", style: "flex:1;min-width:0;text-align:left;border:0;background:transparent;cursor:pointer;padding:0",
-                onclick: function () { itemSheet(row.item); }
-              }, [
-                el("div", { style: "font-size:.9375rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: row.item.name }),
-                el("div", { class: "path", style: "color:var(--faint);margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap", text: pathOf(row.item.locationId).join(" / ") })
-              ]),
-              el("span", { class: "label", style: "flex-shrink:0;color:" + (overdue ? "var(--danger)" : "var(--warn)"), text: text })
+        ? el("div", { class: "all-clear" }, [
+            el("span", { class: "blob", "aria-hidden": "true" }, [icon("check", 26)]),
+            el("h2", { class: "display t-md", text: "Rien à signaler" }),
+            el("p", { class: "lede", text: "Ajoutez une date de péremption ou un prêt dans la fiche d'un objet : l'alerte viendra toute seule." })
+          ])
+        : el("div", {}, groups.filter(function (g) { return g.rows.length > 0; }).map(function (group) {
+            return el("section", { class: "alert-group" }, [
+              el("h2", {}, [group.title, el("span", { class: "n", text: String(group.rows.length) })]),
+              el("ul", { class: "row-list" }, group.rows.map(alertRow))
             ]);
           }))
     ]);
@@ -4993,118 +6623,158 @@
   function viewSettings() {
     var premium = state.plan === "premium";
 
+    /* Toute la ligne est l'interrupteur : le libellé se touche aussi. */
     function switchRow(label, hint, checked, onChange) {
-      return el("div", { class: "stack-sm" }, [
-        el("div", { class: "switch" }, [
-          el("button", {
-            type: "button", role: "switch", "aria-checked": checked ? "true" : "false",
-            "aria-label": label, onclick: onChange
-          }, [el("i")]),
-          el("span", { style: "font-size:.9375rem", text: label })
-        ]),
-        hint ? el("p", { class: "muted", style: "font-size:.75rem;padding-left:58px", text: hint }) : null
+      return el("button", {
+        class: "set-row switch-row", type: "button", role: "switch",
+        "aria-checked": checked ? "true" : "false", onclick: onChange
+      }, [
+        el("span", { class: "txt" }, [el("b", { text: label }), hint ? el("span", { text: hint }) : null]),
+        el("span", { class: "switch", "aria-hidden": "true" }, [el("i")])
       ]);
     }
+    function exportData() {
+      var payload = {
+        exported_at: new Date().toISOString(), format: "fulmo.export.v1",
+        household: state.household, locations: state.locations, items: state.items
+      };
+      var filename = "fulmo-export-" + new Date().toISOString().slice(0, 10) + ".json";
+      var data = JSON.stringify(payload, null, 2);
+      if (downloadsApi) {
+        downloadsApi.save({ filename: filename, data: data })
+          .then(function () { toast("Export enregistré."); })
+          // Le visiteur peut refuser : ce n'est pas une erreur.
+          .catch(function () { toast("Export annulé."); });
+        return;
+      }
+      // Navigateur nu : un simple téléchargement. Le bouton n'existait pas
+      // hors de la passerelle, et l'export était introuvable.
+      try {
+        var url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+        var link = el("a", { href: url, download: filename, style: "display:none" });
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        toast("Export téléchargé : " + filename);
+      } catch (e) {
+        toast("L'export n'a pas pu être créé dans ce navigateur.");
+      }
+    }
+
+    function loadSample() {
+      function load() {
+        searchState.query = ""; searchState.filter = null; aiResults = null;
+        seedHousehold(); save(); goTab("search");
+        toast("Logement d'exemple chargé : 40 objets.");
+      }
+      if (state.items.length === 0) { load(); return; }
+      confirmSheet({
+        title: "Charger le logement d'exemple ?",
+        body: "Vos " + plural(state.items.length, "objet", "objets") + " et vos lieux actuels seront remplacés par le logement de démonstration.",
+        confirmLabel: "Remplacer",
+        onConfirm: load
+      });
+    }
+
+    var household = state.household || {};
+    var roomsCount = state.locations.filter(function (l) { return !l.parentId; }).length;
 
     return el("div", { class: "page" }, [
       el("h1", { class: "display t-lg", text: "Réglages" }),
 
-      el("div", { class: "section", style: "margin-top:20px" }, [
-        el("h2", { text: "Compte" }),
-        el("div", { class: "row", style: "margin-top:12px" }, [
-          el("div", { style: "flex:1;min-width:0" }, [
-            el("div", { style: "font-weight:500;font-size:.9375rem", text: state.account ? state.account.name : "—" }),
-            el("div", { class: "muted", style: "font-size:.8125rem", text: state.account ? state.account.email : "" })
+      el("section", { class: "set-section" }, [
+        el("h2", { text: "Foyer et compte" }),
+        el("div", { class: "set-group" }, [
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [sym(household.type === "house" ? "h-maison" : "h-appart", 22)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: household.name || "Mon logement" }),
+              el("span", { text: plural(roomsCount, "pièce", "pièces") + " · " + plural(state.items.length, "objet", "objets") })
+            ])
+          ]),
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("shield", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: state.account ? state.account.name : "—" }),
+              el("span", { text: state.account ? state.account.email : "" })
+            ])
           ])
         ])
       ]),
 
-      el("div", { class: "section" }, [
-        el("h2", { text: "Abonnement" }),
-        el("p", { class: "muted", style: "font-size:.875rem", text: premium ? "Éclair — 9 €/mois (activé gratuitement en prototype)" : "Libre — gratuit" }),
-        el("div", { style: "margin-top:14px" }, [
+      el("section", { class: "set-section" }, [
+        el("h2", { text: "Formule" }),
+        el("div", { class: "set-group" }, [
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" + (premium ? " volt" : "") }, [icon("bolt", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: premium ? "Éclair — 9 €/mois" : "Libre — gratuit" }),
+              el("span", { text: premium ? "Scan Éclair, plan du logement, espace 3D et recherche en langage naturel." : "Recherche, lieux et alertes. Passez à l'Éclair pour le scan, le plan et l'IA." })
+            ])
+          ]),
           switchRow(
             premium ? "Éclair activé" : "Activer l'Éclair",
-            "Dans la vraie application, cette bascule ouvre un paiement Stripe. Ici elle est libre : basculez autant que vous voulez pour comparer les deux formules.",
+            "Dans la vraie application, cette bascule ouvre un paiement Stripe. Ici elle est libre : comparez les deux formules autant que vous voulez.",
             premium,
             function () {
               state.plan = premium ? "free" : "premium";
-              if (!premium && (state.tab === "scan" || state.tab === "map")) { /* on reste sur la page */ }
               save(); render();
-              toast(state.plan === "premium" ? "Éclair activé." : "Retour au plan Libre.");
+              toast(state.plan === "premium" ? "Éclair activé." : "Retour à la formule Libre.");
             }
           )
         ])
       ]),
 
-      el("div", { class: "section" }, [
+      el("section", { class: "set-section" }, [
         el("h2", { text: "Apparence" }),
-        el("div", { class: "seg", style: "margin-top:12px" }, [
-          ["light", "Clair"], ["dark", "Sombre"]
-        ].map(function (option) {
-          return el("button", {
-            type: "button", "aria-pressed": state.theme === option[0] ? "true" : "false",
-            onclick: function () { state.theme = option[0]; applyTheme(); save(); render(); },
-            text: option[1]
-          });
-        }))
-      ]),
-
-      el("div", { class: "section" }, [
-        el("h2", { text: "Vos données" }),
-        el("p", { class: "muted", style: "font-size:.875rem", text: "Tout est stocké dans ce navigateur. Rien n'est envoyé à un serveur." }),
-        el("div", { class: "inline", style: "margin-top:14px" }, [
-          downloadsApi ? el("button", {
-            class: "btn btn-line", type: "button",
-            onclick: function () {
-              var payload = {
-                exported_at: new Date().toISOString(), format: "fulmo.export.v1",
-                household: state.household, locations: state.locations, items: state.items
-              };
-              downloadsApi.save({
-                filename: "fulmo-export-" + new Date().toISOString().slice(0, 10) + ".json",
-                data: JSON.stringify(payload, null, 2)
-              }).then(function () {
-                toast("Export enregistré.");
-              }).catch(function () {
-                // Le visiteur peut refuser : ce n'est pas une erreur.
-                toast("Export annulé.");
-              });
-            }
-          }, [icon("download", 15), "Exporter en JSON"]) : null,
-
-          el("button", {
-            class: "btn btn-line", type: "button",
-            onclick: function () {
-              if (state.items.length > 0 && !confirm("Remplacer le contenu actuel par le logement d'exemple ?")) return;
-              seedHousehold(); save(); state.tab = "search"; render();
-              toast("Logement d'exemple chargé : 40 objets.");
-            }
-          }, "Charger le logement d'exemple"),
-
-          el("button", {
-            class: "btn btn-danger", type: "button",
-            onclick: function () {
-              if (!confirm("Effacer ce prototype et repartir de l'inscription ?")) return;
-              state = blank(); save(); render();
-            }
-          }, [icon("trash", 15), "Tout effacer"])
+        el("div", { class: "set-group" }, [
+          el("div", { class: "set-row" }, [
+            el("span", { class: "txt" }, [
+              el("b", { text: "Thème" }),
+              el("span", { text: "Le clair pour chercher en plein jour, le sombre pour le soir." })
+            ]),
+            el("div", { class: "seg", role: "radiogroup", "aria-label": "Thème" }, [
+              ["light", "Clair", "sun"], ["dark", "Sombre", "moon"]
+            ].map(function (option) {
+              var on = state.theme === option[0];
+              return el("button", {
+                type: "button", role: "radio", "aria-checked": on ? "true" : "false",
+                onclick: function () { if (!on) { state.theme = option[0]; applyTheme(); save(); render(); } }
+              }, [icon(option[2], 15), option[1]]);
+            }))
+          ])
         ])
       ]),
 
-      el("div", { class: "section" }, [
+      el("section", { class: "set-section" }, [
+        el("h2", { text: "Vos données" }),
+        el("div", { class: "set-group" }, [
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("shield", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Stockées sur cet appareil" }),
+              el("span", { text: "Rien n'est envoyé à un serveur. Seule la phrase d'une recherche IA part vers l'assistant." })
+            ])
+          ]),
+          el("div", { class: "set-actions" }, [
+            el("button", { class: "btn btn-line", type: "button", onclick: exportData }, [icon("download", 15), "Exporter en JSON"]),
+            el("button", { class: "btn btn-line", type: "button", onclick: loadSample }, "Charger le logement d'exemple"),
+            el("button", { class: "btn btn-danger-line", type: "button", onclick: confirmReset }, [icon("trash", 15), "Tout effacer"])
+          ])
+        ])
+      ]),
+
+      el("section", { class: "set-section" }, [
         el("h2", { text: "Ce qui diffère de la vraie application" }),
-        el("ul", { class: "stack-sm", style: "list-style:none;padding:0;margin:12px 0 0" }, [
+        el("ul", { class: "set-group set-list" }, [
           "L'inscription n'envoie pas d'email de confirmation et n'appelle pas Supabase Auth.",
           "L'abonnement ne passe pas par Stripe : la bascule Éclair est libre.",
           "Le foyer partagé et les invitations par email ne sont pas rejouables sans serveur.",
           "Les données vivent dans ce navigateur, pas dans PostgreSQL avec sa Row Level Security.",
           "Le moteur de recherche, lui, est le portage fidèle de la logique SQL : accents, casse, préfixes et fautes de frappe."
         ].map(function (line) {
-          return el("li", { class: "inline", style: "gap:10px;align-items:flex-start" }, [
-            el("span", { "aria-hidden": "true", style: "color:var(--accent);margin-top:7px;width:12px;height:1px;background:currentColor;flex-shrink:0" }),
-            el("span", { class: "muted", style: "font-size:.875rem;line-height:1.6", text: line })
-          ]);
+          return el("li", {}, [icon("chev", 14), el("span", { text: line })]);
         }))
       ])
     ]);
@@ -5141,9 +6811,18 @@
           description: "", quantity: 1, expiresAt: "", lentTo: ""
         };
 
+    var nameInput, nameError;
+
     function commit() {
       var name = draft.name.trim();
-      if (!name) return;
+      // Un nom vide ne s'enregistrait pas, sans rien dire : on le dit, là où
+      // il manque.
+      if (!name) {
+        nameInput.setAttribute("aria-invalid", "true");
+        nameError.hidden = false;
+        nameInput.focus();
+        return;
+      }
 
       var tags = draft.tags.split(/[,;\n]/).map(function (t) { return t.trim(); })
         .filter(function (t) { return t.length > 0 && t.length <= 40; }).slice(0, 25);
@@ -5194,13 +6873,20 @@
       body: [
         el("label", { class: "field" }, [
           el("span", { text: "Nom de l'objet" }),
-          el("input", {
+          nameInput = el("input", {
             class: "input", style: "font-size:1.0625rem", value: draft.name, maxlength: 120,
-            placeholder: "Perceuse, passeport, guirlande…", autofocus: true,
-            oninput: function (event) { draft.name = event.target.value; },
+            placeholder: "Perceuse, passeport, guirlande…",
+            // Le clavier ne s'ouvre d'office que pour un nouvel objet : on
+            // ouvre une fiche existante pour la lire, pas pour la retaper.
+            autofocus: !item, "aria-describedby": "item-name-err",
+            oninput: function (event) {
+              draft.name = event.target.value;
+              if (draft.name.trim()) { event.target.removeAttribute("aria-invalid"); nameError.hidden = true; }
+            },
             onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); commit(); } }
           }),
-          el("span", { style: "font-size:.75rem;color:var(--faint)", text: "Nommez-le comme vous le chercherez plus tard." })
+          nameError = el("span", { class: "err", id: "item-name-err", role: "alert", hidden: true, text: "Donnez un nom à l'objet pour pouvoir le retrouver." }),
+          el("span", { class: "field-hint", text: "Nommez-le comme vous le chercherez plus tard." })
         ]),
 
         locationField({
@@ -5243,11 +6929,20 @@
         textField("Prêté à", "lentTo", "Prénom, si l'objet est sorti"),
 
         item ? el("button", {
-          class: "btn btn-line", type: "button", style: "align-self:flex-start;color:var(--danger);border-color:color-mix(in oklab, var(--danger) 40%, transparent)",
+          class: "btn btn-danger-line", type: "button", style: "align-self:flex-start",
           onclick: function () {
-            if (!confirm("Supprimer « " + item.name + " » ? Cette action est définitive.")) return;
-            state.items = state.items.filter(function (i) { return i.id !== item.id; });
-            save(); closeSheet(); render(); toast("Objet supprimé.");
+            confirmSheet({
+              title: "Supprimer « " + item.name + " » ?",
+              body: "L'objet disparaît de l'inventaire et des recherches. Cette action est définitive.",
+              confirmLabel: "Supprimer",
+              danger: true,
+              // Annuler ramène à la fiche, pas à la page.
+              onCancel: function () { itemSheet(item); },
+              onConfirm: function () {
+                state.items = state.items.filter(function (i) { return i.id !== item.id; });
+                save(); render(); toast("Objet supprimé.");
+              }
+            });
           }
         }, [icon("trash", 15), "Supprimer cet objet"]) : null
       ],
@@ -5269,22 +6964,71 @@
 
   /* ─── Rendu ───────────────────────────────────────────────────────── */
 
+  /* L'indicateur d'onglet glisse de l'ancien onglet au nouveau (FLIP). */
+  function measureIndicators() {
+    var out = {};
+    [".rail-ind", ".tab-ind"].forEach(function (selector) {
+      var node = root.querySelector(selector);
+      if (node && node.offsetParent) out[selector] = node.getBoundingClientRect();
+    });
+    return out;
+  }
+
+  function glideIndicators(before) {
+    if (reduceMotion() || !Element.prototype.animate) return;
+    Object.keys(before).forEach(function (selector) {
+      var node = root.querySelector(selector);
+      if (!node || !node.offsetParent) return;
+      var now = node.getBoundingClientRect();
+      var dx = before[selector].left - now.left, dy = before[selector].top - now.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      node.animate([{ transform: "translate(" + dx + "px," + dy + "px)" }, { transform: "none" }],
+        { duration: 380, easing: "cubic-bezier(.16, 1, .3, 1)" });
+    });
+  }
+  var lastView = null;
+
+  function afterRender(screen, previousScroll, before) {
+    var inApp = !!(state.account && state.household);
+    var view = inApp ? state.tab + (state.tab === "map" ? ":" + mapMode : "") : (state.account ? "onboarding" : "signup");
+    var entering = view !== lastView;
+    lastView = view;
+    if (inApp && entering && screen.querySelector) {
+      var main = screen.querySelector(".app-main");
+      if (main) main.classList.add("view-enter");
+    }
+    root.replaceChildren(demoBar(), screen);
+    // On garde la position de lecture dans une vue, on repart du haut quand
+    // on en change (on arrivait sur « Alertes » au milieu de la page).
+    if (inApp) window.scrollTo(0, entering ? 0 : previousScroll);
+    if (inApp && entering) glideIndicators(before);
+    // `autofocus` n'agit qu'au chargement d'une page, pas sur un nœud inséré
+    // ensuite : les champs « renommer » et « ajouter » ne prenaient jamais le focus.
+    var auto = root.querySelector("[autofocus]");
+    if (inApp && auto && !openSheet && !cmdk && (!document.activeElement || document.activeElement === document.body)) {
+      try { auto.focus({ preventScroll: true }); } catch (e) { auto.focus(); }
+    }
+  }
+
   function render() {
     var previousScroll = window.scrollY;
+    var before = measureIndicators();
+
+    // Chaque rendu recrée le canevas 3D : la scène précédente est libérée ici,
+    // quel que soit l'onglet. Avant, quitter l'Espace 3D laissait sa boucle
+    // tourner et son contexte WebGL vivre, un de plus à chaque visite.
+    dropScene();
 
     var screen;
     if (!state.account) screen = screenSignup();
     else if (!state.household) screen = screenOnboarding();
     else screen = screenApp();
 
-    root.replaceChildren(demoBar(), screen);
-
-    // Le contenu est reconstruit à chaque rendu ; sans cela, le moindre clic
-    // renverrait l'utilisateur en haut de page.
-    if (state.account && state.household) window.scrollTo(0, previousScroll);
+    afterRender(screen, previousScroll, before);
   }
 
   applyTheme();
+  obRoute();   // app.html#demo / app.html#signup (section inscription)
   render();
 
   /* Ce que l'appareil sait faire en matière de relevé 3D. Résolu une fois,
@@ -5298,10 +7042,6 @@
      cosmétique : si cette réponse n'arrive qu'au moment du clic, l'attente
      consomme l'activation utilisateur et iOS refuse les capteurs de mouvement
      sans rien demander. Résolue ici, le geste n'attend plus rien. */
-  panoSupport().then(function (status) {
-    panoReady = status;
-    if (state.tab === "map" && mapMode === "3d") render();
-  });
   panoSupport().then(function (status) {
     panoReady = status;
     if (state.tab === "map" && mapMode === "3d") render();
