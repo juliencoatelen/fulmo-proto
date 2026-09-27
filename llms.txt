@@ -1,0 +1,27 @@
+# Fulmo
+
+> Fulmo est une application web (en français) qui retient où sont rangés les objets d'une maison — pièce, meuble, tiroir ou bac — et permet de les retrouver en quelques secondes. « Fulmo » signifie « éclair » en espéranto.
+
+## Ce que fait Fulmo
+- Décrire son logement : type (maison ou appartement), niveaux, pièces, meubles de rangement, contenants (tiroirs, bacs, boîtes).
+- Référencer ses objets à la main (nom, mots-clés, photo, dates) ou avec le Scan Éclair : on photographie une étagère, l'IA identifie les objets et les pré-range ; l'utilisateur vérifie et valide.
+- Retrouver un objet par une recherche tolérante aux fautes de frappe, par mots-clés, ou en langage naturel (IA) ; le résultat donne le chemin exact, par exemple « Bureau / Commode / Tiroir du haut ».
+- Plan du logement en coupe, par niveaux, avec les pièces et leurs meubles.
+- Espace 3D : import d'un scan de pièce au format .ply (nuage de points ou splats gaussiens), ou relevé panoramique.
+- Alertes : péremption (médicaments, produits), fin de garantie, objets prêtés.
+- Foyer partagé entre plusieurs membres ; export des données.
+
+## Formules et prix
+- Libre — 0 € : objets illimités, pièces/zones/meubles illimités, recherche tolérante aux fautes, mots-clés et métadonnées, foyer partagé jusqu'à 5 membres, export des données. Sans carte bancaire.
+- Éclair — 9 € par mois : tout Libre, plus Scan Éclair, plan interactif du logement, recherche en langage naturel, alertes (péremption, garantie, prêts), membres du foyer illimités.
+
+## Confidentialité
+- L'inventaire est stocké dans le navigateur de l'appareil de l'utilisateur, pas sur un serveur central.
+- La recherche en langage naturel n'envoie à l'IA que la phrase tapée. Le Scan Éclair envoie la photo prise, pour analyse. L'inventaire ne quitte pas l'appareil.
+- L'inventaire et la recherche classique fonctionnent sans connexion une fois l'application ouverte ; le Scan Éclair et la recherche en langage naturel demandent une connexion.
+
+## Liens
+- Présentation : https://juliencoatelen.github.io/fulmo-proto/
+- Créer un compte gratuit : https://juliencoatelen.github.io/fulmo-proto/app.html#signup
+- Démo (logement pré-rempli de 40 objets) : https://juliencoatelen.github.io/fulmo-proto/app.html#demo
+- Questions fréquentes : https://juliencoatelen.github.io/fulmo-proto/#faq

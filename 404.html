@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page introuvable — Fulmo</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#07070a">
+<link rel="icon" href="/fulmo-proto/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fulmo-proto/assets/css/tokens.css">
+<link rel="stylesheet" href="/fulmo-proto/assets/css/landing.css">
+<style>
+  .lost { min-height: 100svh; display: grid; place-items: center; text-align: center; padding: 32px var(--gutter);
+    background: radial-gradient(50% 50% at 50% 40%, rgb(217 255 61 / .07), transparent 70%); }
+  .lost-inner { display: grid; justify-items: center; gap: 22px; max-width: 560px; }
+  .lost .brand-mark { width: 56px; height: 56px; }
+  .lost h1 { font-size: var(--fs-h1); line-height: 1; }
+  .lost h1 em { color: var(--volt); }
+  .lost p { color: var(--fg-muted); font-size: var(--fs-lede); }
+  .lost code { font-family: var(--font-mono); color: var(--volt); font-size: .9em; }
+</style>
+</head>
+<body class="night">
+<main class="lost">
+  <div class="lost-inner">
+    <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="15.5" fill="none" stroke="#f5f5f0" stroke-width="3.2"/><path d="M27.6 8.5 15.5 26.6h6.8l-2.3 13.1 12.5-18.9h-6.9z" fill="#d9ff3d" stroke="#07070a" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    <h1>Cette page n'est rangée <em>nulle part</em>.</h1>
+    <p>Même Fulmo ne la trouve pas. Le lien est peut-être ancien, ou mal recopié.</p>
+    <p><code>Recherche : page / introuvable</code></p>
+    <div class="cta-row" style="justify-content:center">
+      <a class="btn btn-volt btn-lg" href="/fulmo-proto/">Revenir à l'accueil</a>
+      <a class="btn btn-ghost btn-lg" href="/fulmo-proto/app.html#demo">Essayer la démo</a>
+    </div>
+  </div>
+</main>
+</body>
+</html>

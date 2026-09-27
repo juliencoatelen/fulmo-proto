@@ -1,0 +1,16 @@
+{
+  "name": "fulmo",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Fulmo — la mémoire de votre maison",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "watch": "node tools/build.mjs --watch",
+    "serve": "http-server -p 8080 -c-1 -s ."
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "three": "0.186.1"
+  }
+}
