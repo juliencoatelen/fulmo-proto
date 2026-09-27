@@ -37,8 +37,15 @@
       items: [],
       screen: "signup",
       tab: "search",
-      theme: "light"
+      theme: "light",
+      tourSeen: false   // visite guidée vue ou terminée : elle ne s'impose qu'une fois
     };
+  }
+
+  /* Un compte enregistré avant la visite guidée est déjà entré dans
+     l'application : on ne la lui impose pas après coup. */
+  function tourMigrate(saved, base) {
+    if (saved.tourSeen === undefined) base.tourSeen = !!saved.household;
   }
 
   var state = load();
@@ -58,6 +65,7 @@
       // Avant la déconnexion, un compte enregistré voulait dire « connecté » :
       // on ne renvoie pas ces visiteurs vers l'écran de connexion.
       if (parsed.session === undefined) base.session = !!base.account;
+      tourMigrate(parsed, base);
       return base;
     } catch (e) {
       // Navigation privée, stockage bloqué, données corrompues : on repart
@@ -119,6 +127,7 @@
     Object.keys(base).forEach(function (key) {
       if (saved[key] !== undefined) base[key] = saved[key];
     });
+    tourMigrate(saved, base);
     base.theme = state.theme;
     state = base;
     return true;
@@ -423,30 +432,33 @@
   /* ─── Presets ─────────────────────────────────────────────────────── */
 
   var ROOMS = [
-    { key: "cuisine",   label: "Cuisine",          icon: "r-cuisine", kind: "room", common: true,  suggests: ["Placard haut", "Tiroir à couverts", "Sous l'évier"] },
-    { key: "salon",     label: "Salon",            icon: "r-salon", kind: "room", common: true,  suggests: ["Buffet", "Bibliothèque"] },
-    { key: "chambre",   label: "Chambre",          icon: "r-chambre", kind: "room", common: true,  suggests: ["Armoire", "Table de chevet", "Sous le lit"] },
-    { key: "sdb",       label: "Salle de bain",    icon: "r-sdb", kind: "room", common: true,  suggests: ["Armoire à pharmacie", "Placard"] },
-    { key: "entree",    label: "Entrée",           icon: "r-entree", kind: "room", common: true,  suggests: ["Placard", "Coffre"] },
-    { key: "bureau",    label: "Bureau",           icon: "r-bureau", kind: "room", common: true,  suggests: ["Bureau", "Bibliothèque", "Meuble à tiroirs"] },
-    { key: "enfant",    label: "Chambre d'enfant", icon: "r-enfant", kind: "room", suggests: ["Armoire", "Bac de rangement"] },
-    { key: "sam",       label: "Salle à manger",   icon: "r-sam", kind: "room", suggests: ["Buffet"] },
-    { key: "wc",        label: "WC",               icon: "r-wc", kind: "room", suggests: ["Étagère"] },
-    { key: "buanderie", label: "Buanderie",        icon: "r-buanderie", kind: "room", suggests: ["Étagère", "Placard"] },
-    { key: "dressing",  label: "Dressing",         icon: "r-dressing", kind: "room", suggests: ["Armoire", "Étagère"] },
-    { key: "cellier",   label: "Cellier",          icon: "r-cellier", kind: "room", suggests: ["Étagère", "Bac de rangement"] },
-    { key: "garage",    label: "Garage",           icon: "r-garage", kind: "zone", suggests: ["Rack mural", "Servante à outils", "Étagère"] },
-    { key: "cave",      label: "Cave",             icon: "r-cave", kind: "zone", suggests: ["Rack", "Étagère"] },
-    { key: "grenier",   label: "Grenier",          icon: "r-grenier", kind: "zone", suggests: ["Étagère A", "Étagère B", "Valises"] },
-    { key: "cabanon",   label: "Cabanon",          icon: "r-cabanon", kind: "zone", suggests: ["Servante à outils", "Étagère"] },
-    { key: "atelier",   label: "Atelier",          icon: "r-atelier", kind: "zone", suggests: ["Servante à outils", "Rack mural"] },
-    { key: "jardin",    label: "Jardin",           icon: "r-jardin", kind: "zone", suggests: ["Coffre de terrasse", "Abri à vélos"] },
-    { key: "terrasse",  label: "Terrasse",         icon: "r-terrasse", kind: "zone", suggests: ["Coffre"] },
-    { key: "balcon",    label: "Balcon",           icon: "r-balcon", kind: "zone", suggests: ["Coffre"] },
-    { key: "couloir",   label: "Couloir",          icon: "r-couloir", kind: "room", suggests: ["Placard"] },
-    { key: "veranda",   label: "Véranda",          icon: "r-veranda", kind: "room", suggests: ["Coffre"] },
-    { key: "debarras",  label: "Débarras",         icon: "r-debarras", kind: "room", suggests: ["Étagère", "Carton"] },
-    { key: "soussol",   label: "Sous-sol",         icon: "r-soussol", kind: "zone", suggests: ["Étagère", "Bac de rangement"] }
+    /* `suggests` : des clés du catalogue FURNITURE, dans l'ordre où on les
+       rencontre dans la pièce. Rien n'est ajouté d'office : ce sont des
+       propositions qu'on touche pour les ajouter. */
+    { key: "cuisine",   label: "Cuisine",          icon: "r-cuisine", kind: "room", common: true,  suggests: ["placardhaut", "placardbas", "sousevier", "colonne", "frigo", "etageremurale"] },
+    { key: "salon",     label: "Salon",            icon: "r-salon", kind: "room", common: true,  suggests: ["tv", "biblio", "buffet", "niche", "etageresmurales"] },
+    { key: "chambre",   label: "Chambre",          icon: "r-chambre", kind: "room", common: true,  suggests: ["armoire", "commode", "chevet", "souslit", "penderie"] },
+    { key: "sdb",       label: "Salle de bain",    icon: "r-sdb", kind: "room", common: true,  suggests: ["sousvasque", "pharmacie", "colonne", "etageremurale", "panier"] },
+    { key: "entree",    label: "Entrée",           icon: "r-entree", kind: "room", common: true,  suggests: ["chaussures", "placard", "pateres", "coffre"] },
+    { key: "bureau",    label: "Bureau",           icon: "r-bureau", kind: "room", common: true,  suggests: ["bureau", "tiroirs", "biblio", "etageresmurales", "caisse"] },
+    { key: "enfant",    label: "Chambre d'enfant", icon: "r-enfant", kind: "room", suggests: ["commode", "niche", "coffre", "armoire", "panier"] },
+    { key: "sam",       label: "Salle à manger",   icon: "r-sam", kind: "room", suggests: ["buffet", "vitrine", "etageremurale"] },
+    { key: "wc",        label: "WC",               icon: "r-wc", kind: "room", suggests: ["etageremurale", "panier", "colonne"] },
+    { key: "buanderie", label: "Buanderie",        icon: "r-buanderie", kind: "room", suggests: ["etagere", "placard", "panier", "caisse"] },
+    { key: "dressing",  label: "Dressing",         icon: "r-dressing", kind: "room", suggests: ["penderie", "commode", "etagere", "chaussures"] },
+    { key: "cellier",   label: "Cellier",          icon: "r-cellier", kind: "room", suggests: ["etagere", "caisse", "congel", "frigo"] },
+    { key: "garage",    label: "Garage",           icon: "r-garage", kind: "zone", suggests: ["rack", "servante", "etagere", "caisse"] },
+    { key: "cave",      label: "Cave",             icon: "r-cave", kind: "zone", suggests: ["etagere", "caisse", "carton"] },
+    { key: "grenier",   label: "Grenier",          icon: "r-grenier", kind: "zone", suggests: ["carton", "valise", "caisse", "etagere"] },
+    { key: "cabanon",   label: "Cabanon",          icon: "r-cabanon", kind: "zone", suggests: ["servante", "rack", "etagere"] },
+    { key: "atelier",   label: "Atelier",          icon: "r-atelier", kind: "zone", suggests: ["servante", "rack", "etageresmurales"] },
+    { key: "jardin",    label: "Jardin",           icon: "r-jardin", kind: "zone", suggests: ["coffre", "caisse"] },
+    { key: "terrasse",  label: "Terrasse",         icon: "r-terrasse", kind: "zone", suggests: ["coffre"] },
+    { key: "balcon",    label: "Balcon",           icon: "r-balcon", kind: "zone", suggests: ["coffre", "etagere"] },
+    { key: "couloir",   label: "Couloir",          icon: "r-couloir", kind: "room", suggests: ["placard", "colonne", "pateres"] },
+    { key: "veranda",   label: "Véranda",          icon: "r-veranda", kind: "room", suggests: ["coffre", "panier"] },
+    { key: "debarras",  label: "Débarras",         icon: "r-debarras", kind: "room", suggests: ["etagere", "caisse", "carton", "sousescalier"] },
+    { key: "soussol",   label: "Sous-sol",         icon: "r-soussol", kind: "zone", suggests: ["etagere", "caisse", "congel"] }
   ];
 
   /* Catalogue de meubles.
@@ -474,12 +486,59 @@
     { key: "valise",     label: "Valise",              pic: "f-valise",    hint: "Sert aussi de rangement quand elle ne voyage pas." },
     { key: "rack",       label: "Rack mural",          pic: "f-rack",      hint: "Fixé au mur, avec des crochets. Outils, vélos, câbles." },
     { key: "pharmacie",  label: "Armoire à pharmacie", pic: "f-pharmacie", hint: "Petit meuble mural, médicaments et soins." },
-    { key: "souslit",    label: "Sous le lit",         pic: "f-souslit",   hint: "L'espace sous le lit, avec ou sans bacs." }
+    { key: "souslit",    label: "Sous le lit",         pic: "f-souslit",   hint: "L'espace sous le lit, avec ou sans bacs." },
+    { key: "tv",         label: "Meuble TV",           pic: "f-tv",        hint: "Bas et long, sous la télévision. Niches, tiroirs, câbles.", kw: "télé télévision tv audio hifi" },
+    { key: "chaussures", label: "Meuble à chaussures", pic: "f-chaussures", hint: "Abattants inclinés, près de la porte d'entrée.", kw: "range-chaussures range chaussures souliers baskets" },
+    { key: "etageremurale", label: "Étagère murale",   pic: "f-etagere-murale", hint: "Une planche fixée au mur sur des équerres.", kw: "planche équerre tablette murale" },
+    { key: "etageresmurales", label: "Étagères murales", pic: "f-etageres-murales", hint: "Plusieurs planches décalées sur un même mur.", kw: "planches tablettes" },
+    { key: "colonne",    label: "Placard colonne",     pic: "f-colonne",   hint: "Étroit et toute hauteur, du sol au plafond.", kw: "colonne haute placard mural" },
+    { key: "placardhaut", label: "Placard haut",       pic: "f-placard-haut", hint: "Fixé au mur, au-dessus du plan de travail.", kw: "meuble haut cuisine élément haut" },
+    { key: "placardbas", label: "Placard bas",         pic: "f-placard-bas", hint: "Sous le plan de travail, portes battantes.", kw: "meuble bas cuisine élément bas" },
+    { key: "sousevier",  label: "Meuble sous évier",   pic: "f-sous-vasque", hint: "Sous l'évier, autour des tuyaux. Produits ménagers.", kw: "évier sous-évier" },
+    { key: "sousvasque", label: "Meuble sous vasque",  pic: "f-sous-vasque", hint: "Sous le lavabo de la salle de bain.", kw: "lavabo vasque" },
+    { key: "sousescalier", label: "Placard sous l'escalier", pic: "f-sous-escalier", hint: "Le volume en pente sous les marches.", kw: "escalier soupente" },
+    { key: "niche",      label: "Meuble à cases",      pic: "f-niche",     hint: "Cases carrées ouvertes, avec ou sans paniers.", kw: "cube niche cases kallax" },
+    { key: "panier",     label: "Panier",              pic: "f-panier",    hint: "En osier ou en tissu, posé ou glissé dans une case.", kw: "boîte corbeille osier" },
+    { key: "caisse",     label: "Caisse à couvercle",  pic: "f-caisse",    hint: "Plastique, empilable, fermée par un couvercle à clips.", kw: "boîte box bac couvercle" },
+    { key: "penderie",   label: "Penderie",            pic: "f-penderie",  hint: "Une barre et des cintres, sur pieds ou dans un placard.", kw: "portant cintres vêtements" },
+    { key: "casier",     label: "Casier",              pic: "f-casier",    hint: "Petites portes individuelles, une par personne ou par usage.", kw: "vestiaire consigne" },
+    { key: "vitrine",    label: "Vitrine",             pic: "f-vitrine",   hint: "Portes vitrées : on voit sans ouvrir.", kw: "vaisselier verre" },
+    { key: "pateres",    label: "Patères",             pic: "f-pateres",   hint: "Crochets muraux pour sacs, manteaux et clés.", kw: "crochets portemanteau porte-manteau" }
   ];
 
   function furnitureByLabel(label) {
     for (var i = 0; i < FURNITURE.length; i++) if (FURNITURE[i].label === label) return FURNITURE[i];
     return null;
+  }
+
+  function furnitureByKey(key) {
+    for (var i = 0; i < FURNITURE.length; i++) if (FURNITURE[i].key === key) return FURNITURE[i];
+    return null;
+  }
+
+  /* L'icône d'un rangement saisi à la main, devinée d'après son nom :
+     « Étagère du cellier » → étagère, « Placard de l'entrée » → placard.
+     Les libellés longs d'abord, pour que « étagère murale » gagne sur
+     « étagère ». Sans correspondance : l'icône générique. */
+  function furnitureGuessPic(label) {
+    var text = " " + norm(label) + " ";
+    var entries = FURNITURE.slice().sort(function (a, b) { return b.label.length - a.label.length; });
+    for (var i = 0; i < entries.length; i++) {
+      var words = [entries[i].label].concat(entries[i].kw ? entries[i].kw.split(" ") : []);
+      for (var j = 0; j < words.length; j++) {
+        var w = norm(words[j]);
+        if (w.length > 2 && text.indexOf(w) !== -1) return entries[i].pic;
+      }
+    }
+    return "f-autre";
+  }
+
+  /* Le nom lisible d'une icône du jeu, pour les lecteurs d'écran. */
+  function iconName(id) {
+    var i;
+    for (i = 0; i < FURNITURE.length; i++) if (FURNITURE[i].pic === id) return FURNITURE[i].label;
+    for (i = 0; i < ROOMS.length; i++) if (ROOMS[i].icon === id) return ROOMS[i].label;
+    return id;
   }
 
   /* Palette d'icônes. Volontairement courte et domestique : une liste de mille
@@ -495,8 +554,12 @@
                 "r-sam", "r-buanderie", "r-dressing", "r-cellier", "r-couloir", "r-veranda", "r-piece"]],
     ["Extérieur et annexes", ["r-garage", "r-cave", "r-grenier", "r-soussol", "r-cabanon", "r-atelier",
                               "r-jardin", "r-terrasse", "r-balcon", "r-debarras", "r-zone"]],
-    ["Rangements", ["f-armoire", "f-placard", "f-commode", "f-etagere", "f-biblio", "f-buffet", "f-coffre",
-                    "f-servante", "f-frigo", "f-bac", "f-carton", "f-valise", "f-rack", "f-pharmacie"]],
+    ["Meubles", ["f-armoire", "f-placard", "f-commode", "f-tiroirs", "f-buffet", "f-tv", "f-chaussures",
+                 "f-biblio", "f-vitrine", "f-niche", "f-bureau", "f-chevet", "f-coffre", "f-servante", "f-frigo", "f-congel"]],
+    ["Rangements muraux et placards", ["f-etagere", "f-etagere-murale", "f-etageres-murales", "f-colonne",
+                 "f-placard-haut", "f-placard-bas", "f-sous-vasque", "f-sous-escalier", "f-pharmacie",
+                 "f-penderie", "f-casier", "f-pateres", "f-rack", "f-souslit"]],
+    ["Boîtes et contenants", ["f-bac", "f-caisse", "f-panier", "f-carton", "f-valise", "f-autre"]],
     ["Thèmes", ["t-noel", "t-ski", "t-camping", "t-sport", "t-jeux", "t-bebe", "t-papiers", "t-photo",
                 "t-musique", "t-animal", "t-velo", "t-elec"]]
   ];
@@ -936,72 +999,151 @@
      entier est donc consultable, chaque entrée porte son dessin et sa
      phrase, et tout ce qui manque s'ajoute à la main. */
 
+  /* Les rangements d'une pièce sont des ENTRÉES { id, key, base, label, icon }
+     et non plus de simples noms : le même meuble peut revenir plusieurs fois
+     (deux tables de chevet), chaque exemplaire est numéroté comme les pièces,
+     et la croix retire CELUI-LÀ. `taken` : les noms déjà présents dans la
+     pièce (côté application), pour continuer la numérotation. */
+  function furnLabel(f) { return typeof f === "string" ? f : f.label; }
+
+  function furnTaken(base, taken) {
+    var pattern = new RegExp("^" + base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "( \\d+)?$");
+    return (taken || []).filter(function (name) { return pattern.test(name); }).length;
+  }
+
+  function furnAdd(room, entry, taken) {
+    var base = entry.label;
+    var count = room.furniture.filter(function (f) { return f && f.base === base; }).length + furnTaken(base, taken);
+    var item = { id: uid("f"), key: entry.key || null, base: base, label: count ? base + " " + (count + 1) : base, icon: entry.pic || "f-autre" };
+    room.furniture.push(item);
+    return item;
+  }
+
+  function furnRemove(room, id, taken) {
+    var gone = null;
+    room.furniture = room.furniture.filter(function (f) {
+      if (f && f.id === id) { gone = f; return false; }
+      return true;
+    });
+    if (!gone || !gone.base) return gone;
+    var offset = furnTaken(gone.base, taken);
+    var same = room.furniture.filter(function (f) { return f && f.base === gone.base; });
+    if (same.every(function (f) { return f.label.indexOf(gone.base) === 0; })) {
+      same.forEach(function (f, i) { f.label = i === 0 && !offset ? gone.base : gone.base + " " + (i + 1 + offset); });
+    }
+    return gone;
+  }
+
+  /* Les icônes proposées pour un rangement saisi à la main. */
+  var FURN_CUSTOM_PICS = ["f-autre", "f-etagere", "f-etagere-murale", "f-etageres-murales", "f-placard", "f-colonne",
+    "f-placard-haut", "f-placard-bas", "f-armoire", "f-commode", "f-tiroirs", "f-niche", "f-caisse", "f-bac",
+    "f-panier", "f-carton", "f-coffre", "f-penderie", "f-pateres", "f-casier"];
+
   function furniturePicker(room, onDone, locked) {
-    var locks = locked || [];
+    var taken = locked || [];
     var query = "";
     var grid = el("div", { class: "fpick-grid" });
-    var counter = el("p", { class: "label", style: "color:var(--accent)" });
+    var counter = el("p", { class: "label ob-fp-count", style: "color:var(--accent)" });
 
-    function has(label) { return room.furniture.indexOf(label) !== -1; }
+    function countKey(key) { return room.furniture.filter(function (f) { return f && f.key === key; }).length; }
 
-    function toggle(label) {
-      room.furniture = has(label)
-        ? room.furniture.filter(function (f) { return f !== label; })
-        : room.furniture.concat([label]);
-      paint();
-    }
-
-    function card(entry) {
-      // Un meuble déjà créé reste visible mais figé : le décocher ici
-      // supprimerait un rangement qui contient peut-être des objets.
-      var already = locks.indexOf(entry.label) !== -1;
-      var on = already || has(entry.label);
-      return el("button", {
-        class: "fpick-card" + (on ? " on" : ""), type: "button", disabled: already,
-        "aria-pressed": on ? "true" : "false",
-        onclick: already ? null : function () { toggle(entry.label); }
+    /* Toucher une carte AJOUTE un exemplaire ; le « − » en retire le dernier. */
+    function cell(entry) {
+      var n = countKey(entry.key);
+      var here = furnTaken(entry.label, taken);
+      var add = el("button", {
+        class: "fpick-card" + (n ? " on" : ""), type: "button", "data-key": entry.key,
+        "aria-label": "Ajouter : " + entry.label + (n ? " (" + n + " déjà)" : ""),
+        onclick: function () {
+          var item = furnAdd(room, entry, taken);
+          paint(entry.key);
+          obAnnounce(item.label + " ajouté.");
+        }
       }, [
         el("span", { class: "box" }, [pic(entry.pic)]),
         el("span", { class: "nm", text: entry.label }),
-        el("span", { class: "hint", text: already ? "Déjà dans " + room.label + "." : entry.hint }),
-        el("span", { class: "tick" + (on ? "" : " off") }, [icon("check", 15)])
+        el("span", { class: "hint", text: here ? "Déjà " + here + " dans " + room.label + ". " + entry.hint : entry.hint }),
+        n ? el("span", { class: "ob-fp-n tnum", "aria-hidden": "true", text: "×" + n }) : null
       ]);
+      var less = n ? el("button", {
+        class: "ob-fp-less", type: "button", "data-less": entry.key,
+        "aria-label": "Retirer un exemplaire : " + entry.label, title: "Retirer un exemplaire",
+        onclick: function () {
+          var mine = room.furniture.filter(function (f) { return f && f.key === entry.key; });
+          if (mine.length) furnRemove(room, mine[mine.length - 1].id, taken);
+          paint(null, entry.key);
+        }
+      }, [icon("minus", 14)]) : null;
+      return el("div", { class: "ob-fp-cell" }, [add, less]);
     }
 
-    function paint() {
+    function paint(popKey, focusKey) {
       var q = norm(query);
-      var matches = function (text) { return !q || norm(text).indexOf(q) !== -1; };
-
-      var cards = FURNITURE
-        .filter(function (entry) { return matches(entry.label) || matches(entry.hint); })
-        .map(card);
-
-      // Les meubles saisis à la main ne sont pas au catalogue : sans cette
-      // boucle ils disparaîtraient de la grille dès qu'on la rouvre.
-      room.furniture.forEach(function (label) {
-        if (furnitureByLabel(label) || !matches(label)) return;
-        cards.push(card({ label: label, pic: "f-autre", hint: "Ajouté par vous." }));
-      });
-
-      grid.replaceChildren.apply(grid, cards.length ? cards : [
+      var matches = function (text) { return !!text && (!q || norm(text).indexOf(q) !== -1); };
+      var cells = FURNITURE
+        .filter(function (entry) { return !q || matches(entry.label) || matches(entry.hint) || matches(entry.kw); })
+        .map(cell);
+      grid.replaceChildren.apply(grid, cells.length ? cells : [
         el("p", { class: "loc-empty", text: "Aucun meuble ne correspond. Ajoutez-le ci-dessous." })
       ]);
-      counter.textContent = room.furniture.length === 0
+      var names = room.furniture.map(furnLabel);
+      counter.textContent = names.length === 0
         ? "Aucun meuble pour l'instant"
-        : plural(room.furniture.length, "meuble ajouté", "meubles ajoutés");
+        : plural(names.length, "meuble ajouté", "meubles ajoutés") + " · " + names.join(", ");
+      var key = popKey || focusKey;
+      if (key) {
+        var card = grid.querySelector('[data-key="' + key + '"]');
+        if (card) {
+          card.focus({ preventScroll: true });
+          if (popKey) obPop(card.querySelector(".ob-fp-n"));
+        }
+      }
     }
 
+    /* Un rangement saisi à la main : son icône est devinée d'après le nom
+       pendant la frappe, et reste modifiable dans la rangée d'icônes avant
+       l'ajout. Un choix explicite n'est plus écrasé par la devinette. */
     var custom = "";
+    var customPic = "f-autre", picked = false;
     var addButton;
+    var strip = el("div", {
+      class: "ob-fp-icons", role: "radiogroup", "aria-label": "Icône du rangement à ajouter",
+      onkeydown: function (event) {
+        var step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+        if (!step) return;
+        event.preventDefault();
+        var i = FURN_CUSTOM_PICS.indexOf(customPic);
+        customPic = FURN_CUSTOM_PICS[(i + step + FURN_CUSTOM_PICS.length) % FURN_CUSTOM_PICS.length];
+        picked = true;
+        syncStrip(true);
+      }
+    });
+    function syncStrip(focus) {
+      Array.prototype.forEach.call(strip.children, function (b) {
+        var on = b.getAttribute("data-pic") === customPic;
+        b.setAttribute("aria-checked", on ? "true" : "false");
+        b.tabIndex = on ? 0 : -1;
+        if (on && focus) b.focus();
+      });
+    }
+    FURN_CUSTOM_PICS.forEach(function (id) {
+      strip.appendChild(el("button", {
+        type: "button", role: "radio", "data-pic": id, "aria-label": id === "f-autre" ? "Générique" : iconName(id), title: id === "f-autre" ? "Générique" : iconName(id),
+        onclick: function () { customPic = id; picked = true; syncStrip(false); }
+      }, [pic(id)]));
+    });
+    syncStrip(false);
 
     function addCustom() {
       var label = custom.trim().slice(0, 80);
-      if (!label || has(label) || locks.indexOf(label) !== -1) { custom = ""; return; }
-      room.furniture = room.furniture.concat([label]);
-      custom = "";
+      if (!label) return;
+      furnAdd(room, { key: null, label: label, pic: customPic }, taken);
+      custom = ""; customPic = "f-autre"; picked = false;
       customInput.value = "";
       addButton.disabled = true;
+      syncStrip(false);
       paint();
+      obAnnounce(label + " ajouté.");
       customInput.focus();
     }
 
@@ -1009,7 +1151,11 @@
       class: "input", style: "flex:1;min-width:180px", maxlength: 80,
       placeholder: "Autre meuble : « Malle du grenier », « Bac à jouets »…",
       "aria-label": "Ajouter un meuble qui n'est pas dans la liste",
-      oninput: function (event) { custom = event.target.value; addButton.disabled = !custom.trim(); },
+      oninput: function (event) {
+        custom = event.target.value;
+        addButton.disabled = !custom.trim();
+        if (!picked) { customPic = furnitureGuessPic(custom); syncStrip(false); }
+      },
       onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); addCustom(); } }
     });
 
@@ -1024,15 +1170,18 @@
       body: [
         el("div", { class: "pick-search" }, [
           el("input", {
-            class: "input", type: "search", placeholder: "Rechercher un meuble…",
+            class: "input", type: "search", placeholder: "Rechercher un meuble… (télé, chaussures, étagère)",
             "aria-label": "Rechercher un meuble",
             oninput: function (event) { query = event.target.value; paint(); }
           })
         ]),
+        el("p", { class: "ob-fp-tip", text: "Touchez une carte pour l'ajouter, plusieurs fois pour plusieurs exemplaires." }),
         grid,
         el("div", { class: "stack-sm" }, [
           el("p", { class: "label", text: "Il manque quelque chose ?" }),
-          el("div", { class: "inline" }, [customInput, addButton])
+          el("div", { class: "inline" }, [customInput, addButton]),
+          el("p", { class: "ob-fp-tip", text: "Icône : devinée d'après le nom, modifiable." }),
+          strip
         ]),
         counter
       ],
@@ -1058,7 +1207,7 @@
         el("div", { class: "icon-grid" }, group[1].map(function (name) {
           var on = options.current === name;
           return el("button", {
-            class: on ? "on" : null, type: "button", "aria-label": name,
+            class: on ? "on" : null, type: "button", "aria-label": iconName(name), title: iconName(name),
             "aria-pressed": on ? "true" : "false",
             onclick: function () { choose(name); }
           }, [sym(name, 22)]);
@@ -1180,6 +1329,8 @@
       keys: "alertes peremption garantie prete", run: function () { goTab("alerts"); } },
     { label: "Réglages", hint: "Foyer, membres, thème, abonnement", ic: "cog",
       keys: "reglages parametres foyer membres abonnement export", run: function () { goTab("settings"); } },
+    { label: "Visite guidée", hint: "Les menus pas à pas, puis un premier objet", ic: "spark",
+      keys: "visite guidee didacticiel tutoriel aide decouvrir prise en main", run: function () { tourStart(); } },
     { label: "Basculer le thème clair / sombre", hint: "Le clair pour le plein jour, le sombre pour le soir", ic: "moon",
       keys: "theme sombre clair nuit jour apparence", run: function () { toggleTheme(); } }
   ];
@@ -1253,7 +1404,12 @@
     var acts = CMDK_ACTIONS.filter(function (a) {
       return norm(a.label + " " + a.keys).indexOf(norm(q)) !== -1;
     });
-    if (acts.length) groups.push({ title: "Actions", rows: acts.map(actionRow) });
+    // Une action dont le NOM commence par la frappe passe devant : « visite »
+    // doit ouvrir la visite guidée, pas la boîte de vis trouvée par approximation.
+    if (acts.length) {
+      var named = acts.some(function (a) { return norm(a.label).indexOf(norm(q)) === 0; });
+      groups[named ? "unshift" : "push"]({ title: "Actions", rows: acts.map(actionRow) });
+    }
 
     return groups;
 
@@ -1494,6 +1650,10 @@
   /* Ce que l'application garde en mémoire vive pour le compte ouvert :
      à oublier dès qu'on change de compte. */
   function resetViews() {
+    // Une visite en cours ne survit pas à un changement de compte.
+    if (tour) tourEnd(true);
+    clearTimeout(tourPending);
+    tourPending = null;
     closePalette();
     dropScene();
     searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null };
@@ -1960,8 +2120,6 @@
     garage: "clay", cave: "clay", grenier: "oak", cabanon: "oak", atelier: "clay", jardin: "sage",
     terrasse: "sage", balcon: "sage", couloir: "linen", veranda: "sage", debarras: "clay", soussol: "clay"
   };
-  var OB_GROUND = { garage: 1, cave: 1, soussol: 1, jardin: 1, terrasse: 1, cellier: 1, buanderie: 1, cabanon: 1, atelier: 1, entree: 1, cuisine: 1, salon: 1, sam: 1, veranda: 1 };
-  var OB_UPSTAIRS = { chambre: 1, enfant: 1, dressing: 1, sdb: 1, bureau: 1 };
   var OB_TYPE_LABEL = { apartment: "Appartement", house: "Maison", studio: "Studio", other: "Logement" };
 
   /* Cellules remplies par « coquilles » carrées : la position d'une pièce ne
@@ -1979,30 +2137,38 @@
     return obSvg("polygon", { class: cls, points: points.map(function (p) { return obPt(p[0], p[1], p[2]); }).join(" ") });
   }
 
-  /* Répartition sur les niveaux : ce qui vit en bas reste en bas, les
-     chambres montent, le grenier est au sommet. Stable quand on ajoute. */
-  function obLevels(rooms, floors) {
-    var F = Math.max(1, Math.min(8, floors || 1));
-    var levels = [];
-    for (var i = 0; i < F; i++) levels.push([]);
-    var up = 0, other = 0;
+  /* Les niveaux affichés, du plus bas au plus haut : -1 (sous-sol), 0 (RDC),
+     1, 2… `data.levels` quand l'onboarding les connaît ; sinon le nombre de
+     niveaux, complété par ceux qu'occupent réellement les pièces. */
+  function obFloorList(data) {
+    if (data.levels && data.levels.length) return data.levels.slice();
+    var list = [];
+    for (var i = 0; i < Math.max(1, Math.min(8, data.floors || 1)); i++) list.push(i);
+    (data.rooms || []).forEach(function (r) {
+      if (typeof r.floor === "number" && list.indexOf(r.floor) === -1) list.push(r.floor);
+    });
+    return list.sort(function (a, b) { return a - b; });
+  }
+
+  /* Chaque pièce sur SON niveau (`room.floor`), dans l'ordre d'ajout : rien
+     d'aléatoire, et une pièce ne change de niveau que si on l'y déplace. */
+  function obLevels(rooms, list) {
+    var levels = list.map(function () { return []; });
+    var ground = Math.max(0, list.indexOf(0));
     rooms.forEach(function (room) {
-      var level = 0;
-      if (F > 1) {
-        if (room.key === "grenier") level = F - 1;
-        else if (OB_GROUND[room.key]) level = 0;
-        else if (OB_UPSTAIRS[room.key]) level = 1 + (up++ % (F - 1));
-        else level = other++ % F;
-      }
-      levels[level].push(room);
+      var i = list.indexOf(typeof room.floor === "number" ? room.floor : 0);
+      levels[i < 0 ? ground : i].push(room);
     });
     return levels;
   }
 
+  function obFloorTag(f) { return f < 0 ? "−" + Math.abs(f) : f === 0 ? "RDC" : "N" + f; }
+
   function obModel(data, opts) {
     opts = opts || {};
     var rooms = data.rooms || [];
-    var levels = obLevels(rooms, data.floors);
+    var floorList = obFloorList(data);
+    var levels = obLevels(rooms, floorList);
     var most = 0;
     levels.forEach(function (level) { most = Math.max(most, level.length); });
     var G = Math.max(2, Math.ceil(Math.sqrt(most)));
@@ -2028,7 +2194,11 @@
     levels.forEach(function (list, L) {
       var z0 = L * LH;
       var zs = z0 - FT;
-      var level = obSvg("g", { class: "ob-m-level" + (opts.levelNew === L ? " is-new" : ""), style: "--i:" + L });
+      var level = obSvg("g", {
+        class: "ob-m-level" + (opts.levelNew === floorList[L] ? " is-new" : "") + (floorList[L] < 0 ? " is-under" : "") +
+          (F > 1 && opts.activeFloor === floorList[L] ? " is-active" : ""),
+        style: "--i:" + L, "data-floor": floorList[L]
+      });
       var a = -PAD, b = G + PAD;
       level.appendChild(obFace([[a, a, zs], [b, a, zs], [b, b, zs], [a, b, zs]], "ob-m-slab"));
       level.appendChild(obFace([[a, b, zs], [b, b, zs], [b, b, zs - SLAB], [a, b, zs - SLAB]], "ob-m-slab-a"));
@@ -2067,7 +2237,8 @@
         group.appendChild(obFace([[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], "ob-m-hl"));
 
         // Les rangements : de petits volumes posés contre les murs.
-        (room.furniture || []).slice(0, 5).forEach(function (name, n) {
+        (room.furniture || []).slice(0, 5).forEach(function (f, n) {
+          var name = furnLabel(f);
           var s = 0.17, h = 0.16 + ((name.length * 7) % 5) * 0.045;
           var fx = n < 3 ? x0 + 0.07 + n * 0.24 : x0 + 0.05;
           var fy = n < 3 ? y0 + 0.05 : y0 + 0.31 + (n - 3) * 0.24;
@@ -2092,7 +2263,7 @@
       if (F > 1) {
         var tag = obPt(-PAD, b, zs - SLAB * 0.5).split(",");
         level.appendChild(obSvg("text", { class: "ob-m-tag", x: (+tag[0] - 7).toFixed(1), y: tag[1], "text-anchor": "end" }, [
-          document.createTextNode(L === 0 ? "RDC" : "N" + L)
+          document.createTextNode(obFloorTag(floorList[L]))
         ]));
       }
       svg.appendChild(level);
@@ -2574,6 +2745,7 @@
       var ic = String(l.icon || "");
       return {
         id: "h-" + l.id, key: ic.indexOf("r-") === 0 ? ic.slice(2) : null, label: l.name, icon: l.icon, kind: l.kind,
+        floor: typeof l.floor === "number" ? l.floor : 0,
         furniture: state.locations.filter(function (c) { return c.parentId === l.id; }).map(function (c) { return c.name; })
       };
     });
@@ -2976,9 +3148,69 @@
   function obSteps() {
     return ["plan", "type", "name", "floors", "rooms", "rename", "furniture"].filter(function (step) {
       if (step === "plan") return wiz.withPlan;
-      if (step === "floors") return !(wiz.type === "studio" || wiz.type === "apartment");
+      // Appartement et studio sautent l'étape, sauf s'ils ont une cave ou un
+      // box en sous-sol : il faut alors pouvoir placer ce niveau.
+      if (step === "floors") return !(wiz.type === "studio" || wiz.type === "apartment") || wiz.basement;
       return true;
     });
+  }
+
+  /* Niveaux du logement en cours de configuration, du plus bas au plus haut. */
+  function obWizLevels() {
+    var multi = wiz.type === "house" || wiz.type === "other" || wiz.basement;
+    var F = multi ? Math.max(1, Math.min(8, wiz.floors)) : 1;
+    var list = wiz.basement ? [-1] : [];
+    for (var i = 0; i < F; i++) list.push(i);
+    return list;
+  }
+
+  /* Une pièce dont le niveau disparaît (moins d'étages, sous-sol décoché)
+     descend au plus proche : jamais de pièce hors du logement. */
+  function obClampFloors() {
+    var list = obWizLevels(), top = list[list.length - 1], bottom = list[0];
+    wiz.rooms.forEach(function (room) {
+      if (typeof room.floor !== "number") room.floor = 0;
+      if (room.floor > top) room.floor = top;
+      if (room.floor < bottom) room.floor = bottom;
+    });
+    if (list.indexOf(wiz.activeFloor) === -1) wiz.activeFloor = list.indexOf(0) !== -1 ? 0 : list[0];
+  }
+
+  function obFloorName(f) { return f < 0 ? "Sous-sol" : f === 0 ? "Rez-de-chaussée" : f === 1 ? "1er étage" : f + "e étage"; }
+  function obFloorShort(f) { return f < 0 ? "Sous-sol" : f === 0 ? "RDC" : f === 1 ? "1er" : f + "e"; }
+  function obAtFloor(f) { return f < 0 ? "au sous-sol" : f === 0 ? "au rez-de-chaussée" : "au " + obFloorName(f); }
+
+  /* Le niveau d'une pièce à l'ajout. Le niveau choisi explicitement prime ;
+     sans choix, des défauts sensés : grenier tout en haut, cave au sous-sol,
+     garage et extérieurs au rez-de-chaussée. */
+  var OB_AT_GROUND = { garage: 1, jardin: 1, terrasse: 1, cabanon: 1 };
+  function obFloorFor(key) {
+    var list = obWizLevels();
+    if (list.length === 1 || wiz.floorPicked) return wiz.activeFloor;
+    if (key === "grenier") return list[list.length - 1];
+    if ((key === "cave" || key === "soussol") && list[0] < 0) return list[0];
+    if (OB_AT_GROUND[key]) return 0;
+    return wiz.activeFloor;
+  }
+
+  /* Un interrupteur accessible (role="switch"), mis à jour en place. */
+  function obSwitch(label, sub, on, onChange, extraClass) {
+    var node = el("button", {
+      class: "ob-switch-row" + (extraClass ? " " + extraClass : ""), type: "button", role: "switch",
+      "aria-checked": on ? "true" : "false",
+      onclick: function (event) {
+        var next = node.getAttribute("aria-checked") !== "true";
+        node.setAttribute("aria-checked", next ? "true" : "false");
+        onChange(next, event);
+      }
+    }, [
+      el("span", { class: "ob-switch-txt" }, [
+        el("span", { class: "ob-switch-lbl", text: label }),
+        sub ? el("span", { class: "ob-switch-sub", text: sub }) : null
+      ]),
+      el("span", { class: "ob-switch", "aria-hidden": "true" }, [el("i")])
+    ]);
+    return node;
   }
 
   function obNameIdeas(type) {
@@ -3000,10 +3232,18 @@
 
   /* La petite maison de l'étape « niveaux » : les étages s'empilent, le
      toit se soulève pour laisser entrer le nouveau. */
-  function obHouseArt(n, delta) {
+  function obHouseArt(n, delta, basement, basementNew) {
     var h = Math.min(22, 116 / n), W = 84, X = 18, base = 150;
     var top = base - n * h;
-    var svg = obSvg("svg", { class: "ob-house-svg", viewBox: "0 0 120 160", "aria-hidden": "true", focusable: "false" });
+    var svg = obSvg("svg", { class: "ob-house-svg", viewBox: "0 0 120 176", "aria-hidden": "true", focusable: "false" });
+    // Le sous-sol : sous la ligne du sol, en pointillés — enterré, mais là.
+    if (basement) {
+      var under = obSvg("g", { class: "ob-house-under" + (basementNew ? " is-new" : "") });
+      under.appendChild(obSvg("rect", { x: X + 4, y: base + 3, width: W - 8, height: 17, rx: 1.5 }));
+      under.appendChild(obSvg("rect", { class: "ob-house-win is-lit", x: X + 14, y: base + 8, width: 10, height: 5, rx: 1 }));
+      under.appendChild(obSvg("path", { d: "M" + (X + W - 26) + " " + (base + 18) + "h6v-4h6v-4h6", class: "ob-house-steps" }));
+      svg.appendChild(under);
+    }
     svg.appendChild(obSvg("path", { class: "ob-house-ground", d: "M4 " + base + "H116" }));
     for (var i = 0; i < n; i++) {
       var y = base - (i + 1) * h;
@@ -3038,10 +3278,14 @@
         type: "apartment",
         name: first ? "Chez " + first : "La maison",
         floors: 1,
+        basement: false,      // un niveau -1 : cave, box, sous-sol
+        activeFloor: 0,       // le niveau où vont les pièces ajoutées
+        floorPicked: false,   // choisi explicitement : il prime sur les défauts
         rooms: [],
         custom: ""
       };
     }
+    obClampFloors();
 
     var steps = obSteps();
     wiz.step = Math.max(0, Math.min(steps.length - 1, wiz.step));
@@ -3055,11 +3299,12 @@
     }
 
     function data() {
-      return { name: wiz.name.trim() || "La maison", type: wiz.type, floors: wiz.type === "house" || wiz.type === "other" ? wiz.floors : 1, rooms: wiz.rooms };
+      var levels = obWizLevels();
+      return { name: wiz.name.trim() || "La maison", type: wiz.type, floors: levels.length, levels: levels, rooms: wiz.rooms };
     }
 
     function side(band) {
-      sideNode = obSidePanel(data(), { band: band, labels: true });
+      sideNode = obSidePanel(data(), { band: band, labels: true, activeFloor: current === "rooms" ? wiz.activeFloor : null });
       return sideNode;
     }
 
@@ -3067,7 +3312,7 @@
        nouvelles tombent, les autres restent en place. */
     function repaintSide(opts) {
       if (!sideNode || !sideNode.isConnected) return;
-      var fresh = obSidePanel(data(), Object.assign({ band: sideNode.classList.contains("ob-side--band"), labels: true }, opts || {}));
+      var fresh = obSidePanel(data(), Object.assign({ band: sideNode.classList.contains("ob-side--band"), labels: true, activeFloor: current === "rooms" ? wiz.activeFloor : null }, opts || {}));
       sideNode.replaceChildren.apply(sideNode, Array.prototype.slice.call(fresh.childNodes));
     }
 
@@ -3100,22 +3345,27 @@
         // Un deuxième exemplaire est numéroté d'office : « Chambre 2 » est plus
         // utile qu'une deuxième « Chambre » indistinguable.
         label: existing === 0 ? preset.label : preset.label + " " + (existing + 1),
-        furniture: (preset.suggests || []).slice(0, 3)
+        floor: obFloorFor(preset.key),
+        // Aucun meuble d'office : l'étape Meubles propose, on choisit.
+        furniture: []
       };
       wiz.rooms.push(room);
       return room;
     }
 
     function commit() {
-      state.household = { name: wiz.name.trim() || "La maison", type: wiz.type, floors: data().floors };
+      var levels = obWizLevels();
+      state.household = { name: wiz.name.trim() || "La maison", type: wiz.type, floors: levels.filter(function (f) { return f >= 0; }).length, basement: levels[0] < 0 };
       state.locations = [];
       state.items = [];
 
+      // Le vrai niveau de chaque pièce (-1, 0, 1…), et l'icône de chaque
+      // rangement : celle du catalogue, devinée, ou choisie.
       wiz.rooms.forEach(function (room) {
-        var parent = { id: uid("loc"), parentId: null, kind: room.kind, name: room.label.trim() || "Pièce", icon: room.icon, floor: room.kind === "zone" ? 0 : 1 };
+        var parent = { id: uid("loc"), parentId: null, kind: room.kind, name: room.label.trim() || "Pièce", icon: room.icon, floor: typeof room.floor === "number" ? room.floor : 0 };
         state.locations.push(parent);
-        room.furniture.forEach(function (name) {
-          state.locations.push({ id: uid("loc"), parentId: parent.id, kind: "furniture", name: name, icon: null, floor: parent.floor });
+        room.furniture.forEach(function (f) {
+          state.locations.push({ id: uid("loc"), parentId: parent.id, kind: "furniture", name: furnLabel(f).trim() || "Rangement", icon: typeof f === "string" ? null : (f.icon || null), floor: parent.floor });
         });
       });
 
@@ -3276,7 +3526,15 @@
           ]);
           tiles.push(tile);
           return obTilt(tile, 12);
-        }))
+        })),
+        /* Discret, mais avant le choix : pour un appartement, c'est ce qui
+           décide si l'étape « niveaux » apparaît. */
+        obSwitch("J'ai une cave ou un box en sous-sol", "Il deviendra le niveau −1 de votre logement.", wiz.basement, function (on) {
+          wiz.basement = on;
+          obClampFloors();
+          repaintSide();
+          obAnnounce(on ? "Sous-sol ajouté." : "Sous-sol retiré.");
+        }, "ob-switch-row--quiet")
       ];
       sidePanel = side(false);
     }
@@ -3342,8 +3600,18 @@
       var odo = el("span", { class: "ob-odo tnum", "aria-hidden": "true" }, [reel]);
       var unit = el("span", { class: "ob-odo-unit", "aria-hidden": "true", text: wiz.floors > 1 ? "niveaux" : "niveau" });
       var out = el("output", { class: "ob-sr", "aria-live": "polite", text: plural(wiz.floors, "niveau", "niveaux") });
-      var desc = el("p", { class: "ob-floors-desc", text: obFloorsText(wiz.floors) });
-      var art = el("div", { class: "ob-house" }, [obHouseArt(wiz.floors, 0)]);
+      var descText = function () { return obFloorsText(wiz.floors) + (wiz.basement ? " Plus un sous-sol." : ""); };
+      var desc = el("p", { class: "ob-floors-desc", text: descText() });
+      var art = el("div", { class: "ob-house" }, [obHouseArt(wiz.floors, 0, wiz.basement)]);
+      var basementSwitch = obSwitch("Sous-sol, niveau −1", "Cave, box ou garage enterré.", wiz.basement, function (on, event) {
+        wiz.basement = on;
+        obClampFloors();
+        desc.textContent = descText();
+        art.replaceChildren(obHouseArt(wiz.floors, 0, on, on));
+        repaintSide({ levelNew: on ? -1 : null });
+        if (on) obBurstFrom(basementSwitch, event, { count: 8, power: 3 });
+        obAnnounce(on ? "Sous-sol ajouté, niveau moins un." : "Sous-sol retiré.");
+      });
       var minus, plus;
       var setFloors = function (n) {
         n = Math.max(1, Math.min(8, n));
@@ -3353,14 +3621,15 @@
         reel.style.setProperty("--n", n);
         unit.textContent = n > 1 ? "niveaux" : "niveau";
         out.textContent = plural(n, "niveau", "niveaux");
-        desc.textContent = obFloorsText(n);
+        obClampFloors();
+        desc.textContent = descText();
         var focused = document.activeElement;
         minus.disabled = n <= 1;
         plus.disabled = n >= 8;
         // Un bouton qui se désactive sous le focus le perdrait : on le passe à l'autre.
         if (focused === minus && minus.disabled) plus.focus();
         if (focused === plus && plus.disabled) minus.focus();
-        art.replaceChildren(obHouseArt(n, delta));
+        art.replaceChildren(obHouseArt(n, delta, wiz.basement));
         obPop(odo);
         repaintSide({ levelNew: delta > 0 ? n - 1 : null });
       };
@@ -3369,7 +3638,7 @@
       obKeys.primary = function () { go(1); };
       stage = [
         title("Combien de niveaux ?"),
-        lede("Cave et grenier compris s'ils vous servent de rangement."),
+        lede("Rez-de-chaussée, étages et combles s'ils vous servent de rangement. Le sous-sol se règle juste en dessous."),
         el("div", { class: "ob-floors" }, [
           el("div", { class: "ob-floors-ctrl" }, [
             el("div", {
@@ -3379,7 +3648,8 @@
                 if (event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "-") { event.preventDefault(); setFloors(wiz.floors - 1); }
               }
             }, [minus, el("span", { class: "ob-odo-wrap" }, [odo, unit]), plus, out]),
-            desc
+            desc,
+            basementSwitch
           ]),
           art
         ]),
@@ -3391,7 +3661,51 @@
     /* ─── Pièces ─── */
     else if (current === "rooms") {
       var tilesByKey = {};
-      var tray = el("div", { class: "ob-tray", role: "list", "aria-label": "Pièces sélectionnées" });
+      var tray = el("div", { class: "ob-trays" });
+      var levels = obWizLevels();
+
+      /* Le niveau actif : les pièces touchées y vont. Segment de gauche à
+         droite, du plus bas au plus haut, comme on monte l'escalier. */
+      var floorHint = el("p", { class: "ob-floor-hint", "aria-live": "polite" });
+      var paintFloorHint = function () {
+        floorHint.replaceChildren(
+          "Les pièces touchées s'ajoutent ", el("strong", { text: obAtFloor(wiz.activeFloor) }),
+          wiz.floorPicked || levels.length < 2 ? "." : ". Grenier, cave et garage se placent d'eux-mêmes."
+        );
+      };
+      var floorButtons = [];
+      var pickFloor = function (f, focus) {
+        wiz.activeFloor = f;
+        wiz.floorPicked = true;
+        floorButtons.forEach(function (b) {
+          var on = +b.getAttribute("data-floor") === f;
+          b.setAttribute("aria-checked", on ? "true" : "false");
+          b.tabIndex = on ? 0 : -1;
+          if (on && focus) b.focus();
+        });
+        paintFloorHint();
+        repaintSide();
+      };
+      var floorBar = levels.length > 1 ? el("div", {
+        class: "ob-floorbar", role: "radiogroup", "aria-label": "Niveau où ajouter les pièces",
+        onkeydown: function (event) {
+          var step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
+          if (!step) return;
+          event.preventDefault();
+          var i = levels.indexOf(wiz.activeFloor);
+          pickFloor(levels[Math.max(0, Math.min(levels.length - 1, i + step))], true);
+        }
+      }, levels.map(function (f) {
+        var b = el("button", {
+          class: "ob-floorbtn", type: "button", role: "radio", "data-floor": f,
+          "aria-checked": f === wiz.activeFloor ? "true" : "false", tabindex: f === wiz.activeFloor ? "0" : "-1",
+          "aria-label": obFloorName(f),
+          onclick: function () { pickFloor(f, false); }
+        }, [el("span", { text: obFloorShort(f) })]);
+        floorButtons.push(b);
+        return b;
+      })) : null;
+      paintFloorHint();
       var trayHead = el("p", { class: "ob-tray-head" });
       var bagCount = el("span", { class: "ob-bag-n tnum" });
       var bag = el("span", { class: "ob-bag", "aria-hidden": "true" }, [icon("box", 16), bagCount]);
@@ -3424,8 +3738,18 @@
           tile.badge.textContent = count ? "×" + count : "";
           if (popKey === preset.key) obPop(tile.badge);
         });
+        // Le panier se lit comme une coupe : un groupe par niveau, du haut vers le bas.
+        var groups = levels.length > 1 ? levels.slice().reverse() : [null];
         tray.replaceChildren.apply(tray, wiz.rooms.length
-          ? wiz.rooms.map(function (room) { return chipOf(room, room.id === newId); })
+          ? groups.map(function (f) {
+              var here = f === null ? wiz.rooms : wiz.rooms.filter(function (r) { return r.floor === f; });
+              if (!here.length) return null;
+              return el("div", { class: "ob-tray-group" }, [
+                f === null ? null : el("p", { class: "ob-tray-fl" }, [obFloorName(f), el("span", { class: "tnum", text: " · " + here.length })]),
+                el("div", { class: "ob-tray", role: "list", "aria-label": f === null ? "Pièces sélectionnées" : "Pièces " + obAtFloor(f) },
+                  here.map(function (room) { return chipOf(room, room.id === newId); }))
+              ]);
+            }).filter(Boolean)
           : [el("span", { class: "ob-tray-empty", text: "Rien pour l'instant. Touchez une pièce ci-dessus." })]);
         trayHead.textContent = wiz.rooms.length ? plural(wiz.rooms.length, "pièce sélectionnée", "pièces sélectionnées") : "Votre sélection";
         bagCount.textContent = String(wiz.rooms.length);
@@ -3450,7 +3774,7 @@
       var addCustom = function () {
         var label = wiz.custom.trim();
         if (!label) return;
-        var room = { id: uid("r"), key: null, icon: "r-piece", kind: "room", label: label.slice(0, 80), furniture: [] };
+        var room = { id: uid("r"), key: null, icon: "r-piece", kind: "room", label: label.slice(0, 80), floor: wiz.activeFloor, furniture: [] };
         wiz.rooms.push(room);
         wiz.custom = "";
         customInput.value = "";
@@ -3489,7 +3813,7 @@
             var target = tray.querySelector('[data-id="' + room.id + '"]');
             obFly(ic, obInView(target) ? target : bag);
             if (!obInView(target)) obPop(bag);
-            obAnnounce("Pièce ajoutée : " + room.label + ".");
+            obAnnounce("Pièce ajoutée : " + room.label + (levels.length > 1 ? ", " + obAtFloor(room.floor) : "") + ".");
           }
         }, [ic, el("span", { class: "ob-room-lbl", text: preset.label }), badge, el("span", { class: "ob-room-plus", "aria-hidden": "true" }, [icon("plus", 13)])]);
         tilesByKey[preset.key] = { node: node, badge: badge };
@@ -3499,7 +3823,10 @@
       obKeys.primary = function () { if (wiz.rooms.length) go(1); };
       stage = [
         title("Quelles pièces ?"),
-        lede("Touchez pour ajouter, plusieurs fois pour en avoir plusieurs. La croix en retire une."),
+        lede(levels.length > 1
+          ? "Choisissez un niveau, puis touchez ses pièces — plusieurs fois pour en avoir plusieurs. La croix en retire une."
+          : "Touchez pour ajouter, plusieurs fois pour en avoir plusieurs. La croix en retire une."),
+        floorBar ? el("div", { class: "ob-floorpick" }, [floorBar, floorHint]) : null,
         grid,
         el("div", { class: "ob-custom" }, [customInput, customAdd]),
         el("div", { class: "ob-basket" }, [trayHead, tray]),
@@ -3517,6 +3844,7 @@
           g.classList.toggle("is-focus", g.getAttribute("data-room") === id);
         });
       };
+      var renameLevels = obWizLevels();
       var rows = wiz.rooms.map(function (room, index) {
         var input = el("input", {
           class: "ob-rename-input", value: room.label, maxlength: 80,
@@ -3536,7 +3864,7 @@
             else go(1);
           }
         });
-        return el("li", { class: "ob-rename-row", style: "--i:" + Math.min(index, 10) }, [
+        return el("li", { class: "ob-rename-row" + (renameLevels.length > 1 ? " has-floor" : ""), style: "--i:" + Math.min(index, 10) }, [
           el("button", {
             class: "ob-icon-btn", type: "button",
             "aria-label": "Changer l'icône de " + room.label, title: "Changer l'icône",
@@ -3553,6 +3881,19 @@
             }
           }, [sym(room.icon, 20)]),
           input,
+          /* Réassigner le niveau : un menu natif, lisible au clavier comme au
+             lecteur d'écran. La maquette suit aussitôt. */
+          renameLevels.length > 1 ? el("select", {
+            class: "ob-floor-select", "aria-label": "Niveau de la pièce " + (index + 1),
+            onchange: function (event) {
+              room.floor = +event.target.value;
+              repaintSide();
+              focusRoom(room.id);
+              obAnnounce(room.label + " : " + obFloorName(room.floor) + ".");
+            }
+          }, renameLevels.slice().reverse().map(function (f) {
+            return el("option", { value: String(f), selected: room.floor === f ? true : null, text: obFloorName(f) });
+          })) : null,
           el("button", {
             class: "ob-x ob-x--row", type: "button", "aria-label": "Retirer " + room.label, title: "Retirer",
             onclick: function () {
@@ -3569,7 +3910,9 @@
       obKeys.primary = function () { go(1); };
       stage = [
         title("Précisez les noms"),
-        lede("« Chambre 2 » devient « Chambre de Léa ». Touchez l'icône pour la changer. Facultatif, mais très utile à la recherche."),
+        lede(renameLevels.length > 1
+          ? "« Chambre 2 » devient « Chambre de Léa ». Touchez l'icône pour la changer, et corrigez le niveau si besoin."
+          : "« Chambre 2 » devient « Chambre de Léa ». Touchez l'icône pour la changer. Facultatif, mais très utile à la recherche."),
         rows.length
           ? el("ul", { class: "ob-rename" }, rows)
           : el("p", { class: "ob-hint", text: "Aucune pièce pour l'instant. Revenez à l'étape précédente pour en ajouter." }),
@@ -3580,62 +3923,114 @@
 
     /* ─── Meubles ─── */
     else {
-      var furnChip = function (room, name, isNew, paint) {
-        var entry = furnitureByLabel(name);
-        var node = el("span", { class: "ob-chip ob-chip--furn" + (isNew ? " is-new" : ""), role: "listitem" }, [
-          el("span", { class: "ob-chip-pic", "aria-hidden": "true" }, [sym(entry ? entry.pic : "f-autre", 20)]),
-          el("span", { class: "ob-chip-lbl", text: name }),
-          el("button", {
-            class: "ob-x", type: "button", "aria-label": "Retirer " + name + " de " + room.label, title: "Retirer",
-            onclick: function () {
-              var index = room.furniture.indexOf(name);
-              node.classList.add("is-out");
-              setTimeout(function () {
-                room.furniture = room.furniture.filter(function (f) { return f !== name; });
-                paint([]);
-                repaintSide();
-                var xs = paint.list.querySelectorAll(".ob-x");
-                var next = xs[Math.min(index, xs.length - 1)];
-                (next || paint.add).focus({ preventScroll: true });
-                obAnnounce(name + " retiré de " + room.label + ".");
-              }, obCalm() ? 0 : 170);
-            }
-          }, [icon("x", 13)])
-        ]);
-        return node;
-      };
-
+      /* Rien n'est ajouté d'office. Chaque pièce propose SES rangements en
+         puces : un toucher ajoute un exemplaire, deux touchers deux (« Table
+         de chevet », « Table de chevet 2 »). Le catalogue complet reste là. */
       var sections = wiz.rooms.map(function (room) {
+        var preset = null;
+        for (var p = 0; p < ROOMS.length; p++) if (ROOMS[p].key === room.key) preset = ROOMS[p];
+        var suggestKeys = (preset && preset.suggests) || ["etagere", "placard", "caisse", "carton"];
         var list = el("div", { class: "ob-tray", role: "list", "aria-label": "Rangements de " + room.label });
+        var sugg = el("div", { class: "ob-sugg", role: "group", "aria-label": "Suggestions pour " + room.label });
         var count = el("span", { class: "ob-furn-n tnum" });
-        var add = el("button", {
-          class: "ob-add-chip", type: "button",
+        var paint;
+
+        var catalogue = el("button", {
+          class: "ob-add-chip", type: "button", "aria-label": "Catalogue complet des rangements pour " + room.label,
           onclick: function () {
-            var before = room.furniture.slice();
+            var before = room.furniture.map(function (f) { return f.id; });
             furniturePicker(room, function () {
-              var added = room.furniture.filter(function (f) { return before.indexOf(f) === -1; });
+              var added = room.furniture.filter(function (f) { return before.indexOf(f.id) === -1; }).map(function (f) { return f.id; });
               paint(added);
               repaintSide();
               if (added.length) obAnnounce(plural(added.length, "rangement ajouté", "rangements ajoutés") + " à " + room.label + ".");
             });
           }
-        }, [icon("plus", 14), el("span", { text: "Ajouter" })]);
-        var paint = function (fresh) {
-          var chips = room.furniture.map(function (name) { return furnChip(room, name, fresh.indexOf(name) !== -1, paint); });
-          chips.push(add);
-          list.replaceChildren.apply(list, chips);
-          count.textContent = room.furniture.length ? plural(room.furniture.length, "rangement", "rangements") : "Aucun rangement";
+        }, [icon("grid", 14), el("span", { text: "Catalogue" })]);
+
+        var chipOf = function (f, isNew) {
+          var node = el("span", { class: "ob-chip ob-chip--furn" + (isNew ? " is-new" : ""), role: "listitem", "data-id": f.id }, [
+            el("button", {
+              class: "ob-chip-pic", type: "button", "aria-label": "Changer l'icône de " + f.label, title: "Changer l'icône",
+              onclick: function () {
+                iconPicker({
+                  title: "Icône de " + f.label, current: f.icon,
+                  onPick: function (value) {
+                    var entry = f.key ? furnitureByKey(f.key) : null;
+                    f.icon = value || (entry ? entry.pic : furnitureGuessPic(f.base || f.label));
+                    paint([]);
+                    var again = list.querySelector('[data-id="' + f.id + '"] .ob-chip-pic');
+                    if (again) { again.focus({ preventScroll: true }); obPop(again); }
+                    obAnnounce("Icône de " + f.label + " changée.");
+                  }
+                });
+              }
+            }, [sym(f.icon || "f-autre", 20)]),
+            el("span", { class: "ob-chip-lbl", text: f.label }),
+            el("button", {
+              class: "ob-x", type: "button", "aria-label": "Retirer " + f.label + " de " + room.label, title: "Retirer",
+              onclick: function () {
+                var index = room.furniture.indexOf(f);
+                node.classList.add("is-out");
+                setTimeout(function () {
+                  furnRemove(room, f.id);
+                  paint([]);
+                  repaintSide();
+                  var xs = list.querySelectorAll(".ob-x");
+                  var next = xs[Math.min(index, xs.length - 1)] || sugg.querySelector("button");
+                  if (next) next.focus({ preventScroll: true });
+                  obAnnounce(f.label + " retiré de " + room.label + ".");
+                }, obCalm() ? 0 : 170);
+              }
+            }, [icon("x", 13)])
+          ]);
+          return node;
         };
-        paint.list = list;
-        paint.add = add;
+
+        paint = function (freshIds, popKey) {
+          list.replaceChildren.apply(list, room.furniture.length
+            ? room.furniture.map(function (f) { return chipOf(f, freshIds.indexOf(f.id) !== -1); })
+            : [el("span", { class: "ob-tray-empty", text: "Aucun rangement pour l'instant." })]);
+          count.textContent = room.furniture.length ? plural(room.furniture.length, "rangement", "rangements") : "Aucun rangement";
+          var buttons = suggestKeys.map(function (key) {
+            var entry = furnitureByKey(key);
+            if (!entry) return null;
+            var n = room.furniture.filter(function (f) { return f.key === key; }).length;
+            return el("button", {
+              class: "ob-sugg-chip" + (n ? " is-on" : ""), type: "button", "data-key": key,
+              "aria-label": "Ajouter : " + entry.label + (n ? " (" + n + " déjà)" : ""),
+              onclick: function (event) {
+                var item = furnAdd(room, entry);
+                paint([item.id], key);
+                repaintSide();
+                obBurstFrom(event.currentTarget, event, { count: 8, power: 3 });
+                obAnnounce(item.label + " ajouté à " + room.label + ".");
+              }
+            }, [
+              el("span", { class: "ob-sugg-plus", "aria-hidden": "true" }, [icon("plus", 12)]),
+              sym(entry.pic, 18),
+              el("span", { text: entry.label }),
+              n ? el("span", { class: "ob-sugg-n tnum", "aria-hidden": "true", text: "×" + n }) : null
+            ]);
+          }).filter(Boolean);
+          buttons.push(catalogue);
+          sugg.replaceChildren.apply(sugg, buttons);
+          if (popKey) {
+            var hit = sugg.querySelector('[data-key="' + popKey + '"]');
+            if (hit) { hit.focus({ preventScroll: true }); obPop(hit.querySelector(".ob-sugg-n")); }
+          }
+        };
         paint([]);
+
         return el("section", { class: "ob-furn" }, [
           el("h2", { class: "ob-furn-head" }, [
             el("span", { class: "ob-furn-ic", "aria-hidden": "true" }, [sym(room.icon, 18)]),
             el("span", { class: "ob-furn-name", text: room.label }),
             count
           ]),
-          list
+          list,
+          el("p", { class: "ob-sugg-head", text: "Suggestions" }),
+          sugg
         ]);
       });
 
@@ -3645,7 +4040,7 @@
       obKeys.primary = function () { onFinish(null); };
       stage = [
         title("Les meubles de rangement"),
-        lede("Nous avons prévu l'essentiel. Ajoutez les endroits où vous rangez vraiment ; le reste pourra venir plus tard."),
+        lede("Touchez les suggestions de chaque pièce — deux fois pour deux tables de chevet. Touchez l'icône d'un rangement pour la changer. Le catalogue complet reste à portée."),
         sections.length ? el("div", { class: "ob-furns" }, sections) : el("p", { class: "ob-hint", text: "Aucune pièce : vous pourrez tout créer depuis l'application." }),
         el("div", { class: "ob-actions ob-actions--sticky" }, [finishCta])
       ];
@@ -3951,7 +4346,7 @@
         el("ul", { class: "results" + (stagger ? " stagger" : "") }, results.slice(0, 60).map(function (row, index) {
           var item = row.item;
           var li = el("li", {
-            class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (item.id === singleFound ? " found" : ""),
+            class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (item.id === singleFound || item.id === tourFoundId ? " found" : ""),
             style: "--i:" + index
           }, [
             el("span", { class: "thumb" }, [sym(rootIconOf(item.locationId), 20)]),
@@ -3989,9 +4384,20 @@
     return el("div", { class: "page search-page" }, [
       el("div", { class: "search-head", "data-graft": "" }, [
         el("h1", { class: "search-title", text: "Que cherchez-vous ?" }),
-        el("p", { class: "search-sub" }, [
-          el("b", { text: String(state.items.length) }),
-          (state.items.length < 2 ? " objet référencé" : " objets référencés") + (state.household ? " dans « " + state.household.name + " »" : "") + "."
+        el("div", { class: "search-meta" }, [
+          el("p", { class: "search-sub" }, [
+            el("b", { text: String(state.items.length) }),
+            (state.items.length < 2 ? " objet référencé" : " objets référencés") + (state.household ? " dans « " + state.household.name + " »" : "") + "."
+          ]),
+          el("span", { class: "spacer" }),
+          // La démonstration ne lance pas la visite d'office : elle la propose.
+          tourIsDemo() && !state.tourSeen ? el("button", {
+            class: "btn btn-sm btn-quiet tour-launch", type: "button", onclick: tourStart
+          }, [icon("spark", 14), "Visite guidée"]) : null,
+          el("button", {
+            class: "btn btn-sm btn-volt add-item-btn", type: "button",
+            onclick: function () { if (tour) tourOpenSheet(); else itemSheet(null); }
+          }, [icon("plus", 15), "Ajouter un objet"])
         ]),
 
         el("div", { class: "search-row", "data-graft": "" }, [
@@ -4341,10 +4747,11 @@
                   var basket = { label: node.name, furniture: [] };
                   var existing = childrenOf(node.id).map(function (child) { return child.name; });
                   furniturePicker(basket, function () {
-                    basket.furniture.forEach(function (name) {
+                    // Des entrées { label, icon } : exemplaires numérotés et icône choisie.
+                    basket.furniture.forEach(function (f) {
                       state.locations.push({
                         id: uid("loc"), parentId: node.id, kind: "furniture",
-                        name: name, icon: null, floor: node.floor
+                        name: furnLabel(f), icon: f.icon || null, floor: node.floor
                       });
                     });
                     adding = null;
@@ -6892,11 +7299,15 @@
      est conservée — mais la lecture est immédiate, et un logement se relit
      d'un coup d'œil six mois plus tard. */
 
+  /* Les niveaux sont des nombres : -1 sous-sol, 0 rez-de-chaussée, 1 premier
+     étage… Un niveau qui ne contient que des combles (grenier) s'appelle ainsi,
+     quel que soit son numéro. */
   var FLOOR_NAMES = {
-    "2": "Combles", "1": "Étage", "0": "Rez-de-chaussée", "-1": "Sous-sol"
+    "1": "1er étage", "0": "Rez-de-chaussée", "-1": "Sous-sol"
   };
 
-  function floorLabel(floor) {
+  function floorLabel(floor, rooms) {
+    if (floor > 0 && rooms && rooms.length && rooms.every(function (r) { return r.icon === "r-grenier"; })) return "Combles";
     if (FLOOR_NAMES[String(floor)]) return FLOOR_NAMES[String(floor)];
     return floor > 0 ? floor + "ᵉ étage" : "Niveau " + floor;
   }
@@ -7019,9 +7430,9 @@
         : el("div", { class: "floors" }, floors.map(function (floor) {
             var rooms = byFloor[String(floor)];
             var hasFocus = focus && rooms.some(function (r) { return r.id === focus.id; });
-            return el("section", { class: "floor", "aria-label": floorLabel(floor) }, [
+            return el("section", { class: "floor", "aria-label": floorLabel(floor, rooms) }, [
               el("div", { class: "floor-tag" }, [
-                el("h2", { text: floorLabel(floor) }),
+                el("h2", { text: floorLabel(floor, rooms) }),
                 el("span", { class: "n", text: plural(rooms.reduce(function (n, r) { return n + total(r.id); }, 0), "objet", "objets") })
               ]),
               el("div", { class: "floor-rooms" }, rooms.map(roomCard)),
@@ -7235,6 +7646,20 @@
       ]),
 
       el("section", { class: "set-section" }, [
+        el("h2", { text: "Aide" }),
+        el("div", { class: "set-group" }, [
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("spark", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Visite guidée" }),
+              el("span", { text: "Les menus un par un, puis un objet rangé et retrouvé. Deux minutes." })
+            ]),
+            el("button", { class: "btn btn-sm btn-line tour-replay", type: "button", onclick: tourStart }, "Revoir la visite guidée")
+          ])
+        ])
+      ]),
+
+      el("section", { class: "set-section" }, [
         el("h2", { text: "Vos données" }),
         el("div", { class: "set-group" }, [
           el("div", { class: "set-row" }, [
@@ -7285,7 +7710,10 @@
 
   /* ─── Feuille d'objet ─────────────────────────────────────────────── */
 
-  function itemSheet(item, defaultName) {
+  /* `hooks` (facultatif) : { onSaved(objet), onClose() } — la visite guidée
+     s'en sert pour suivre la fiche sans la réécrire. */
+  function itemSheet(item, defaultName, hooks) {
+    hooks = hooks || {};
     var draft = item
       ? {
           name: item.name, locationId: item.locationId, spot: item.spot || "",
@@ -7340,7 +7768,8 @@
       save();
       closeSheet();
       render();
-      toast(item ? "Objet enregistré." : "Objet référencé.");
+      if (hooks.onSaved) hooks.onSaved(item || payload);
+      else toast(item ? "Objet enregistré." : "Objet référencé.");
     }
 
     function textField(label, key, placeholder, hint, type) {
@@ -7357,6 +7786,7 @@
 
     var card = sheet({
       title: item ? "Modifier l'objet" : "Nouvel objet",
+      onClose: hooks.onClose,
       body: [
         el("label", { class: "field" }, [
           el("span", { text: "Nom de l'objet" }),
@@ -7441,6 +7871,594 @@
     return card;
   }
 
+  /* ═══ Visite guidée ══════════════════════════════════════════════════
+
+     À la première entrée dans l'application, un voile sombre et flou couvre
+     l'écran ; un seul projecteur net, cerclé de volt, glisse d'un élément à
+     l'autre et une bulle de verre explique. La visite navigue vraiment : elle
+     ouvre chaque onglet, éclaire d'abord son entrée, puis la zone utile de la
+     vue. Elle finit par le geste qui compte — référencer un objet — dans la
+     vraie fiche d'ajout, puis le retrouve.
+
+     Contrainte de fond : render() reconstruit #root. Tout ce qui appartient à
+     la visite vit donc dans <body>, hors de #root, et une boucle
+     requestAnimationFrame relit à chaque image la position de la cible —
+     rendu, défilement, redimensionnement, défilement interne d'une feuille :
+     le projecteur suit tout, sans écouteur à rebrancher. */
+
+  var tour = null;
+  var tourPending = null;
+  var tourFoundId = null;   // l'objet que la recherche fait pulser à la fin
+
+  function tourIsDemo() {
+    return !!(state.account && accountKey(state.account.email) === accountKey(DEMO_ACCOUNT.email));
+  }
+  function tourWide() { return window.innerWidth >= 900; }    // le rail est visible
+  function tourPhone() { return window.innerWidth < 640; }
+  function tourFirstName() {
+    return state.account && state.account.name ? String(state.account.name).trim().split(/\s+/)[0] : "";
+  }
+
+  /* Le premier élément VISIBLE qui répond : sur mobile le rail existe mais
+     il est masqué, et c'est l'onglet de la barre du bas qu'il faut éclairer. */
+  function tourQ(selector) {
+    if (!selector) return null;
+    if (typeof selector === "function") return selector();
+    var list = document.querySelectorAll(selector);
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i].getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) return list[i];
+    }
+    return null;
+  }
+
+  function tourSteps() {
+    var premium = state.plan === "premium";
+    var wide = tourWide();
+    var hasItems = state.items.length > 0;
+    var first = tourFirstName();
+    function tab(id) { return wide ? '.rail-btn[data-tab="' + id + '"]' : '.tabbar .tab[data-tab="' + id + '"]'; }
+
+    return [
+      { id: "welcome", tab: "search", hero: true,
+        title: "Bienvenue dans votre maison" + (first ? ", " + first : ""),
+        text: "Fulmo retient où vous rangez chaque chose, et vous le retrouve en deux secondes. Un tour des menus, puis vous rangerez votre premier objet.",
+        next: "Commencer la visite", prevLabel: "Plus tard" },
+
+      { id: "search", tab: "search", target: ".search-box",
+        title: "Chercher, tout simplement",
+        text: "Tapez ce que vous cherchez, même mal : « pasport » trouve le passeport. Chaque résultat dit où il est rangé — pièce › meuble › contenant." },
+
+      { id: "filters", tab: "search", target: ".search-filters", eclair: !premium,
+        title: "Mots-clés et recherche avec vos mots",
+        text: premium
+          ? "Un mot-clé regroupe d'un geste : noël, papiers, outillage. « Avec mes mots » comprend une phrase — « le truc pour gonfler le matelas ». Seule la phrase part vers l'IA, jamais votre inventaire."
+          : "Un mot-clé regroupe d'un geste : noël, papiers, outillage. La recherche « Avec mes mots », qui comprend une phrase entière, fait partie de l'Éclair." },
+
+      wide
+        ? { id: "cmdk", tab: "search", target: ".rail-head .kbd-hint",
+            title: "⌘K, de partout",
+            text: "Où que vous soyez, ⌘K (Ctrl K sous Windows) ou la touche « / » ouvrent la recherche par-dessus l'écran. Objets, lieux et actions au même endroit." }
+        : { id: "cmdk", tab: "places", target: ".app-head .cmdk-trigger",
+            title: "La recherche, de partout",
+            text: "En haut de chaque écran, ce champ ouvre la recherche par-dessus ce que vous faisiez. Objets, lieux et actions au même endroit." },
+
+      { id: "places", tab: "places", tabTarget: tab("places"), target: ".tree",
+        title: "Mes lieux",
+        text: "L'architecture de votre logement : pièce › meuble › contenant. Ajoutez un tiroir, renommez une étagère, changez une icône quand vous voulez." },
+
+      { id: "scan", tab: "scan", tabTarget: tab("scan"), target: premium ? ".scan-stage" : ".page .empty", eclair: !premium,
+        title: "Scan Éclair",
+        text: premium
+          ? "Photographiez une étagère ou un tiroir : l'IA reconnaît les objets et pré-remplit leurs fiches. Vous décochez, corrigez, validez."
+          : "Photographiez un tiroir, l'IA reconnaît les objets et pré-remplit leurs fiches. C'est une fonction Éclair : vous pourrez l'essayer depuis cet écran." },
+
+      { id: "map", tab: "map", tabTarget: tab("map"), target: premium ? ".floors" : ".page .empty", eclair: !premium,
+        title: "Plan et Espace 3D",
+        text: premium
+          ? "Votre logement en coupe, étage par étage : chaque pièce montre ce qu'elle contient. La bascule « Espace 3D » ouvre une pièce relevée en volume, où la recherche désigne le rangement."
+          : "Le plan en coupe et l'Espace 3D montrent le rangement au lieu de l'épeler. Deux fonctions Éclair, à découvrir quand vous voulez." },
+
+      { id: "alerts", tab: "alerts", tabTarget: tab("alerts"), target: ".alert-group, .all-clear",
+        title: "Alertes",
+        text: "Péremptions, fins de garantie, objets prêtés : tout ce qui a une date remonte ici avant qu'il soit trop tard. La date se saisit dans la fiche de l'objet." },
+
+      { id: "settings", tab: "settings", tabTarget: wide ? ".rail-home" : ".app-head .head-avatar", target: ".set-section",
+        title: "Votre foyer et les réglages",
+        text: "Votre foyer, sa formule, le thème clair ou sombre, l'export de vos données en un fichier. Dans la version en ligne, c'est ici que vous inviterez votre foyer à partager l'inventaire." },
+
+      { id: "add", tab: "search", target: ".add-item-btn", interactive: true,
+        title: hasItems ? "Et maintenant, un objet de plus" : "À vous : votre premier objet",
+        text: "Tout part de là : ranger. La fiche va s'ouvrir, et la visite vous guide champ par champ.",
+        next: hasItems ? "Ajouter un autre objet" : "Ajouter mon premier objet", action: tourOpenSheet },
+
+      { id: "name", live: true, target: ".sheet .field",
+        title: "Son nom",
+        text: "Nommez-le comme vous le chercherez plus tard. Une idée pour commencer :",
+        suggest: ["Passeport", "Clés de la cave", "Chargeur de téléphone"],
+        canNext: function () { var input = tourQ(".sheet .field input"); return !!(input && input.value.trim()); } },
+
+      { id: "place", live: true,
+        target: function () { var list = tourQ(".sheet .loc-list"); return list ? list.closest(".field") : null; },
+        title: "Où est-il rangé ?",
+        text: "Choisissez le rangement le plus précis : un tiroir vaut mieux qu'une pièce. Tapez pour filtrer la liste." },
+
+      { id: "save", live: true, target: ".sheet-foot .btn-volt", noNext: true,
+        title: "Enregistrez",
+        text: "Un geste, et c'est retenu. Touchez « Enregistrer »." },
+
+      { id: "found", tab: "search", target: ".result.found", ending: true,
+        title: "Voilà. Rangez, puis demandez.",
+        text: "Il se retrouve en une frappe, avec son chemin. Tout Fulmo tient dans ce geste. La visite reste dans les Réglages si vous voulez la revoir.",
+        next: "Terminer" }
+    ];
+  }
+
+  /* Démarre la visite. Rien ne s'impose une seconde fois : l'état « vue »
+     est enregistré dès la fin ou l'abandon. */
+  function tourStart() {
+    if (tour || !state.household) return;
+    clearTimeout(tourPending);
+    tourPending = null;
+    closePalette();
+    closeSheet();
+
+    var veil = el("div", { class: "tour-veil" });
+    var spot = el("div", { class: "tour-spot", "aria-hidden": "true" });
+    var arrow = el("i", { class: "tour-arrow", "aria-hidden": "true" });
+    var bubble = el("section", { class: "tour-bubble", "aria-labelledby": "tour-title" });
+    var live = el("p", { class: "sr-only", "aria-live": "polite" });
+    var overlay = el("div", { class: "tour", role: "dialog", "aria-modal": "true", "aria-labelledby": "tour-title" },
+      [veil, spot, bubble, live]);
+    bubble.appendChild(arrow);
+    // Un clic à côté ne fait rien : la visite ne se ferme que par « Passer ».
+    veil.addEventListener("click", function (event) { event.preventDefault(); });
+    document.body.appendChild(overlay);
+
+    tour = {
+      overlay: overlay, veil: veil, spot: spot, bubble: bubble, arrow: arrow, live: live,
+      steps: tourSteps(), index: -1, rect: null, drawn: "", side: null,
+      previous: document.activeElement, closingSheet: false
+    };
+    document.addEventListener("keydown", tourKey, true);
+    window.addEventListener("resize", tourOnResize);
+    requestAnimationFrame(function () { if (tour) overlay.classList.add("is-on"); });
+    tour.raf = requestAnimationFrame(tourFrame);
+    tourShow(0);
+  }
+
+  function tourEnd(completed, message) {
+    if (!tour) return;
+    var closing = tour;
+    tour = null;
+    cancelAnimationFrame(closing.raf);
+    document.removeEventListener("keydown", tourKey, true);
+    window.removeEventListener("resize", tourOnResize);
+    root.inert = false;
+    state.tourSeen = true;
+    save();
+    closing.overlay.classList.remove("is-on");
+    closing.overlay.classList.add("is-leaving");
+    setTimeout(function () { closing.overlay.remove(); }, reduceMotion() ? 0 : 320);
+    setTimeout(function () { tourFoundId = null; }, 2400);
+    if (message) toast(message);
+    else if (!completed) toast("Visite interrompue. Elle vous attend dans les Réglages.");
+    if (closing.previous && closing.previous.isConnected && closing.previous.focus) {
+      try { closing.previous.focus({ preventScroll: true }); } catch (e) {}
+    }
+  }
+
+  /* Affiche une étape : navigue vers sa vue si besoin, prépare la bulle, et
+     laisse la boucle d'animation faire glisser le projecteur. */
+  function tourShow(index) {
+    if (!tour) return;
+    var steps = tour.steps;
+    index = Math.max(0, Math.min(steps.length - 1, index));
+    var step = steps[index];
+    var before = steps[tour.index];
+
+    // Revenir de la fiche vers la visite : on referme la fiche sans que sa
+    // fermeture soit prise pour un abandon.
+    if (before && before.live && !step.live && openSheet) {
+      tour.closingSheet = true;
+      closeSheet();
+      tour.closingSheet = false;
+    }
+
+    tour.index = index;
+    if (step.tab && (state.tab !== step.tab || (step.tab === "map" && mapMode !== "2d"))) {
+      if (step.tab === "map") mapMode = "2d";
+      closePalette();
+      state.tab = step.tab;
+      save();
+      render();
+    }
+
+    var now = performance.now();
+    tour.phase = step.tabTarget && !reduceMotion() ? "tab" : "zone";
+    tour.phaseAt = now;
+    tour.tween = { from: tour.rect, t0: now };
+    tour.scrolled = false;
+    tour.side = null;
+    tour.hold = false;
+
+    // Pendant la finale, la fiche reste utilisable : seule la page derrière
+    // est rendue inerte.
+    root.inert = !step.interactive;
+    tour.overlay.setAttribute("aria-modal", step.live || step.interactive ? "false" : "true");
+    tour.overlay.classList.toggle("is-live", !!step.live);
+    tour.overlay.classList.toggle("is-interactive", !!(step.live || step.interactive));
+
+    tourPaintBubble(step);
+    tour.live.textContent = "Étape " + (index + 1) + " sur " + steps.length + ". " + step.title + ". " + step.text;
+  }
+
+  /* Typographie française : pas de guillemet ni de deux-points orphelin en
+     bout de ligne. */
+  function tourTypo(text) {
+    return String(text).replace(/« /g, "« ").replace(/ (»|:|\?|!|;)/g, " $1");
+  }
+
+  function tourPaintBubble(step) {
+    var b = tour.bubble;
+    var index = tour.index, total = tour.steps.length;
+    var first = index === 0;
+    var next = step.noNext ? null : el("button", {
+      class: "btn btn-sm btn-volt tour-next", type: "button",
+      onclick: tourNext
+    }, [step.next || "Suivant", step.ending || step.action ? null : icon("arrow-right", 14)]);
+    var prev = step.ending ? null : el("button", {
+      class: "btn btn-sm btn-quiet tour-prev", type: "button",
+      onclick: first ? function () { tourEnd(false); } : tourPrev
+    }, first ? (step.prevLabel || "Plus tard") : [icon("arrow-left", 14), "Précédent"]);
+
+    var body = [
+      el("div", { class: "tour-top" }, [
+        el("span", { class: "tour-count", text: (index + 1) + " / " + total }),
+        el("span", { class: "tour-bar", "aria-hidden": "true" }, [el("i", { style: "--p:" + ((index + 1) / total).toFixed(3) })]),
+        step.ending || first ? null : el("button", {
+          class: "tour-skip", type: "button", onclick: function () { tourEnd(false); }
+        }, "Passer")
+      ]),
+      step.hero ? el("span", { class: "tour-mark", "aria-hidden": "true" }, [icon("bolt", 22)]) : null,
+      el("h2", { class: "tour-title", id: "tour-title", text: tourTypo(step.title) }),
+      el("p", { class: "tour-text", text: tourTypo(step.text) }),
+      step.eclair ? el("p", { class: "tour-eclair" }, [icon("bolt", 13), "Fonction Éclair"]) : null,
+      step.suggest ? el("div", { class: "tour-suggest" }, step.suggest.map(function (word) {
+        return el("button", {
+          class: "chip chip-sm", type: "button",
+          onclick: function () {
+            var input = tourQ(".sheet .field input");
+            if (!input) return;
+            input.value = word;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.focus({ preventScroll: true });
+          }
+        }, word);
+      })) : null,
+      el("div", { class: "tour-actions" }, [prev, el("span", { class: "spacer" }), next])
+    ];
+    b.replaceChildren.apply(b, [tour.arrow].concat(body.filter(Boolean)));
+    b.classList.toggle("is-hero", !!step.hero);
+    b.classList.remove("is-in");
+    void b.offsetWidth;
+    b.classList.add("is-in");
+
+    // Le focus va au bouton principal — sauf pendant la saisie de la fiche,
+    // où il reste dans le champ.
+    if (!step.live && next) { try { next.focus({ preventScroll: true }); } catch (e) {} }
+  }
+
+  function tourNext() {
+    if (!tour) return;
+    var step = tour.steps[tour.index];
+    if (step.canNext && !step.canNext()) {
+      var input = tourQ(".sheet .field input");
+      if (input) input.focus();
+      tour.bubble.classList.remove("is-nudge");
+      void tour.bubble.offsetWidth;
+      tour.bubble.classList.add("is-nudge");
+      return;
+    }
+    if (step.ending) { tourEnd(true); return; }
+    if (step.action) { step.action(); return; }
+    // L'étape « enregistrer » ne s'achève que par l'enregistrement.
+    if (step.noNext) return;
+    tourShow(tour.index + 1);
+  }
+
+  function tourPrev() {
+    if (!tour || tour.index === 0) return;
+    tourShow(tour.index - 1);
+  }
+
+  function tourOnResize() { if (tour) tour.side = null; }
+
+  function tourKey(event) {
+    if (!tour) return;
+    var step = tour.steps[tour.index];
+    var active = document.activeElement;
+    var typing = !!(active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName));
+
+    // Pendant la finale, la fiche garde son clavier : Échap la ferme (et
+    // arrête la visite), Tab reste dans la fiche.
+    if (step.live) {
+      if (!typing && event.key === "ArrowRight") { event.preventDefault(); tourNext(); }
+      else if (!typing && event.key === "ArrowLeft") { event.preventDefault(); tourPrev(); }
+      return;
+    }
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); tourEnd(false); return; }
+    if (event.key === "ArrowRight") { event.preventDefault(); event.stopPropagation(); tourNext(); return; }
+    if (event.key === "ArrowLeft") { event.preventDefault(); event.stopPropagation(); tourPrev(); return; }
+    if (event.key === "/" || ((event.metaKey || event.ctrlKey) && String(event.key).toLowerCase() === "k")) {
+      event.preventDefault(); event.stopPropagation(); return;
+    }
+    if (event.key === "Tab") {
+      // Piège de focus : la bulle, plus la cible quand on peut la toucher.
+      var nodes = Array.prototype.filter.call(tour.bubble.querySelectorAll("button"), function (n) { return !n.disabled; });
+      if (step.interactive) {
+        var target = tourQ(step.target);
+        if (target) nodes.unshift(target);
+      }
+      if (!nodes.length) return;
+      var at = nodes.indexOf(active);
+      event.preventDefault();
+      event.stopPropagation();
+      nodes[at === -1 ? 0 : (at + (event.shiftKey ? -1 : 1) + nodes.length) % nodes.length].focus();
+    }
+  }
+
+  /* ─── Géométrie : le trou, le projecteur, la bulle ─────────────────── */
+
+  function tourHole(node) {
+    var r = node.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return null;
+    var pad = r.height < 48 ? 6 : 10;
+    var W = window.innerWidth, H = window.innerHeight;
+    var x = Math.max(6, r.left - pad), y = Math.max(6, r.top - pad);
+    var x2 = Math.min(W - 6, r.right + pad), y2 = Math.min(H - 6, r.bottom + pad);
+    if (x2 - x < 8 || y2 - y < 8) return null;
+    return { x: x, y: y, w: x2 - x, h: y2 - y, r: Math.min(18, (y2 - y) / 2) };
+  }
+
+  function tourCenterHole() {
+    return { x: window.innerWidth / 2, y: window.innerHeight * 0.42, w: 0, h: 0, r: 0 };
+  }
+
+  function tourMix(a, b, k) {
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, w: a.w + (b.w - a.w) * k, h: a.h + (b.h - a.h) * k, r: a.r + (b.r - a.r) * k };
+  }
+
+  /* Le voile est découpé d'un rectangle arrondi (règle pair-impair) : le
+     flou et l'ombre s'arrêtent net au bord du projecteur, et les clics
+     passent au travers du trou jusqu'à la cible. */
+  function tourPath(h) {
+    var W = window.innerWidth, H = window.innerHeight;
+    var p = "M0 0H" + W + "V" + H + "H0Z";
+    if (h && h.w > 1 && h.h > 1) {
+      var f = function (n) { return Math.round(n * 10) / 10; };
+      var r = f(Math.min(h.r, h.w / 2, h.h / 2)), x = f(h.x), y = f(h.y), w = f(h.w), hh = f(h.h);
+      p += "M" + f(x + r) + " " + y + "H" + f(x + w - r) +
+        "A" + r + " " + r + " 0 0 1 " + f(x + w) + " " + f(y + r) + "V" + f(y + hh - r) +
+        "A" + r + " " + r + " 0 0 1 " + f(x + w - r) + " " + f(y + hh) + "H" + f(x + r) +
+        "A" + r + " " + r + " 0 0 1 " + x + " " + f(y + hh - r) + "V" + f(y + r) +
+        "A" + r + " " + r + " 0 0 1 " + f(x + r) + " " + y + "Z";
+    }
+    return 'path(evenodd, "' + p + '")';
+  }
+
+  /* La cible est amenée à l'écran une fois par étape, là où la bulle ne la
+     couvrira pas. Dans une feuille, c'est le corps de la feuille qui défile. */
+  function tourReveal(node, step) {
+    if (node.closest(".tabbar, .rail, .app-head")) return;
+    var smooth = reduceMotion() ? "auto" : "smooth";
+    if (node.closest(".sheet")) { node.scrollIntoView({ block: "nearest", behavior: smooth }); return; }
+    var r = node.getBoundingClientRect();
+    var head = document.querySelector(".app-head");
+    var topLimit = (head && head.offsetParent ? head.getBoundingClientRect().bottom : 0) + 20;
+    var bottomLimit = window.innerHeight - 24;
+    if (tourPhone() && !step.live) bottomLimit = window.innerHeight - tour.bubble.offsetHeight - 110;
+    if (r.top >= topLimit && r.bottom <= bottomLimit) return;
+    var room = bottomLimit - topLimit;
+    var delta = r.height < room ? r.top - topLimit - Math.max(0, (room - r.height) / 4) : r.top - topLimit;
+    window.scrollTo({ top: Math.max(0, window.scrollY + delta), behavior: smooth });
+  }
+
+  function tourPlace(hole, step, waiting) {
+    var b = tour.bubble;
+    var docked = tourPhone() && !step.live;
+    b.classList.toggle("is-docked", docked);
+    b.classList.toggle("is-waiting", !!waiting);
+    if (docked) {
+      b.style.transform = "";
+      tour.arrow.className = "tour-arrow";
+      // Rangée en bas, la bulle ne doit pas couvrir la cible : si la page ne
+      // peut plus défiler pour la remonter, la bulle passe en haut.
+      var dockTop = window.innerHeight - b.offsetHeight - 90;
+      b.classList.toggle("is-top", !!(hole && hole.w > 2 && hole.y + hole.h > dockTop && hole.y > b.offsetHeight + 40));
+      return;
+    }
+    var W = window.innerWidth, H = window.innerHeight, m = 14, gap = 18;
+    var bw = b.offsetWidth, bh = b.offsetHeight;
+    var left, top, side = null;
+
+    if (!hole || hole.w < 2) {
+      left = (W - bw) / 2;
+      top = Math.max(m, (H - bh) / 2);
+    } else {
+      var fits = {
+        below: H - (hole.y + hole.h) - gap - m >= bh,
+        above: hole.y - gap - m >= bh,
+        right: W - (hole.x + hole.w) - gap - m >= bw,
+        left: hole.x - gap - m >= bw
+      };
+      var order = tourPhone() ? ["below", "above"] : step.live ? ["right", "left", "below", "above"] : ["below", "above", "right", "left"];
+      // Le côté choisi tient tant qu'il reste possible : la bulle ne saute
+      // pas d'un bord à l'autre pendant un défilement.
+      if (tour.side && fits[tour.side]) side = tour.side;
+      else side = order.filter(function (s) { return fits[s]; })[0] || null;
+      tour.side = side;
+
+      if (side === "below" || side === "above") {
+        left = Math.min(Math.max(m, hole.x + hole.w / 2 - bw / 2), W - bw - m);
+        top = side === "below" ? hole.y + hole.h + gap : hole.y - gap - bh;
+        tour.arrow.style.setProperty("--a", Math.min(Math.max(22, hole.x + hole.w / 2 - left), bw - 22) + "px");
+      } else if (side === "right" || side === "left") {
+        top = Math.min(Math.max(m, hole.y + hole.h / 2 - bh / 2), H - bh - m);
+        left = side === "right" ? hole.x + hole.w + gap : hole.x - gap - bw;
+        tour.arrow.style.setProperty("--a", Math.min(Math.max(22, hole.y + hole.h / 2 - top), bh - 22) + "px");
+      } else {
+        // Rien ne tient à côté d'une grande zone : la bulle se pose en bas
+        // de l'écran, par-dessus, sans flèche.
+        left = (W - bw) / 2;
+        top = H - bh - m;
+      }
+    }
+    tour.arrow.className = "tour-arrow" + (side ? " is-" + side : "");
+    b.style.transform = "translate(" + Math.round(left) + "px," + Math.round(top) + "px)";
+  }
+
+  /* La boucle : où est la cible, où en est le glissement, où poser la
+     bulle. Rien n'est réécrit si rien n'a bougé. */
+  function tourFrame() {
+    if (!tour) return;
+    tour.raf = requestAnimationFrame(tourFrame);
+    var step = tour.steps[tour.index];
+    var now = performance.now();
+    var node = null;
+
+    if (tour.phase === "tab") {
+      node = tourQ(step.tabTarget);
+      if (!node || now - tour.phaseAt > 650) {
+        tour.phase = "zone";
+        tour.phaseAt = now;
+        tour.tween = { from: tour.rect, t0: now };
+      }
+    }
+    if (tour.phase === "zone" && step.target) {
+      node = tourQ(step.target);
+      if (node && !tour.scrolled) { tour.scrolled = true; tourReveal(node, step); }
+    }
+    var want = (node && tourHole(node)) || tourCenterHole();
+    var k = 1;
+    if (tour.tween && !reduceMotion()) {
+      var t = Math.min(1, (now - tour.tween.t0) / 560);
+      k = t >= 1 ? 1 : 1 - Math.pow(2, -10 * t);   // expo out, la courbe de --ease-out
+    }
+    var from = tour.tween && tour.tween.from ? tour.tween.from : tourCenterHole();
+    var cur = k >= 1 ? want : tourMix(from, want, k);
+    if (k >= 1) tour.tween = null;
+    tour.rect = cur;
+    tourDraw(cur, step);
+    tourPlace(node ? cur : null, step, tour.phase === "tab" || tour.hold);
+  }
+
+  function tourDraw(cur, step) {
+    var key = [cur.x, cur.y, cur.w, cur.h, cur.r, window.innerWidth, window.innerHeight].map(Math.round).join(",");
+    if (key !== tour.drawn) {
+      tour.drawn = key;
+      var clip = tourPath(cur);
+      tour.veil.style.clipPath = clip;
+      tour.veil.style.webkitClipPath = clip;
+      var s = tour.spot.style;
+      s.transform = "translate(" + cur.x.toFixed(1) + "px," + cur.y.toFixed(1) + "px)";
+      s.width = cur.w.toFixed(1) + "px";
+      s.height = cur.h.toFixed(1) + "px";
+      s.borderRadius = cur.r.toFixed(1) + "px";
+    }
+    tour.spot.classList.toggle("is-empty", cur.w < 4);
+    tour.spot.classList.toggle("is-pass", !!(step.interactive || step.live));
+    if (step.canNext) {
+      var nextBtn = tour.bubble.querySelector(".tour-next");
+      if (nextBtn) nextBtn.classList.toggle("is-muted", !step.canNext());
+    }
+  }
+
+  /* ─── La finale : un vrai objet, dans la vraie fiche ───────────────── */
+
+  function tourOpenSheet() {
+    if (!tour) return;
+    closePalette();
+    itemSheet(null, "", {
+      onSaved: tourSaved,
+      onClose: function () {
+        if (tour && !tour.closingSheet) tourEnd(false, "Fiche refermée : la visite s'arrête là. Elle vous attend dans les Réglages.");
+      }
+    });
+    tourShow(tour.index + 1);
+  }
+
+  function tourSaved(item) {
+    if (!tour) return;
+    var from = tour.rect;
+    // Le temps de la célébration, la bulle se retire et le voile reprend sa
+    // profondeur : la lumière part du bouton qu'on vient de toucher.
+    tour.hold = true;
+    tour.overlay.classList.remove("is-live");
+    tourCelebrate(from && from.w > 2 ? from.x + from.w / 2 : window.innerWidth / 2,
+                  from && from.h > 2 ? from.y + from.h / 2 : window.innerHeight / 2);
+    searchState = { query: item.name, ai: null, aiBusy: false, aiTried: null, filter: null };
+    aiResults = null;
+    tourFoundId = item.id;
+    state.tab = "search";
+    save();
+    render();
+    var end = tour.steps.length - 1;
+    setTimeout(function () { if (tour) tourShow(end); }, reduceMotion() ? 0 : 700);
+  }
+
+  /* Célébration : un éclair de lumière volt depuis le bouton, une gerbe
+     d'étincelles. Bref ; et seulement la lueur si l'on a demandé moins de
+     mouvement. */
+  function tourCelebrate(x, y) {
+    var flash = el("div", { class: "tour-flash", "aria-hidden": "true", style: "--fx:" + Math.round(x) + "px;--fy:" + Math.round(y) + "px" });
+    document.body.appendChild(flash);
+    setTimeout(function () { flash.remove(); }, 1100);
+    if (reduceMotion()) return;
+
+    var canvas = el("canvas", { class: "tour-sparks", "aria-hidden": "true" });
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+    document.body.appendChild(canvas);
+    var g = canvas.getContext("2d");
+    if (!g) { canvas.remove(); return; }
+    g.scale(dpr, dpr);
+    var parts = [];
+    for (var i = 0; i < 64; i++) {
+      var a = Math.random() * Math.PI * 2, v = 2.5 + Math.random() * 7.5;
+      parts.push({ x: x, y: y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 3.2, life: 1, size: 1 + Math.random() * 2.4, white: i % 4 === 0 });
+    }
+    var t0 = performance.now();
+    (function frame(now) {
+      g.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      parts.forEach(function (p) {
+        p.vx *= 0.965; p.vy = p.vy * 0.965 + 0.32;
+        p.x += p.vx; p.y += p.vy; p.life -= 0.017;
+        if (p.life <= 0) return;
+        g.globalAlpha = p.life;
+        g.fillStyle = p.white ? "#ffffff" : "#d9ff3d";
+        g.beginPath(); g.arc(p.x, p.y, p.size, 0, 6.2832); g.fill();
+      });
+      if (now - t0 < 1500) requestAnimationFrame(frame);
+      else canvas.remove();
+    })(t0);
+  }
+
+  /* Appelé après chaque rendu : lance la visite à la première entrée d'un
+     compte dans l'application — jamais d'office pour la démonstration, qui
+     l'a en bouton. Le délai laisse finir la célébration de l'onboarding. */
+  function tourAfterRender() {
+    if (tour || tourPending) return;
+    if (!state.session || !state.account || !state.household || state.tourSeen || tourIsDemo()) return;
+    tourPending = setTimeout(function () {
+      tourPending = null;
+      if (tour || state.tourSeen || !state.household || !state.session || tourIsDemo()) return;
+      if (document.querySelector(".ob-celebrate, .cmdk-backdrop") || openSheet) { tourAfterRender(); return; }
+      tourStart();
+    }, 900);
+  }
+
   /* ─── Thème ───────────────────────────────────────────────────────── */
 
   /* Le blanc est le défaut du produit, pas une conséquence du système : on
@@ -7495,6 +8513,7 @@
     if (inApp && auto && !openSheet && !cmdk && (!document.activeElement || document.activeElement === document.body)) {
       try { auto.focus({ preventScroll: true }); } catch (e) { auto.focus(); }
     }
+    tourAfterRender();
   }
 
   function render() {

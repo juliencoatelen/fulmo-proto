@@ -1,0 +1,186 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FULMO — visite guidée
+
+   Un voile sombre et légèrement flou sur tout l'écran, découpé d'un seul
+   projecteur net où la lumière volt se pose ; une bulle de verre qui
+   explique. Le voile, le projecteur et la bulle vivent hors de #root (le
+   rendu le reconstruit) ; le JS les place à chaque image.
+
+   Couleurs, courbes et durées : jetons de tokens.css uniquement.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.tour {
+  --tour-veil: rgb(7 7 10 / .5);
+  position: fixed; inset: 0; z-index: 160;
+  pointer-events: none;
+}
+:root[data-theme="dark"] .tour { --tour-veil: rgb(0 0 0 / .6); }
+
+/* ─── Le voile ────────────────────────────────────────────────────────── */
+
+.tour-veil {
+  position: absolute; inset: 0; pointer-events: auto;
+  background: var(--tour-veil);
+  backdrop-filter: blur(3px) saturate(115%);
+  -webkit-backdrop-filter: blur(3px) saturate(115%);
+  opacity: 0;
+  transition: opacity var(--dur-3) var(--ease-out), background-color var(--dur-3) var(--ease-out);
+}
+.tour.is-on .tour-veil { opacity: 1; }
+/* Pendant la saisie, la feuille a déjà son propre fond : le voile s'allège. */
+.tour.is-live .tour-veil { background: rgb(7 7 10 / .22); backdrop-filter: none; -webkit-backdrop-filter: none; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .tour { --tour-veil: rgb(7 7 10 / .68); }
+}
+
+/* ─── Le projecteur ───────────────────────────────────────────────────── */
+
+.tour-spot {
+  position: absolute; left: 0; top: 0; width: 0; height: 0;
+  pointer-events: auto;   /* hors finale, un clic sur la cible ne navigue pas */
+  box-shadow:
+    0 0 0 1.5px color-mix(in oklab, var(--volt) 88%, transparent),
+    0 0 0 6px color-mix(in oklab, var(--volt) 16%, transparent);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--volt) 7%, transparent), transparent 55%);
+  opacity: 0;
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+.tour.is-on .tour-spot { opacity: 1; }
+.tour-spot.is-empty { opacity: 0 !important; }
+.tour-spot.is-pass { pointer-events: none; }
+/* Le halo respire : doucement, et seulement autour de la cible. */
+.tour-spot::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 36px 4px color-mix(in oklab, var(--volt) 42%, transparent);
+  animation: tour-breathe 2.6s var(--ease-in-out) infinite alternate;
+}
+@keyframes tour-breathe { from { opacity: .35; } to { opacity: 1; } }
+
+/* ─── La bulle ────────────────────────────────────────────────────────── */
+
+.tour-bubble {
+  position: absolute; left: 0; top: 0;
+  width: min(380px, calc(100vw - 28px));
+  pointer-events: auto;
+  padding: 16px 18px 14px;
+  border-radius: var(--r-lg);
+  color: var(--fg);
+  background: color-mix(in oklab, var(--raised) 82%, transparent);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
+  border: 1px solid color-mix(in oklab, var(--fg) 11%, transparent);
+  box-shadow: var(--shadow-3), inset 0 1px 0 rgb(255 255 255 / .4);
+  isolation: isolate;
+}
+:root[data-theme="dark"] .tour-bubble { box-shadow: var(--shadow-3), inset 0 1px 0 rgb(255 255 255 / .07); }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .tour-bubble { background: var(--raised); }
+}
+/* Une lueur volt, posée dans un coin du verre. */
+.tour-bubble::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(90% 70% at 0% 0%, color-mix(in oklab, var(--volt) 20%, transparent), transparent 62%);
+}
+.tour-bubble.is-in { animation: tour-in var(--dur-3) var(--ease-out); }
+@keyframes tour-in { from { opacity: 0; filter: blur(8px); } }
+.tour-bubble.is-waiting { opacity: 0; pointer-events: none; }
+.tour-bubble.is-nudge { animation: tour-nudge .32s var(--ease-out); }
+@keyframes tour-nudge { 25% { translate: -5px 0; } 60% { translate: 4px 0; } }
+
+.tour-bubble.is-hero { width: min(440px, calc(100vw - 28px)); padding: 22px 22px 16px; }
+.tour-bubble.is-hero .tour-title { font-size: 1.625rem; }
+
+/* Téléphone : la bulle se range en bas, au-dessus de la barre d'onglets. */
+.tour-bubble.is-docked {
+  top: auto; left: 12px; right: 12px; width: auto;
+  bottom: calc(var(--tabbar-h, 64px) + env(safe-area-inset-bottom) + 12px);
+  transform: none;
+}
+@media (min-width: 900px) { .tour-bubble.is-docked { bottom: 20px; } }
+/* …ou en haut, quand la cible est tout en bas d'une page qui ne défile plus. */
+.tour-bubble.is-docked.is-top { bottom: auto; top: calc(env(safe-area-inset-top) + 12px); }
+
+/* Pendant la saisie, le verre passe par-dessus une feuille chargée de
+   texte : il s'épaissit pour rester lisible. */
+.tour.is-live .tour-bubble { background: color-mix(in oklab, var(--raised) 95%, transparent); }
+
+/* La flèche, du même verre (opaque : un losange flou se verrait mal). */
+.tour-arrow {
+  position: absolute; display: none; width: 14px; height: 14px; z-index: -1;
+  background: color-mix(in oklab, var(--raised) 94%, transparent);
+  border: 1px solid color-mix(in oklab, var(--fg) 11%, transparent);
+  transform: rotate(45deg);
+}
+.tour-arrow.is-below { display: block; top: -7px; left: var(--a); margin-left: -7px; border-right: 0; border-bottom: 0; }
+.tour-arrow.is-above { display: block; bottom: -7px; left: var(--a); margin-left: -7px; border-left: 0; border-top: 0; }
+.tour-arrow.is-right { display: block; left: -7px; top: var(--a); margin-top: -7px; border-top: 0; border-right: 0; }
+.tour-arrow.is-left  { display: block; right: -7px; top: var(--a); margin-top: -7px; border-bottom: 0; border-left: 0; }
+
+.tour-top { display: flex; align-items: center; gap: 10px; min-height: 28px; }
+.tour-count { font-family: var(--font-mono); font-size: .75rem; color: var(--fg-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tour-bar { flex: 1; height: 3px; border-radius: var(--r-pill); background: color-mix(in oklab, var(--fg) 10%, transparent); overflow: hidden; }
+.tour-bar i {
+  display: block; height: 100%; border-radius: inherit; background: var(--accent-fill);
+  transform: scaleX(var(--p, 0)); transform-origin: left center;
+  transition: transform var(--dur-3) var(--ease-out);
+}
+.tour-skip {
+  position: relative; border: 0; background: transparent; color: var(--fg-muted); cursor: pointer;
+  font: inherit; font-size: .8125rem; font-weight: 500; padding: 4px 6px; border-radius: var(--r-xs);
+}
+.tour-skip::before { content: ""; position: absolute; inset: -8px -4px; }
+.tour-skip:hover { color: var(--fg); background: var(--hover); }
+
+.tour-mark {
+  display: grid; place-items: center; width: 46px; height: 46px; margin-top: 12px;
+  border-radius: var(--r-md); background: var(--accent-fill); color: var(--on-accent);
+  box-shadow: 0 10px 30px -8px color-mix(in oklab, var(--volt) 70%, transparent);
+}
+.tour-title {
+  margin: 12px 0 6px; font-family: var(--font-display); font-weight: 700;
+  font-size: 1.25rem; line-height: 1.15; letter-spacing: -0.02em; text-wrap: balance;
+}
+.tour-text { font-size: .9375rem; line-height: 1.55; color: var(--fg-muted); text-wrap: pretty; }
+.tour-eclair {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
+  padding: 3px 10px; border-radius: var(--r-pill);
+  background: var(--accent-soft); color: var(--fg); font-size: .75rem; font-weight: 600;
+}
+.tour-eclair .icon { color: var(--accent); }
+.tour-suggest { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.tour-actions { display: flex; align-items: center; gap: 8px; margin-top: 16px; }
+.tour-actions .spacer { flex: 1; }
+.tour-next.is-muted { opacity: .5; }
+
+/* ─── La célébration ──────────────────────────────────────────────────── */
+
+.tour-flash {
+  position: fixed; inset: 0; z-index: 170; pointer-events: none;
+  background: radial-gradient(circle at var(--fx, 50%) var(--fy, 50%),
+    color-mix(in oklab, var(--volt) 75%, transparent) 0,
+    color-mix(in oklab, var(--volt) 24%, transparent) 16%,
+    transparent 52%);
+  animation: tour-flash 1s var(--ease-out) forwards;
+}
+@keyframes tour-flash { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+.tour-sparks { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 171; pointer-events: none; }
+
+/* ─── Sortie ──────────────────────────────────────────────────────────── */
+
+.tour.is-leaving .tour-veil,
+.tour.is-leaving .tour-spot,
+.tour.is-leaving .tour-bubble { opacity: 0; transition: opacity var(--dur-2) var(--ease-in-out); }
+
+/* ─── Points d'entrée dans l'application ──────────────────────────────── */
+
+.search-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; margin-top: 8px; }
+.search-meta .search-sub { margin: 0; }
+.search-meta .spacer { flex: 1 1 auto; }
+
+/* ─── Moins de mouvement ──────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot::after { animation: none; opacity: .8; }
+  .tour-bubble.is-in, .tour-bubble.is-nudge { animation: none; }
+  .tour-flash { animation-duration: .6s; }
+}
