@@ -792,3 +792,24 @@ html[data-ob-dir="back"]::view-transition-new(ob-stage) { animation-name: ob-in-
   .ob-welcome-check { animation: none; }
   .ob-welcome-check .ob-check path { animation: none; stroke-dashoffset: 0; }
 }
+
+/* ─── Comptes de l'appareil (connexion) ─────────────────────────────────── */
+.ob-accounts { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
+.ob-account {
+  display: inline-flex; align-items: center; gap: 10px; min-height: 48px; max-width: 100%;
+  padding: 6px 14px 6px 6px; border-radius: var(--r-pill);
+  border: 1px solid var(--line-strong); background: color-mix(in oklab, var(--fg) 4%, transparent);
+  color: var(--fg); font: inherit; text-align: left; cursor: pointer;
+  transition: border-color var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out);
+}
+.ob-account:hover { border-color: color-mix(in oklab, var(--volt) 55%, transparent); transform: translateY(-1px); }
+.ob-account.is-on { border-color: var(--volt); background: color-mix(in oklab, var(--volt) 10%, transparent); }
+.ob-account-av {
+  display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%;
+  background: var(--ink-3); color: var(--volt); font: 700 .95rem/1 var(--font-display);
+}
+.ob-account.is-on .ob-account-av { background: var(--volt); color: var(--ink-0); }
+.ob-account-txt { display: grid; min-width: 0; line-height: 1.25; }
+.ob-account-txt strong { font-size: .875rem; font-weight: 600; }
+.ob-account-txt span { font-size: .75rem; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .ob-account:hover { transform: none; } }
