@@ -223,3 +223,30 @@ export function beamTexture() {
   ctx.fillStyle = h; ctx.fillRect(0, 0, 128, 256);
   return tex(c, { aniso: 1 });
 }
+
+// Jour derrière la fenêtre : ciel clair, nuages doux, façades ensoleillées.
+export function dayTexture() {
+  const [c, ctx] = canvas(1024, 768);
+  const r = rng(35);
+  const g = ctx.createLinearGradient(0, 0, 0, 768);
+  g.addColorStop(0, "#6f9fdc"); g.addColorStop(0.6, "#b8d3ef"); g.addColorStop(1, "#e9eef2");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 1024, 768);
+  for (let i = 0; i < 18; i++) {
+    const x = r() * 1024, y = 60 + r() * 260, w = 120 + r() * 220;
+    const cg = ctx.createRadialGradient(x, y, 0, x, y, w / 2);
+    cg.addColorStop(0, "rgba(255,255,255,0.75)"); cg.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = cg; ctx.save(); ctx.translate(x, y); ctx.scale(1, 0.35); ctx.translate(-x, -y);
+    ctx.fillRect(x - w / 2, y - w / 2, w, w); ctx.restore();
+  }
+  let x = 0;
+  while (x < 1024) {
+    const w = 60 + r() * 120, h = 120 + r() * 260, top = 768 - h;
+    ctx.fillStyle = `hsl(${28 + r() * 16} ${18 + r() * 14}% ${68 + r() * 14}%)`;
+    ctx.fillRect(x, top, w, h);
+    ctx.fillStyle = "rgba(60,70,90,0.22)";
+    for (let wy = top + 14; wy < 760; wy += 22) for (let wx = x + 10; wx < x + w - 12; wx += 18) ctx.fillRect(wx, wy, 8, 11);
+    ctx.fillStyle = "rgba(0,0,0,0.08)"; ctx.fillRect(x + w * 0.7, top, w * 0.3, h);
+    x += w + r() * 8;
+  }
+  return tex(c, { aniso: 4 });
+}

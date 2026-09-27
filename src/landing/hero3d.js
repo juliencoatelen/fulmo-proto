@@ -3,7 +3,7 @@
 import {
   WebGLRenderer, Scene, PerspectiveCamera, Color, FogExp2, PMREMGenerator,
   ACESFilmicToneMapping, PCFShadowMap, SRGBColorSpace, Vector2, Vector3,
-  Mesh, PlaneGeometry, ShaderMaterial, AdditiveBlending, DoubleSide
+  Mesh, PlaneGeometry, ShaderMaterial, AdditiveBlending, NormalBlending, DoubleSide
 } from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
@@ -27,7 +27,7 @@ const TL = {
   focus: [3.0, 7.0], open: [7.0, 7.9], pin: 7.3, close: [11.1, 11.8]
 };
 
-export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }) {
+export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower, sequence }) {
   const renderer = new WebGLRenderer({ canvas, antialias: false, powerPreference: "high-performance", alpha: false, stencil: false });
   const maxDPR = coarse ? 1.5 : 2;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDPR));
@@ -93,7 +93,9 @@ export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }
     frame.fov = lerp(62, 42, k);
     camera.fov = frame.fov;
     // portrait : la scène vit dans la moitié haute, le texte en bas
-    frame.shiftY = lerp(0.2, 0.0, k);
+    // scène plein écran : on la remonte pour laisser le bas au texte ;
+    // scène en bandeau (mobile) : on la centre
+    frame.shiftY = h >= innerHeight * 0.8 ? lerp(0.2, 0.0, k) : -0.05;
     // paysage : la pièce glisse à droite, le texte garde la gauche
     frame.shiftX = aspect > 1.2 ? -lerp(0, 0.1, clamp01((aspect - 1.2) / 0.5)) : 0;
     if (frame.shiftY > 0.001 || frame.shiftX < -0.001) camera.setViewOffset(w, h, w * frame.shiftX, h * frame.shiftY, w, h);
@@ -112,18 +114,24 @@ export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }
   function setScroll(v) { scroll = clamp01(v); if (!running) renderOnce(); }
 
   /* ─── Objets cherchés ──────────────────────────────────────────────── */
-  const order = ["passeport", "guirlande", "chargeur"];
-  let cycle = 0;
+  // Démo automatique : une liste de contenants à ouvrir tour à tour.
+  // Recherche du visiteur : find(id) rejoue le balayage, en accéléré, vers ce contenant.
+  const ids = Object.keys(world.targets);
+  const auto = (sequence && sequence.length ? sequence : ["commode-haut", "bac-1", "boite-cables"]).filter((id) => world.targets[id]);
+  for (const id of ids) { world.targets[id].o = 0; world.targets[id].p = 0; }
   const proj = new Vector3();
+  const mode = { user: false, t0: 0, target: null, autoBase: 0, token: 0 };
 
-  function applyTarget(key, openT, pulse, alive) {
-    for (const k of order) {
-      const tg = world.targets[k];
-      const on = k === key;
-      const o = on ? openT : 0;
-      tg.group.position.copy(tg.open).multiplyScalar(easeOut(o));
-      tg.mat.emissiveIntensity = on ? pulse : 0;
-      if (tg.bulbs) world.bulbMat.color.setRGB(1, 0.8, 0.55).multiplyScalar(on && alive ? 1.2 + pulse * 1.4 : 0.35);
+  function applyTargets(active, openT, pulse, dt) {
+    const k = dt > 0 ? Math.min(1, dt * 7) : 1;
+    for (const id of ids) {
+      const tg = world.targets[id];
+      const on = id === active;
+      tg.o += ((on ? openT : 0) - tg.o) * k;
+      tg.p += ((on ? pulse : 0) - tg.p) * k;
+      tg.group.position.copy(tg.open).multiplyScalar(easeOut(clamp01(tg.o)));
+      tg.mat.emissiveIntensity = tg.p;
+      if (tg.bulbs) world.bulbMat.color.setRGB(1, 0.8, 0.55).multiplyScalar(0.35 + clamp01(tg.o) * (0.9 + tg.p * 4));
     }
   }
 
@@ -137,13 +145,22 @@ export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }
   let running = false, raf = 0, elapsed = 0, lastPhase = "";
   const xMin = world.bounds.xMin - 0.4, xMax = world.bounds.xMax + 0.4;
   const orbit = { t: 0 };
+  let lampBase = world.lamps[0].intensity;
+
+  function timeline() {
+    if (mode.user) {
+      // accéléré, puis on garde l'objet trouvé ouvert tant que le visiteur regarde
+      const t = Math.min(TL.sweepA[0] + (elapsed - mode.t0) * 2.6, TL.close[0] - 0.01);
+      return { t, target: mode.target, index: -1 };
+    }
+    const local = Math.max(0, elapsed - mode.autoBase);
+    const index = Math.floor(local / LOOP);
+    return { t: local % LOOP, target: auto[index % auto.length], index };
+  }
 
   function update(dt) {
-    const t = elapsed % LOOP;
-    const loopIndex = Math.floor(elapsed / LOOP);
-    if (loopIndex !== cycle) cycle = loopIndex;
-    const key = order[cycle % order.length];
-    const tg = world.targets[key];
+    const { t, target, index } = timeline();
+    const tg = world.targets[target];
 
     // Fronts du balayage
     let a = lerp(xMin, xMax, easeInOut(seg(t, ...TL.sweepA)));
@@ -164,7 +181,7 @@ export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }
 
     // Point focal dans le nuage
     scanUniforms.uFocus.value.copy(tg.focus);
-    scanUniforms.uFocusAmt.value = Math.sin(Math.PI * seg(t, ...TL.focus)) * 1.0;
+    scanUniforms.uFocusAmt.value = Math.sin(Math.PI * seg(t, ...TL.focus));
 
     // Lasers
     const showA = a > xMin && a < xMax, showB = b > xMin && b < xMax;
@@ -173,10 +190,10 @@ export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }
     laserB.material.uniforms.uOpacity.value = showB ? 0.7 : 0;
     laserA.visible = showA; laserB.visible = showB;
 
-    // Tiroir / bac / boîte qui s'ouvre, pulsation volt, épingle
+    // Contenant qui s'ouvre, pulsation volt, épingle
     const openT = seg(t, ...TL.open) * (1 - seg(t, ...TL.close));
     const pulse = openT > 0 ? (0.04 + 0.2 * (0.5 + 0.5 * Math.sin((t - TL.open[0]) * 4.2))) * openT : 0;
-    applyTarget(key, openT, pulse, true);
+    applyTargets(target, openT, pulse, dt);
     const pinOn = t > TL.pin && t < TL.close[0] && s < 0.35;
 
     // Caméra : parallaxe souris (desktop) ou orbite douce (tactile)
@@ -195,22 +212,22 @@ export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }
       world.pointer.position.set(frame.target.x + pointer.sx * 3.6, 1.25 - pointer.sy * 1.1, -0.9);
     }
     // Lampes : légère respiration du filament
-    world.lamps[0].intensity = 5.5 + Math.sin(elapsed * 1.7) * 0.08;
+    world.lamps[0].intensity = lampBase * (1 + Math.sin(elapsed * 1.7) * 0.015);
 
     scanUniforms.uTime.value = elapsed;
 
     // Épingle HTML ancrée en 3D
     camera.updateMatrixWorld();
     const pp = project(tg.anchor);
-    onPin && onPin({ key, visible: pinOn && pp.visible, x: pp.x, y: pp.y });
+    onPin && onPin({ target, user: mode.user, token: mode.token, visible: pinOn && pp.visible, x: pp.x, y: pp.y });
 
-    let phase = "idle";
+    let phase;
     if (t < TL.sweepA[0]) phase = "type";
-    else if (t < TL.sweepB[1]) phase = "scan";
+    else if (t < TL.open[0]) phase = "scan";
     else if (t < TL.close[0]) phase = "found";
     else phase = "reset";
-    const ph = phase + ":" + key;
-    if (ph !== lastPhase) { lastPhase = ph; onPhase && onPhase({ phase, key, t }); }
+    const ph = `${phase}:${target}:${index}:${mode.token}`;
+    if (ph !== lastPhase) { lastPhase = ph; onPhase && onPhase({ phase, target, index, user: mode.user, token: mode.token }); }
   }
 
   function renderOnce() { composer.render(); }
@@ -230,25 +247,58 @@ export function createHero({ canvas, onPin, onPhase, reduced, coarse, lowPower }
   }
   function stop() { running = false; cancelAnimationFrame(raf); }
 
-  // Scène composée et immobile : tiroir ouvert, épingle posée
-  function still(key = "passeport") {
+  // Recherche du visiteur : balayage accéléré vers ce contenant
+  function find(id) {
+    if (!world.targets[id]) return false;
+    mode.user = true; mode.target = id; mode.t0 = elapsed; mode.token++;
+    if (reduced || !running) still(id);
+    return true;
+  }
+  // Retour à la démo automatique (au début d'un cycle)
+  function resume() {
+    if (!mode.user) return;
+    mode.user = false; mode.autoBase = elapsed; mode.token++;
+  }
+
+  // Scène composée et immobile : contenant ouvert, épingle posée
+  function still(id = auto[0]) {
     scanUniforms.uA.value = scanUniforms.uB.value = xMin - 1;
     scanUniforms.uFocusAmt.value = 0;
     laserA.visible = laserB.visible = false;
-    applyTarget(key, 1, 0.16, true);
+    applyTargets(id, 1, 0.16, 0);
     camera.position.copy(frame.pos); camera.lookAt(frame.target);
     camera.updateMatrixWorld();
     composer.render();
-    const pp = project(world.targets[key].anchor);
-    onPin && onPin({ key, visible: pp.visible, x: pp.x, y: pp.y });
+    const pp = project(world.targets[id].anchor);
+    onPin && onPin({ target: id, user: mode.user, token: mode.token, visible: pp.visible, x: pp.x, y: pp.y });
   }
 
-  // Positionne la boucle à un instant précis (captures, réduction de mouvement)
-  function seek(sec) { elapsed = sec; update(0.016); composer.render(); }
+  // Jour / nuit : même pièce, autre lumière
+  let day = false;
+  function setDay(v) {
+    day = !!v;
+    world.setMood(day ? "day" : "night");
+    lampBase = world.lamps[0].intensity;
+    const bg = day ? "#e9e4da" : "#07070a";
+    scene.background.set(bg); scene.fog.color.set(bg);
+    scene.fog.density = day ? 0.006 : 0.035;
+    scene.environmentIntensity = day ? 0.55 : 0.16;
+    renderer.toneMappingExposure = day ? 1.0 : 0.92;
+    bloom.strength = day ? 0.14 : 0.5;
+    bloom.threshold = day ? 1.6 : 0.95;
+    const pm = points.material;
+    pm.uniforms.uDay.value = day ? 1 : 0;
+    pm.blending = day ? NormalBlending : AdditiveBlending;
+    pm.needsUpdate = true;
+    if (!running) composer.render();
+  }
+
+  // Positionne la boucle à un instant précis (captures)
+  function seek(sec) { elapsed = mode.user ? mode.t0 + sec : mode.autoBase + sec; update(0.016); composer.render(); }
 
   resize();
   // Compile les shaders avant le premier fondu pour éviter un accroc
   renderer.compile(scene, camera);
 
-  return { start, stop, resize, setPointer, setGyro, setScroll, still, seek, renderer, get running() { return running; } };
+  return { start, stop, resize, setPointer, setGyro, setScroll, still, seek, find, resume, setDay, renderer, get running() { return running; }, get day() { return day; } };
 }

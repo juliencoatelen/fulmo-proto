@@ -27,6 +27,7 @@
   function blank() {
     return {
       account: null,
+      session: false,   // connecté ou non ; se déconnecter garde le compte et le logement
       plan: "free",
       planSeen: false,
       household: null,
@@ -54,6 +55,9 @@
       // Un réglage « système » enregistré par une version précédente : le
       // produit n'a plus que deux thèmes, et le blanc est celui par défaut.
       if (base.theme !== "dark") base.theme = "light";
+      // Avant la déconnexion, un compte enregistré voulait dire « connecté » :
+      // on ne renvoie pas ces visiteurs vers l'écran de connexion.
+      if (parsed.session === undefined) base.session = !!base.account;
       return base;
     } catch (e) {
       // Navigation privée, stockage bloqué, données corrompues : on repart
@@ -2013,7 +2017,8 @@
 
         if (opts.labels !== false) {
           var at = obPt(cx + 0.5, cy + 0.56, z0).split(",");
-          var text = obSvg("text", { class: "ob-m-label", x: at[0], y: at[1], "text-anchor": "middle", "data-label": room.id });
+          // Le cadrage grossit une petite grille : l'étiquette suit, à taille lue constante.
+          var text = obSvg("text", { class: "ob-m-label", x: at[0], y: at[1], "text-anchor": "middle", "data-label": room.id, style: "font-size:" + (2.6 + G) + "px" });
           text.textContent = obShort(room.label);
           labels.push(text);
         }
@@ -2292,7 +2297,12 @@
       ctaLabel.textContent = "Création du compte…";
       obBurstFrom(cta, null, { count: 22, power: 5, up: true });
       var account = { name: signup.fullName.trim(), email: signup.email.trim().toLowerCase() };
-      setTimeout(function () { enter(account, false); }, obCalm() ? 150 : 700);
+      var started = Date.now();
+      // Seule l'empreinte salée du mot de passe est gardée, jamais le texte.
+      obSeal(signup.password).then(function (secret) {
+        account.secret = secret;
+        setTimeout(function () { enter(account, false); }, Math.max(0, (obCalm() ? 150 : 700) - (Date.now() - started)));
+      });
     }
 
     /* Google et Apple : présents parce que c'est ainsi que la vraie
@@ -2329,13 +2339,30 @@
     });
     signName = side.querySelector(".ob-sign-name");
 
-    var head = el("header", { class: "ob-head" }, [logo(22)]);
+    var head = el("header", { class: "ob-head" }, [
+      logo(22),
+      el("p", { class: "ob-head-link" }, [
+        el("span", { class: "ob-head-q", text: "Déjà un compte ? " }),
+        el("button", { class: "ob-linkbtn", type: "button", onclick: function () { obGoAuth("login"); } }, "Se connecter")
+      ])
+    ]);
+
+    /* Un seul compte par appareil dans ce prototype : en créer un nouveau
+       remplace l'ancien et son logement. On le dit avant, pas après. */
+    var existing = state.account ? el("div", { class: "ob-panel" }, [
+      el("p", { class: "ob-panel-title", text: "Un compte existe déjà sur cet appareil." }),
+      el("p", { text: state.account.email + (state.household ? " · " + state.household.name : "") + ". En créer un nouveau remplacera ce compte et son logement." }),
+      el("div", { class: "ob-panel-actions" }, [
+        el("button", { class: "ob-line-btn", type: "button", onclick: function () { obGoAuth("login"); } }, [icon("arrow-right", 15), "Me connecter à ce compte"])
+      ])
+    ]) : null;
 
     var stage = [
       el("h1", { class: "ob-title ob-title--hero", id: "ob-step-title", tabindex: "-1" }, [
         "Retrouvez tout en un ", el("em", { class: "ob-serif", text: "éclair" }), "."
       ]),
       el("p", { class: "ob-lede", text: "Créez votre compte gratuit. Deux minutes pour décrire votre logement, puis chaque objet se retrouve en deux secondes." }),
+      existing,
       form,
       el("div", { class: "ob-or", role: "separator" }, [el("span", { text: "ou" })]),
       el("div", { class: "ob-social" }, [social("Google", OB_GOOGLE), social("Apple", OB_APPLE)]),
@@ -2366,7 +2393,14 @@
   /* Ouvre la session du prototype. `seeded` saute la configuration du logement
      et charge l'exemple, pour atterrir directement dans l'application. */
   function enter(account, seeded) {
-    state.account = { name: account.name, email: account.email, createdAt: Date.now() };
+    // Un nouveau compte part d'un état propre : il ne doit pas hériter du
+    // logement d'un compte précédent sur cet appareil. Seul le thème reste.
+    var theme = state.theme;
+    state = blank();
+    state.theme = theme;
+    state.account = { name: account.name, email: account.email, createdAt: Date.now(), secret: account.secret || null };
+    state.session = true;
+    obAuthView = null;
     signup = obBlankSignup();
     wiz = null;
     screenOnboarding.last = 0;
@@ -2384,23 +2418,321 @@
       return;
     }
 
-    // Le choix de formule est la première étape du parcours, pas une modale.
+    // D'abord le « compte créé », puis le choix de formule — une étape du
+    // parcours, pas une modale.
     state.screen = "onboarding";
+    obWelcome = { name: obFirstName(account.name) };
     save();
     obTransition(function () {}, "fwd");
+  }
+
+  /* ═══ Connexion, déconnexion, compte créé ═══════════════════════════ */
+
+  var obAuthView = null;   // "signup" | "login" : écran d'accès demandé
+  var obWelcome = null;    // { name } : à saluer juste après l'inscription
+  var obWelcomeToken = null;
+  var obLogin = { email: "", password: "" };
+
+  /* Sans session : l'écran demandé, sinon la connexion si un compte existe
+     sur cet appareil, l'inscription sinon. */
+  function obAuthScreen() {
+    var view = obAuthView || (state.account ? "login" : "signup");
+    return view === "login" ? screenLogin() : screenSignup();
+  }
+
+  function obGoAuth(view) {
+    obAuthView = view;
+    obTransition(function () {}, view === "login" ? "back" : "fwd");
+  }
+
+  /* Le mot de passe ne s'écrit jamais en clair dans le stockage : on garde un
+     sel aléatoire et l'empreinte SHA-256 de « sel:mot de passe ». Précaution
+     de prototype — la vraie application délègue à Supabase Auth. Sans
+     crypto.subtle (file://, contexte non sécurisé), rien n'est enregistré et
+     la connexion ne vérifie que l'email. */
+  function obCanHash() {
+    return !!(window.crypto && window.crypto.subtle && window.crypto.getRandomValues && window.TextEncoder);
+  }
+  function obHex(buffer) {
+    return Array.prototype.map.call(new Uint8Array(buffer), function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+  }
+  function obDigest(password, salt) {
+    return window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ":" + password)).then(obHex);
+  }
+  function obSeal(password) {
+    if (!obCanHash()) return Promise.resolve(null);
+    try {
+      var bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      var salt = obHex(bytes.buffer);
+      return obDigest(password, salt).then(function (hash) { return { algo: "sha256", salt: salt, hash: hash }; }, function () { return null; });
+    } catch (e) { return Promise.resolve(null); }
+  }
+  /* → Promise<booléen>. Un compte sans empreinte (créé avant cette version, ou
+     par un bouton de démonstration) est accepté : l'appelant la pose alors. */
+  function obVerify(secret, password) {
+    if (!secret || !secret.hash || !obCanHash()) return Promise.resolve(true);
+    return obDigest(password, secret.salt).then(function (hash) { return hash === secret.hash; }, function () { return false; });
+  }
+
+  /* Le logement enregistré, sous la forme qu'attend la maquette. */
+  function obHouseRooms() {
+    return state.locations.filter(function (l) { return !l.parentId; }).slice(0, 16).map(function (l) {
+      var ic = String(l.icon || "");
+      return {
+        id: "h-" + l.id, key: ic.indexOf("r-") === 0 ? ic.slice(2) : null, label: l.name, icon: l.icon, kind: l.kind,
+        furniture: state.locations.filter(function (c) { return c.parentId === l.id; }).map(function (c) { return c.name; })
+      };
+    });
+  }
+
+  function obLogout() {
+    state.session = false;
+    save();
+    obAuthView = "login";
+    obLogin = { email: "", password: "" };
+    closeSheet();
+    obTransition(function () {}, "back");
+    toast("Vous êtes déconnecté. Votre logement reste sur cet appareil.");
+  }
+
+  function screenLogin() {
+    obKeys = null;
+    var acct = state.account;
+    var home = acct && state.household ? state.household : null;
+    var fields = {};
+    var busy = false;
+    if (!obLogin.email && acct) obLogin.email = acct.email;
+
+    var panel = el("div", { class: "ob-login-panel", "aria-live": "polite" });
+
+    function setErr(key, message) {
+      var f = fields[key];
+      f.wrap.classList.toggle("is-err", !!message);
+      if (message) f.input.setAttribute("aria-invalid", "true");
+      else f.input.removeAttribute("aria-invalid");
+      f.msg.replaceChildren();
+      if (message) f.msg.appendChild(el("span", { class: "ob-msg-err" }, [icon("warn", 13), el("span", { text: message })]));
+    }
+
+    function shake(key) {
+      var w = fields[key].wrap;
+      w.classList.remove("ob-shake");
+      void w.offsetWidth;
+      w.classList.add("ob-shake");
+    }
+
+    function field(key, label, type, autocomplete, extras) {
+      var id = "ob-l-" + key;
+      var input = el("input", {
+        class: "ob-input", id: id, name: key, type: type, placeholder: " ",
+        autocomplete: autocomplete, value: obLogin[key], required: true,
+        maxlength: 254, autocapitalize: "none", spellcheck: "false",
+        inputmode: key === "email" ? "email" : null,
+        "aria-describedby": id + "-msg",
+        oninput: function (event) {
+          obLogin[key] = event.target.value;
+          if (fields[key].wrap.classList.contains("is-err")) setErr(key, null);
+        }
+      });
+      var msg = el("div", { class: "ob-msg", id: id + "-msg", "aria-live": "polite" });
+      var wrap = el("div", { class: "ob-field ob-field--" + key }, [input, el("label", { class: "ob-flabel", for: id, text: label })].concat(extras || []).concat([msg]));
+      fields[key] = { input: input, msg: msg, wrap: wrap };
+      return wrap;
+    }
+
+    var eye = el("button", {
+      class: "ob-eye", type: "button", "aria-pressed": "false", "aria-controls": "ob-l-password",
+      "aria-label": "Afficher le mot de passe",
+      onclick: function () {
+        var input = fields.password.input;
+        var start = input.selectionStart, end = input.selectionEnd;
+        var show = input.type === "password";
+        input.type = show ? "text" : "password";
+        eye.setAttribute("aria-pressed", show ? "true" : "false");
+        eye.setAttribute("aria-label", show ? "Masquer le mot de passe" : "Afficher le mot de passe");
+        eye.replaceChildren(icon(show ? "eye-off" : "eye", 19));
+        input.focus();
+        try { input.setSelectionRange(start, end); } catch (e) {}
+      }
+    }, [icon("eye", 19)]);
+
+    function toSignup(email) {
+      if (email) signup.email = email;
+      obGoAuth("signup");
+    }
+
+    function demoButton() {
+      // Jamais proposé s'il y a déjà un logement ici : la démo le remplacerait.
+      return state.household ? null : el("button", {
+        class: "ob-line-btn", type: "button",
+        onclick: function () { enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true); }
+      }, [icon("bolt", 15), "Essayer la démo"]);
+    }
+
+    function showNoAccount(email) {
+      panel.replaceChildren(el("div", { class: "ob-panel", role: "alert" }, [
+        el("p", { class: "ob-panel-title", text: "Aucun compte avec cette adresse sur cet appareil." }),
+        el("p", { text: "Dans ce prototype, un compte vit dans le navigateur où il a été créé. Vérifiez l'adresse, ou créez votre compte ici." }),
+        el("div", { class: "ob-panel-actions" }, [
+          el("button", { class: "ob-line-btn ob-line-btn--volt", type: "button", onclick: function () { toSignup(email); } }, [icon("plus", 15), "Créer un compte"]),
+          demoButton()
+        ])
+      ]));
+      obAnnounce("Aucun compte avec cette adresse sur cet appareil.");
+    }
+
+    function showForgot() {
+      panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
+        el("p", { class: "ob-panel-title", text: "Pas de réinitialisation dans ce prototype." }),
+        el("p", { text: "Sans serveur, aucun email ne peut partir. Votre compte et votre logement restent dans ce navigateur ; si le mot de passe est perdu, un nouveau compte remplacera celui-ci sur cet appareil." }),
+        el("div", { class: "ob-panel-actions" }, [
+          el("button", { class: "ob-line-btn", type: "button", onclick: function () { toSignup(null); } }, [icon("plus", 15), "Créer un nouveau compte"])
+        ])
+      ]));
+    }
+
+    var cta = obCta("Se connecter", { type: "submit" });
+    var ctaLabel = cta.querySelector(".ob-cta-label");
+    function setBusy(on) {
+      busy = on;
+      cta.classList.toggle("is-busy", on);
+      if (on) cta.setAttribute("aria-busy", "true"); else cta.removeAttribute("aria-busy");
+      ctaLabel.textContent = on ? "Connexion…" : "Se connecter";
+    }
+
+    function submit(event) {
+      event.preventDefault();
+      if (busy) return;
+      panel.replaceChildren();
+      var mail = obLogin.email.trim().toLowerCase();
+      var bad = null;
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) {
+        setErr("email", mail ? "Cette adresse email n'est pas valide : vérifiez le @ et le domaine." : "Indiquez votre adresse email.");
+        bad = "email";
+      } else setErr("email", null);
+      if (!obLogin.password) { setErr("password", "Indiquez votre mot de passe."); bad = bad || "password"; }
+      else setErr("password", null);
+      if (bad) { fields[bad].input.focus(); shake(bad); return; }
+
+      if (!acct || String(acct.email).toLowerCase() !== mail) { showNoAccount(mail); return; }
+
+      setBusy(true);
+      var started = Date.now();
+      obVerify(acct.secret, obLogin.password).then(function (ok) {
+        setTimeout(function () {
+          if (!ok) {
+            setBusy(false);
+            setErr("password", "Mot de passe incorrect. Vérifiez les majuscules, ou voyez « Mot de passe oublié ? ».");
+            fields.password.input.focus();
+            fields.password.input.select();
+            shake("password");
+            obAnnounce("Mot de passe incorrect.");
+            return;
+          }
+          // Compte ancien sans empreinte : on la pose maintenant.
+          var sealed = acct.secret || !obCanHash() ? Promise.resolve(acct.secret || null) : obSeal(obLogin.password);
+          sealed.then(function (secret) {
+            state.account.secret = secret;
+            state.session = true;
+            obAuthView = null;
+            obLogin = { email: "", password: "" };
+            save();
+            obTransition(function () {}, "fwd");
+            toast(state.household ? "Bon retour, " + (obFirstName(acct.name) || "bienvenue") + "." : "Connecté. Reprenons la configuration de votre logement.");
+          });
+        }, Math.max(0, (obCalm() ? 100 : 450) - (Date.now() - started)));
+      });
+    }
+
+    var form = el("form", { class: "ob-form", onsubmit: submit, novalidate: true, "aria-label": "Connexion" }, [
+      field("email", "Adresse email", "email", "username"),
+      field("password", "Mot de passe", "password", "current-password", [eye]),
+      el("div", { class: "ob-login-row" }, [
+        el("button", { class: "ob-linkbtn", type: "button", onclick: showForgot }, "Mot de passe oublié ?")
+      ]),
+      cta
+    ]);
+
+    var side = home
+      ? obSidePanel({ name: home.name, type: home.type, floors: home.floors || 1, rooms: obHouseRooms() }, { hideMobile: true, caption: "Votre logement vous attend, tel que vous l'avez laissé." })
+      : obSidePanel({ name: "Chez vous", type: "apartment", floors: 1, rooms: OB_TEASER }, { hideMobile: true, caption: "Aperçu. Votre logement vous attendra ici, pièce par pièce." });
+
+    var head = el("header", { class: "ob-head" }, [
+      logo(22),
+      el("p", { class: "ob-head-link" }, [
+        el("span", { class: "ob-head-q", text: "Pas encore de compte ? " }),
+        el("button", { class: "ob-linkbtn", type: "button", onclick: function () { toSignup(null); } }, "Créer un compte")
+      ])
+    ]);
+
+    var stage = [
+      el("h1", { class: "ob-title ob-title--hero", id: "ob-step-title", tabindex: "-1" }, [
+        "Content de vous ", el("em", { class: "ob-serif", text: "revoir" }), "."
+      ]),
+      el("p", { class: "ob-lede", text: home ? "Connectez-vous pour retrouver " + home.name + "." : "Connectez-vous pour retrouver votre logement et tout ce qu'il contient." }),
+      form,
+      panel,
+      el("p", { class: "ob-fine", text: "Prototype : votre compte vit dans ce navigateur. Le mot de passe n'y est jamais stocké en clair, seulement son empreinte." }),
+      el("p", { class: "ob-switch" }, [
+        "Pas encore de compte ? ",
+        el("button", { class: "ob-linkbtn", type: "button", onclick: function () { toSignup(null); } }, "Créer un compte")
+      ])
+    ];
+
+    var screen = obShell("login", head, stage, side);
+    if (obFine()) setTimeout(function () {
+      var target = obLogin.email ? fields.password.input : fields.email.input;
+      if (target && target.isConnected && !document.activeElement.matches("input")) target.focus({ preventScroll: true });
+    }, 30);
+    return screen;
+  }
+
+  /* « Compte créé » : une seconde et demie pour marquer le passage, sans
+     prétendre qu'un email de validation est parti. Passable d'un clic. */
+  function obWelcomeScreen() {
+    var name = obWelcome && obWelcome.name;
+    var token = {};
+    obWelcomeToken = token;
+    function next() {
+      if (obWelcomeToken !== token) return;
+      obWelcomeToken = null;
+      obWelcome = null;
+      obTransition(function () {}, "fwd");
+    }
+    obKeys = { back: null, primary: next };
+    var check = el("div", { class: "ob-welcome-check", "aria-hidden": "true" }, [obCheck(44)]);
+    var stage = [
+      check,
+      el("h1", { class: "ob-title ob-welcome-title", id: "ob-step-title", tabindex: "-1" }, [
+        el("span", { text: "Compte créé," }),
+        el("span", { class: "ob-welcome-name", text: name ? "bienvenue " + name + "." : "bienvenue." })
+      ]),
+      el("p", { class: "ob-lede", text: "Votre compte est enregistré sur cet appareil. Place à votre formule, puis à votre logement." }),
+      el("div", { class: "ob-actions" }, [obCta("Choisir ma formule", { onclick: next })])
+    ];
+    setTimeout(function () {
+      var r = check.getBoundingClientRect();
+      if (r.width) obSpark(r.left + r.width / 2, r.top + r.height / 2, { count: 28, power: 6 });
+    }, 380);
+    setTimeout(next, obCalm() ? 2600 : 1800);
+    return obShell("welcome", el("header", { class: "ob-head" }, [logo(22)]), stage, null);
   }
 
   /* ═══ Choix de formule ══════════════════════════════════════════════ */
 
   var FREE_FEATURES = [
     "Objets illimités", "Pièces, zones et meubles illimités",
-    "Recherche tolérante aux fautes", "Mots-clés et métadonnées",
-    "Foyer partagé jusqu'à 5 membres", "Export de vos données"
+    "Recherche instantanée tolérante aux fautes", "Mots-clés et métadonnées",
+    "Photo par objet", "Foyer partagé jusqu'à 5 membres",
+    "Installation sur l'écran d'accueil", "Export de vos données à tout moment"
   ];
   var PAID_FEATURES = [
     "Tout le plan Libre, sans limite", "Scan Éclair : référencement par la caméra",
-    "Plan interactif du logement", "Recherche en langage naturel",
-    "Alertes péremption, garantie et prêts", "Membres du foyer illimités"
+    "Plan 2D/3D interactif du logement", "Recherche en langage naturel",
+    "Alertes péremption, garantie et prêts", "Accès délégué proche aidant",
+    "Historique et journal des déplacements", "Membres du foyer illimités",
+    "Export PDF assurance et sinistre", "Support prioritaire"
   ];
   var OB_PLANS = [
     { id: "free", name: "Libre", price: "0 €", suffix: "pour toujours", pitch: "Tout ce qu'il faut pour ne plus jamais chercher.", features: FREE_FEATURES },
@@ -2560,6 +2892,7 @@
   }
 
   function screenOnboarding() {
+    if (obWelcome) return obWelcomeScreen();
     if (!wiz) {
       var first = obFirstName(state.account ? state.account.name : "");
       wiz = {
@@ -3188,13 +3521,20 @@
   /* ─── Ancres d'entrée ─────────────────────────────────────────────────
      app.html#demo : directement dans le logement d'exemple — sauf si un
      logement existe déjà ici, qu'on n'écrase jamais.
-     app.html#signup : l'inscription, ou l'application si un compte existe
-     déjà (c'est le comportement par défaut du rendu). */
+     app.html#signup / #login : l'écran demandé, tant qu'aucune session
+     n'est ouverte ; connecté, on reste dans l'application. */
   function obRoute() {
     var hash = String(location.hash || "").toLowerCase();
-    if (hash !== "#demo" && hash !== "#signup") return;
+    if (hash !== "#demo" && hash !== "#signup" && hash !== "#login") return;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
-    if (hash === "#demo" && !state.household) enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true);
+    if (hash === "#demo") {
+      if (!state.household) enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true);
+      // Un logement existe ici mais personne n'est connecté : on ne l'ouvre
+      // pas sans mot de passe.
+      else if (!state.session) obAuthView = "login";
+      return;
+    }
+    if (!state.session) obAuthView = hash === "#login" ? "login" : "signup";
   }
   window.addEventListener("hashchange", function () { obRoute(); render(); });
 
@@ -6699,6 +7039,9 @@
               el("b", { text: state.account ? state.account.name : "—" }),
               el("span", { text: state.account ? state.account.email : "" })
             ])
+          ]),
+          el("div", { class: "set-actions" }, [
+            el("button", { class: "btn btn-line", type: "button", onclick: obLogout }, [icon("logout", 15), "Se déconnecter"])
           ])
         ])
       ]),
@@ -7020,7 +7363,7 @@
     dropScene();
 
     var screen;
-    if (!state.account) screen = screenSignup();
+    if (!state.account || !state.session) screen = obAuthScreen();
     else if (!state.household) screen = screenOnboarding();
     else screen = screenApp();
 
@@ -7028,7 +7371,7 @@
   }
 
   applyTheme();
-  obRoute();   // app.html#demo / app.html#signup (section inscription)
+  obRoute();   // app.html#demo / #signup / #login (section inscription)
   render();
 
   /* Ce que l'appareil sait faire en matière de relevé 3D. Résolu une fois,

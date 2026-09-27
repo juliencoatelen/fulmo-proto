@@ -30,6 +30,7 @@ export function buildRoom(scene, { quality = 1 } = {}) {
     rug: T.rugTexture(),
     plaster: T.plasterTexture(),
     night: T.nightTexture(),
+    day: T.dayTexture(),
     art: T.artTexture(),
     beam: T.beamTexture()
   };
@@ -61,15 +62,9 @@ export function buildRoom(scene, { quality = 1 } = {}) {
       emissive: new Color("#ffb46b"), emissiveIntensity: 0.9
     })),
     glass: new MeshPhysicalMaterial({ color: "#9fb6ff", roughness: 0.05, transparent: true, opacity: 0.12, metalness: 0 }),
-    passport: M({ color: "#26315c", roughness: 0.6 }),
-    // matériaux « cibles » : clonés pour pulser seuls
-    drawerTop: null, binTarget: null, boxTarget: null
+    passport: M({ color: "#26315c", roughness: 0.6 })
   };
   patchMaterial(mats.glass);
-  mats.drawerTop = mats.oak.clone(); patchMaterial(mats.drawerTop);
-  mats.binTarget = mats.linen.clone(); patchMaterial(mats.binTarget); mats.binTarget.side = 0;
-  mats.boxTarget = mats.walnut.clone(); patchMaterial(mats.boxTarget);
-  for (const k of ["drawerTop", "binTarget", "boxTarget"]) mats[k].emissive = new Color("#d9ff3d");
 
   function add(geo, mat, pos, { weight = 1, shadow = true, receive = true, rot, parent = room, sample = true } = {}) {
     const m = new Mesh(geo, mat);
@@ -242,27 +237,44 @@ export function buildRoom(scene, { quality = 1 } = {}) {
     B(leaf, mats.leaf, [L1 - 0.14 + Math.cos(a) * 0.06, shelfYs[3] + 0.16 + (i % 2) * 0.03, bz + 0.03 + Math.sin(a) * 0.05], { rot: [0.3 * Math.sin(a), a, 0.5], weight: 1 });
   }
 
-  // Bacs en tissu (étagère du bas). Le bac de gauche garde la guirlande.
-  const binY = shelfYs[0] + 0.015 + 0.14;
-  const binGroup = new Group(); bookcase.add(binGroup);
-  add(rbox(0.38, 0.28, 0.32, 0.03, 3), mats.binTarget, [L0 + 0.2, binY, bz + 0.02], { parent: binGroup, weight: 1.3 });
-  add(new TorusGeometry(0.03, 0.008, 6, 16, Math.PI), mats.felt, [L0 + 0.2, binY + 0.07, bz + 0.18], { parent: binGroup, weight: 0.5 });
-  // guirlande qui dépasse : de petites ampoules sur un fil
-  const bulbMat = new MeshBasicMaterial({ color: new Color("#ffcf8a").multiplyScalar(1.5), toneMapped: false });
-  const bulbs = new Group(); binGroup.add(bulbs);
-  for (let i = 0; i < 9; i++) {
-    const b = new Mesh(new SphereGeometry(0.011, 8, 6), bulbMat);
-    b.position.set(L0 + 0.05 + i * 0.035, binY + 0.14 + Math.sin(i * 1.3) * 0.02, bz + 0.02 + Math.cos(i * 1.7) * 0.07);
-    bulbs.add(b);
-  }
-  add(rbox(0.38, 0.28, 0.32, 0.03, 3), mats.felt, [L1 - 0.2, binY, bz + 0.02], { parent: bookcase, weight: 1.3 });
-  add(rbox(0.38, 0.28, 0.32, 0.03, 3), mats.linen, [R0 + 0.2, binY, bz + 0.02], { parent: bookcase, weight: 1.3 });
-  add(rbox(0.38, 0.28, 0.32, 0.03, 3), mats.felt, [R1 - 0.2, binY, bz + 0.02], { parent: bookcase, weight: 1.3 });
+  // Chaque contenant « cherchable » a son propre matériau (il pulse seul en volt)
+  const targetMat = (m) => { const c = m.clone(); patchMaterial(c); c.emissive = new Color("#d9ff3d"); c.emissiveIntensity = 0; return c; };
+  const targets = {};
 
-  // Boîte à câbles en noyer (étagère du milieu, à droite) : le chargeur
+  // Bacs en tissu (étagère du bas), numérotés de gauche à droite.
+  const binY = shelfYs[0] + 0.015 + 0.14;
+  const binXs = [L0 + 0.2, L1 - 0.2, R0 + 0.2, R1 - 0.2];
+  const binMats = [mats.linen, mats.felt, mats.linen, mats.felt];
+  const bulbMat = new MeshBasicMaterial({ color: new Color("#ffcf8a").multiplyScalar(1.5), toneMapped: false });
+  let bulbs = null;
+  binXs.forEach((x, i) => {
+    const g = new Group(); bookcase.add(g);
+    const m = targetMat(binMats[i]); m.side = 0;
+    add(rbox(0.38, 0.28, 0.32, 0.03, 3), m, [x, binY, bz + 0.02], { parent: g, weight: 1.3 });
+    add(new TorusGeometry(0.03, 0.008, 6, 16, Math.PI), mats.felt, [x, binY + 0.07, bz + 0.18], { parent: g, weight: 0.5 });
+    if (i === 0) { // la guirlande dépasse du bac 1
+      bulbs = new Group(); g.add(bulbs);
+      for (let k = 0; k < 9; k++) {
+        const bl = new Mesh(new SphereGeometry(0.011, 8, 6), bulbMat);
+        bl.position.set(x - 0.15 + k * 0.035, binY + 0.14 + Math.sin(k * 1.3) * 0.02, bz + 0.02 + Math.cos(k * 1.7) * 0.07);
+        bulbs.add(bl);
+      }
+    }
+    targets[`bac-${i + 1}`] = {
+      group: g, mat: m, open: new Vector3(0, 0, 0.24), bulbs: i === 0,
+      anchor: new Vector3(x, binY + 0.2, bz + 0.2), focus: new Vector3(x, binY, bz)
+    };
+  });
+
+  // Boîte à câbles en noyer (étagère du milieu, à droite)
   const boxGroup = new Group(); bookcase.add(boxGroup);
-  add(rbox(0.3, 0.13, 0.22, 0.012, 2), mats.boxTarget, [R0 + 0.17, shelfYs[2] + 0.015 + 0.065, bz + 0.03], { parent: boxGroup, weight: 1.3 });
+  const boxMat = targetMat(mats.walnut);
+  add(rbox(0.3, 0.13, 0.22, 0.012, 2), boxMat, [R0 + 0.17, shelfYs[2] + 0.015 + 0.065, bz + 0.03], { parent: boxGroup, weight: 1.3 });
   add(new TorusGeometry(0.035, 0.006, 6, 24), mats.blackMetal, [R0 + 0.17, shelfYs[2] + 0.14, bz + 0.03], { parent: boxGroup, rot: [Math.PI / 2, 0, 0], weight: 0.6 });
+  targets["boite-cables"] = {
+    group: boxGroup, mat: boxMat, open: new Vector3(0, 0, 0.16),
+    anchor: new Vector3(R0 + 0.17, shelfYs[2] + 0.18, bz + 0.18), focus: new Vector3(R0 + 0.17, shelfYs[2] + 0.08, bz)
+  };
 
   /* ─── Commode à trois tiroirs ───────────────────────────────────────── */
   const cx = 2.85, cw = 1.3, ch = 0.78, cd = 0.48, legH = 0.15, cz = WALL_Z + cd / 2 + 0.02;
@@ -274,24 +286,33 @@ export function buildRoom(scene, { quality = 1 } = {}) {
     C(new CylinderGeometry(0.02, 0.012, legH, 10), mats.walnut, [cx + dx, legH / 2, cz + dz], { rot: [dz > 0 ? 0.08 : -0.08, 0, dx > 0 ? -0.08 : 0.08], weight: 0.3 });
   const drawerH = (ch - 0.08) / 3;
   const front = cz + cd / 2;
-  let topDrawer = null;
+  const drawerIds = ["commode-haut", "commode-milieu", "commode-bas"];
   for (let i = 0; i < 3; i++) {
     const y = legH + 0.04 + drawerH * (2 - i) + drawerH / 2;
     const g = new Group(); commode.add(g);
-    const fm = i === 0 ? mats.drawerTop : mats.oak;
+    const fm = targetMat(mats.oak);
     add(rbox(cw - 0.06, drawerH - 0.02, 0.025, 0.008, 2), fm, [cx, y, front + 0.012], { parent: g, weight: 1.4 });
     for (const dx of [-0.3, 0.3])
       add(new SphereGeometry(0.018, 16, 10), mats.brass, [cx + dx, y, front + 0.035], { parent: g, weight: 0.3 });
-    if (i === 0) {
-      // caisson du tiroir (visible ouvert) + passeport et quelques papiers
-      const inW = cw - 0.14, inD = cd - 0.06, yb = y - drawerH / 2 + 0.03;
-      add(new BoxGeometry(inW, 0.012, inD), mats.oak, [cx, yb, front - inD / 2], { parent: g, weight: 0.4 });
-      add(new BoxGeometry(0.012, drawerH - 0.05, inD), mats.oak, [cx - inW / 2, yb + drawerH / 2 - 0.03, front - inD / 2], { parent: g, weight: 0.4 });
-      add(new BoxGeometry(0.012, drawerH - 0.05, inD), mats.oak, [cx + inW / 2, yb + drawerH / 2 - 0.03, front - inD / 2], { parent: g, weight: 0.4 });
+    // caisson (visible une fois ouvert) et son contenu
+    const inW = cw - 0.14, inD = cd - 0.06, yb = y - drawerH / 2 + 0.03;
+    add(new BoxGeometry(inW, 0.012, inD), mats.oak, [cx, yb, front - inD / 2], { parent: g, weight: 0.3, sample: i === 0 });
+    add(new BoxGeometry(0.012, drawerH - 0.05, inD), mats.oak, [cx - inW / 2, yb + drawerH / 2 - 0.03, front - inD / 2], { parent: g, weight: 0.3, sample: i === 0 });
+    add(new BoxGeometry(0.012, drawerH - 0.05, inD), mats.oak, [cx + inW / 2, yb + drawerH / 2 - 0.03, front - inD / 2], { parent: g, weight: 0.3, sample: i === 0 });
+    if (i === 0) { // papiers : passeport, carte grise
       add(rbox(0.125, 0.012, 0.176, 0.004, 1), mats.passport, [cx - 0.12, yb + 0.012, front - 0.14], { parent: g, rot: [0, 0.22, 0], weight: 1.5 });
       add(rbox(0.21, 0.01, 0.297, 0.002, 1), mats.ceramic, [cx + 0.18, yb + 0.01, front - 0.2], { parent: g, rot: [0, -0.1, 0], weight: 0.6 });
-      topDrawer = { group: g, y };
+    } else if (i === 1) { // pharmacie
+      add(rbox(0.3, 0.1, 0.2, 0.01, 2), mats.ceramic, [cx - 0.2, yb + 0.056, front - 0.16], { parent: g, rot: [0, 0.1, 0], weight: 0, sample: false });
+      add(new CylinderGeometry(0.03, 0.03, 0.12, 16), mats.clay, [cx + 0.15, yb + 0.066, front - 0.12], { parent: g, weight: 0, sample: false });
+    } else { // outillage
+      add(rbox(0.42, 0.12, 0.24, 0.02, 2), M({ color: "#a4542f", roughness: 0.55 }), [cx - 0.1, yb + 0.066, front - 0.16], { parent: g, rot: [0, -0.08, 0], weight: 0, sample: false });
+      add(rbox(0.22, 0.02, 0.05, 0.008, 1), mats.blackMetal, [cx + 0.3, yb + 0.02, front - 0.12], { parent: g, rot: [0, 0.5, 0], weight: 0, sample: false });
     }
+    targets[drawerIds[i]] = {
+      group: g, mat: fm, open: new Vector3(0, 0, 0.3),
+      anchor: new Vector3(cx, y + 0.1, front + 0.1), focus: new Vector3(cx, y, front - 0.1)
+    };
   }
 
   // Lampe de table en céramique + abat-jour
@@ -368,8 +389,29 @@ export function buildRoom(scene, { quality = 1 } = {}) {
   key.shadow.bias = -0.0006; key.shadow.normalBias = 0.02; key.shadow.radius = 6;
   room.add(key, key.target);
 
-  room.add(new HemisphereLight("#3a4a78", "#2a1d14", 0.35));
-  room.add(new AmbientLight("#ffffff", 0.04));
+  const hemi = new HemisphereLight("#3a4a78", "#2a1d14", 0.35);
+  const ambient = new AmbientLight("#ffffff", 0.04);
+  room.add(hemi, ambient);
+
+  // Jour / nuit : la même pièce, deux lumières. Le jour, le soleil entre par la
+  // fenêtre, les lampes s'éteignent presque.
+  const moods = {
+    night: { ceil: "#2b2622", sky: tx.night, sun: ["#9cb6ff", 2.4], key: 9, hemi: ["#3a4a78", "#2a1d14", 0.35], amb: 0.04, lamps: [5.5, 2.2], shade: 0.9, beam: ["#5b7bd6", 0.1] },
+    day: { ceil: "#ddd3c4", sky: tx.day, sun: ["#fff0d8", 7.5], key: 3, hemi: ["#cfe0ff", "#8a6a4a", 1.6], amb: 0.35, lamps: [0.4, 0.25], shade: 0.12, beam: ["#fff2d6", 0.16] }
+  };
+  function setMood(name) {
+    const m = moods[name];
+    sky.material.map = m.sky; sky.material.needsUpdate = true;
+    mats.ceiling.color.set(m.ceil);
+    moon.color.set(m.sun[0]); moon.intensity = m.sun[1];
+    key.intensity = m.key;
+    hemi.color.set(m.hemi[0]); hemi.groundColor.set(m.hemi[1]); hemi.intensity = m.hemi[2];
+    ambient.intensity = m.amb;
+    floorLamp.userData.base = m.lamps[0]; floorLamp.intensity = m.lamps[0];
+    tableLamp.intensity = m.lamps[1];
+    mats.shade.emissiveIntensity = m.shade;
+    beam.material.color.set(m.beam[0]); beam.material.opacity = m.beam[1];
+  }
 
   // Lumière volt qui suit le pointeur (desktop)
   const pointer = new PointLight("#d9ff3d", 0, 2.6, 2);
@@ -377,25 +419,9 @@ export function buildRoom(scene, { quality = 1 } = {}) {
   room.add(pointer);
 
   return {
-    room, sampled, pointer, mats, bulbs, bulbMat,
+    room, sampled, pointer, mats, bulbs, bulbMat, setMood,
     lamps: [floorLamp, tableLamp],
-    targets: {
-      passeport: {
-        group: topDrawer.group, mat: mats.drawerTop, open: new Vector3(0, 0, 0.3),
-        anchor: new Vector3(cx, topDrawer.y + 0.1, front + 0.1),
-        focus: new Vector3(cx, topDrawer.y, front - 0.1)
-      },
-      guirlande: {
-        group: binGroup, mat: mats.binTarget, open: new Vector3(0, 0, 0.24), bulbs: true,
-        anchor: new Vector3(L0 + 0.2, binY + 0.2, bz + 0.2),
-        focus: new Vector3(L0 + 0.2, binY, bz)
-      },
-      chargeur: {
-        group: boxGroup, mat: mats.boxTarget, open: new Vector3(0, 0, 0.16),
-        anchor: new Vector3(R0 + 0.17, shelfYs[2] + 0.18, bz + 0.18),
-        focus: new Vector3(R0 + 0.17, shelfYs[2] + 0.08, bz)
-      }
-    },
+    targets,
     bounds: { xMin: -4.6, xMax: 4.6 }
   };
 }
