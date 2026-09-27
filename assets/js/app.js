@@ -68,7 +68,64 @@
 
   function save() {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+    stash();
   }
+
+  /* ─── Comptes de cet appareil ─────────────────────────────────────────
+
+     Pas de serveur dans le prototype : chaque compte créé ici garde son
+     propre logement dans un registre local, indexé par email. `state` est le
+     compte ouvert ; le registre les garde tous, démonstration comprise. Créer
+     un compte n'écrase donc plus jamais celui d'avant : on bascule de l'un à
+     l'autre par la connexion. */
+
+  var ACCOUNTS_KEY = "fulmo.accounts.v1";
+  var DEMO_ACCOUNT = { name: "Camille Dupont", email: "camille@exemple.fr" };
+
+  function accountKey(email) { return String(email || "").trim().toLowerCase(); }
+  function accountsRead() {
+    try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function accountsWrite(map) {
+    try { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(map)); } catch (e) {}
+  }
+  function accountFind(email) {
+    var saved = accountsRead()[accountKey(email)];
+    return saved && saved.account ? saved : null;
+  }
+  /* Les comptes de l'appareil, le plus récemment utilisé d'abord. */
+  function accountsList() {
+    var map = accountsRead();
+    return Object.keys(map).map(function (k) { return map[k]; })
+      .filter(function (saved) { return saved && saved.account; })
+      .sort(function (a, b) { return (b.lastUsed || 0) - (a.lastUsed || 0); });
+  }
+  /* Range le compte ouvert dans le registre. Appelé par save(). */
+  function stash() {
+    if (!state.account || !state.account.email) return;
+    var map = accountsRead();
+    var copy = JSON.parse(JSON.stringify(state));
+    copy.session = false;
+    copy.lastUsed = Date.now();
+    map[accountKey(state.account.email)] = copy;
+    accountsWrite(map);
+  }
+  /* Ouvre un compte du registre à la place du compte courant. Le thème est
+     une préférence de l'appareil : il ne change pas avec le compte. */
+  function accountOpen(email) {
+    var saved = accountFind(email);
+    if (!saved) return false;
+    var base = blank();
+    Object.keys(base).forEach(function (key) {
+      if (saved[key] !== undefined) base[key] = saved[key];
+    });
+    base.theme = state.theme;
+    state = base;
+    return true;
+  }
+
+  // Un compte enregistré par une version précédente entre dans le registre.
+  if (state.account && !accountFind(state.account.email)) stash();
 
   var seq = 0;
   function uid(prefix) { seq += 1; return prefix + "-" + Date.now().toString(36) + "-" + seq; }
@@ -1418,7 +1475,7 @@
      vedette. Sur les écrans de nuit (inscription, onboarding), elle prend la
      nuit elle aussi. */
   function demoBar() {
-    var night = !state.account || !state.household;
+    var night = !state.account || !state.household || !state.session;
     return el("div", { class: "demo-bar" + (night ? " night" : "") }, [
       el("span", { class: "demo-dot", "aria-hidden": "true" }),
       el("span", { class: "demo-text" }, [
@@ -1434,19 +1491,26 @@
     ]);
   }
 
+  /* Ce que l'application garde en mémoire vive pour le compte ouvert :
+     à oublier dès qu'on change de compte. */
+  function resetViews() {
+    closePalette();
+    dropScene();
+    searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null };
+    aiResults = null;
+    review = null; placingId = null; spaceFocus = null; spaceRoomId = null; mapFocus = null;
+  }
+
   function confirmReset() {
     confirmSheet({
       title: "Réinitialiser le prototype ?",
-      body: "Le logement, les objets, les relevés et l'historique de ce navigateur seront effacés, et vous repartirez de l'inscription.",
+      body: "Tous les comptes de ce navigateur, avec leurs logements, objets, relevés et historiques, seront effacés, et vous repartirez de l'inscription.",
       confirmLabel: "Tout effacer",
       danger: true,
       onConfirm: function () {
-        closePalette();
-        dropScene();
         state = blank();
-        searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null };
-        aiResults = null;
-        review = null; placingId = null; spaceFocus = null; spaceRoomId = null; mapFocus = null;
+        try { localStorage.removeItem(ACCOUNTS_KEY); } catch (e) {}
+        resetViews();
         applyTheme(); save(); render();
         toast("Prototype réinitialisé.");
       }
@@ -2291,6 +2355,18 @@
         obAnnounce(signup.errors[firstBad]);
         return;
       }
+      // Une adresse = un compte : si elle est déjà prise ici, on propose de
+      // s'y connecter plutôt que d'écraser le logement qui va avec.
+      if (accountFind(signup.email)) {
+        setStatus("email", "Un compte existe déjà avec cette adresse sur cet appareil. Connectez-vous, ou choisissez une autre adresse.", false);
+        fields.email.input.focus();
+        fields.email.wrap.classList.remove("ob-shake");
+        void fields.email.wrap.offsetWidth;
+        fields.email.wrap.classList.add("ob-shake");
+        obLogin.email = accountKey(signup.email);
+        obAnnounce(signup.errors.email);
+        return;
+      }
       signup.busy = true;
       cta.classList.add("is-busy");
       cta.setAttribute("aria-busy", "true");
@@ -2314,7 +2390,10 @@
         class: "ob-social-btn", type: "button",
         "aria-label": "Continuer avec " + provider + " (compte fictif dans ce prototype)",
         onclick: function () {
-          enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, false);
+          // Un compte fictif par fournisseur, distinct de la démonstration.
+          var mail = provider.toLowerCase() + ".demo@exemple.fr";
+          if (accountFind(mail)) { obOpenAccount(mail, null); toast("Prototype : compte " + provider + " fictif rouvert."); return; }
+          enter({ name: "Camille Dupont", email: mail }, false);
           toast("Prototype : compte fictif créé, sans connexion à " + provider + ".");
         }
       }, [glyph, el("span", { text: provider })]);
@@ -2347,13 +2426,14 @@
       ])
     ]);
 
-    /* Un seul compte par appareil dans ce prototype : en créer un nouveau
-       remplace l'ancien et son logement. On le dit avant, pas après. */
-    var existing = state.account ? el("div", { class: "ob-panel" }, [
-      el("p", { class: "ob-panel-title", text: "Un compte existe déjà sur cet appareil." }),
-      el("p", { text: state.account.email + (state.household ? " · " + state.household.name : "") + ". En créer un nouveau remplacera ce compte et son logement." }),
+    /* D'autres comptes vivent déjà sur cet appareil : on le signale, sans
+       alarme — en créer un nouveau ne touche à aucun d'eux. */
+    var others = accountsList();
+    var existing = others.length ? el("div", { class: "ob-panel" }, [
+      el("p", { class: "ob-panel-title", text: others.length === 1 ? "Un compte existe déjà sur cet appareil." : others.length + " comptes existent déjà sur cet appareil." }),
+      el("p", { text: others.slice(0, 3).map(function (o) { return o.account.email; }).join(", ") + (others.length > 3 ? "…" : "") + ". Le nouveau compte s'ajoute à côté, avec son propre logement." }),
       el("div", { class: "ob-panel-actions" }, [
-        el("button", { class: "ob-line-btn", type: "button", onclick: function () { obGoAuth("login"); } }, [icon("arrow-right", 15), "Me connecter à ce compte"])
+        el("button", { class: "ob-line-btn", type: "button", onclick: function () { obGoAuth("login"); } }, [icon("arrow-right", 15), others.length === 1 ? "Me connecter à ce compte" : "Me connecter à l'un d'eux"])
       ])
     ]) : null;
 
@@ -2373,7 +2453,7 @@
         class: "ob-demo", type: "button",
         onclick: function (event) {
           obBurstFrom(event.currentTarget, event, { count: 16 });
-          enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true);
+          enter(DEMO_ACCOUNT, true);
         }
       }, [
         el("span", { class: "ob-demo-ic", "aria-hidden": "true" }, [icon("bolt", 18)]),
@@ -2393,6 +2473,19 @@
   /* Ouvre la session du prototype. `seeded` saute la configuration du logement
      et charge l'exemple, pour atterrir directement dans l'application. */
   function enter(account, seeded) {
+    // Le compte ouvert est rangé dans le registre avant tout : en créer un
+    // autre ne l'efface pas, on pourra s'y reconnecter.
+    stash();
+    resetViews();
+
+    // La démonstration existe déjà sur cet appareil : on la rouvre telle
+    // qu'on l'a laissée plutôt que de la remplir à nouveau.
+    if (seeded && accountFind(account.email)) {
+      obOpenAccount(account.email, null);
+      toast("Compte de démonstration ouvert.");
+      return;
+    }
+
     // Un nouveau compte part d'un état propre : il ne doit pas hériter du
     // logement d'un compte précédent sur cet appareil. Seul le thème reste.
     var theme = state.theme;
@@ -2486,9 +2579,25 @@
     });
   }
 
+  /* Ouvre un compte du registre, session comprise, et y entre. */
+  function obOpenAccount(email, secret) {
+    stash();
+    resetViews();
+    accountOpen(email);
+    if (secret) state.account.secret = secret;
+    state.session = true;
+    obAuthView = null;
+    obLogin = { email: "", password: "" };
+    signup = obBlankSignup();
+    wiz = null;
+    save();
+    obTransition(function () {}, "fwd");
+  }
+
   function obLogout() {
     state.session = false;
     save();
+    resetViews();
     obAuthView = "login";
     obLogin = { email: "", password: "" };
     closeSheet();
@@ -2563,10 +2672,10 @@
     }
 
     function demoButton() {
-      // Jamais proposé s'il y a déjà un logement ici : la démo le remplacerait.
-      return state.household ? null : el("button", {
+      // La démonstration est un compte à part : l'ouvrir ne touche à rien.
+      return el("button", {
         class: "ob-line-btn", type: "button",
-        onclick: function () { enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true); }
+        onclick: function () { enter(DEMO_ACCOUNT, true); }
       }, [icon("bolt", 15), "Essayer la démo"]);
     }
 
@@ -2585,7 +2694,7 @@
     function showForgot() {
       panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
         el("p", { class: "ob-panel-title", text: "Pas de réinitialisation dans ce prototype." }),
-        el("p", { text: "Sans serveur, aucun email ne peut partir. Votre compte et votre logement restent dans ce navigateur ; si le mot de passe est perdu, un nouveau compte remplacera celui-ci sur cet appareil." }),
+        el("p", { text: "Sans serveur, aucun email ne peut partir. Votre compte et votre logement restent dans ce navigateur ; si le mot de passe est perdu, créez un nouveau compte avec une autre adresse." }),
         el("div", { class: "ob-panel-actions" }, [
           el("button", { class: "ob-line-btn", type: "button", onclick: function () { toSignup(null); } }, [icon("plus", 15), "Créer un nouveau compte"])
         ])
@@ -2615,11 +2724,13 @@
       else setErr("password", null);
       if (bad) { fields[bad].input.focus(); shake(bad); return; }
 
-      if (!acct || String(acct.email).toLowerCase() !== mail) { showNoAccount(mail); return; }
+      var target = accountFind(mail);
+      if (!target) { showNoAccount(mail); return; }
+      var acctIn = target.account;
 
       setBusy(true);
       var started = Date.now();
-      obVerify(acct.secret, obLogin.password).then(function (ok) {
+      obVerify(acctIn.secret, obLogin.password).then(function (ok) {
         setTimeout(function () {
           if (!ok) {
             setBusy(false);
@@ -2631,19 +2742,44 @@
             return;
           }
           // Compte ancien sans empreinte : on la pose maintenant.
-          var sealed = acct.secret || !obCanHash() ? Promise.resolve(acct.secret || null) : obSeal(obLogin.password);
+          var sealed = acctIn.secret || !obCanHash() ? Promise.resolve(acctIn.secret || null) : obSeal(obLogin.password);
           sealed.then(function (secret) {
-            state.account.secret = secret;
-            state.session = true;
-            obAuthView = null;
-            obLogin = { email: "", password: "" };
-            save();
-            obTransition(function () {}, "fwd");
-            toast(state.household ? "Bon retour, " + (obFirstName(acct.name) || "bienvenue") + "." : "Connecté. Reprenons la configuration de votre logement.");
+            obOpenAccount(mail, secret);
+            toast(state.household ? "Bon retour, " + (obFirstName(acctIn.name) || "bienvenue") + "." : "Connecté. Reprenons la configuration de votre logement.");
           });
         }, Math.max(0, (obCalm() ? 100 : 450) - (Date.now() - started)));
       });
     }
+
+    /* Les comptes de cet appareil, en un geste : toucher l'un remplit
+       l'email et passe au mot de passe. */
+    var known = accountsList();
+    var picker = known.length > 1 ? el("div", { class: "ob-accounts", role: "group", "aria-label": "Comptes sur cet appareil" },
+      known.slice(0, 6).map(function (o) {
+        var mailOf = accountKey(o.account.email);
+        return el("button", {
+          class: "ob-account" + (accountKey(obLogin.email) === mailOf ? " is-on" : ""), type: "button",
+          "aria-pressed": accountKey(obLogin.email) === mailOf ? "true" : "false",
+          onclick: function (event) {
+            // La démonstration n'a pas de mot de passe : on l'ouvre d'un geste.
+            if (mailOf === DEMO_ACCOUNT.email) { obOpenAccount(mailOf, null); toast("Compte de démonstration ouvert."); return; }
+            obLogin.email = mailOf;
+            fields.email.input.value = mailOf;
+            setErr("email", null);
+            panel.replaceChildren();
+            Array.prototype.forEach.call(picker.children, function (b) { b.classList.remove("is-on"); b.setAttribute("aria-pressed", "false"); });
+            event.currentTarget.classList.add("is-on");
+            event.currentTarget.setAttribute("aria-pressed", "true");
+            fields.password.input.focus();
+          }
+        }, [
+          el("span", { class: "ob-account-av", "aria-hidden": "true", text: (obFirstName(o.account.name) || "?").charAt(0).toUpperCase() }),
+          el("span", { class: "ob-account-txt" }, [
+            el("strong", { text: mailOf === DEMO_ACCOUNT.email ? "Démonstration" : (o.account.name || mailOf) }),
+            el("span", { text: mailOf })
+          ])
+        ]);
+      })) : null;
 
     var form = el("form", { class: "ob-form", onsubmit: submit, novalidate: true, "aria-label": "Connexion" }, [
       field("email", "Adresse email", "email", "username"),
@@ -2670,7 +2806,8 @@
       el("h1", { class: "ob-title ob-title--hero", id: "ob-step-title", tabindex: "-1" }, [
         "Content de vous ", el("em", { class: "ob-serif", text: "revoir" }), "."
       ]),
-      el("p", { class: "ob-lede", text: home ? "Connectez-vous pour retrouver " + home.name + "." : "Connectez-vous pour retrouver votre logement et tout ce qu'il contient." }),
+      el("p", { class: "ob-lede", text: picker ? "Choisissez votre compte, ou saisissez votre adresse." : home ? "Connectez-vous pour retrouver " + home.name + "." : "Connectez-vous pour retrouver votre logement et tout ce qu'il contient." }),
+      picker,
       form,
       panel,
       el("p", { class: "ob-fine", text: "Prototype : votre compte vit dans ce navigateur. Le mot de passe n'y est jamais stocké en clair, seulement son empreinte." }),
@@ -3519,22 +3656,29 @@
   }
 
   /* ─── Ancres d'entrée ─────────────────────────────────────────────────
-     app.html#demo : directement dans le logement d'exemple — sauf si un
-     logement existe déjà ici, qu'on n'écrase jamais.
-     app.html#signup / #login : l'écran demandé, tant qu'aucune session
-     n'est ouverte ; connecté, on reste dans l'application. */
+     app.html#demo : le compte de démonstration, un compte à part — ouvert tel
+     qu'on l'a laissé, ou rempli la première fois. Le compte en cours reste
+     rangé sur l'appareil.
+     app.html#signup : toujours le formulaire d'inscription. Une session
+     ouverte est fermée d'abord (rien n'est effacé) : on crée un compte de
+     plus, on ne remplace personne.
+     app.html#login : l'écran de connexion ; connecté, on reste dans l'app. */
   function obRoute() {
     var hash = String(location.hash || "").toLowerCase();
     if (hash !== "#demo" && hash !== "#signup" && hash !== "#login") return;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
     if (hash === "#demo") {
-      if (!state.household) enter({ name: "Camille Dupont", email: "camille@exemple.fr" }, true);
-      // Un logement existe ici mais personne n'est connecté : on ne l'ouvre
-      // pas sans mot de passe.
-      else if (!state.session) obAuthView = "login";
+      var onDemo = state.session && state.account && accountKey(state.account.email) === DEMO_ACCOUNT.email;
+      if (!onDemo) enter(DEMO_ACCOUNT, true);
       return;
     }
-    if (!state.session) obAuthView = hash === "#login" ? "login" : "signup";
+    if (hash === "#signup") {
+      if (state.session) { state.session = false; save(); resetViews(); }
+      signup = obBlankSignup();
+      obAuthView = "signup";
+      return;
+    }
+    if (!state.session) obAuthView = "login";
   }
   window.addEventListener("hashchange", function () { obRoute(); render(); });
 
