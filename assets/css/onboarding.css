@@ -742,3 +742,53 @@ html[data-ob-dir="back"]::view-transition-new(ob-stage) { animation-name: ob-in-
   .ob-odo-reel, .ob-progress-fill, .ob-progress::after, .ob-meter-fill { transition-duration: 1ms; }
   .ob-cta.is-busy .ob-spin { animation: ob-spin 1.6s linear infinite; }
 }
+
+/* ─── Connexion, liens d'accès, compte créé ────────────────────────────── */
+
+.ob-head-link { margin: 0; display: flex; align-items: center; gap: 4px; font-size: var(--fs-small); color: var(--fg-muted); }
+@media (max-width: 480px) { .ob-head-q { display: none; } }
+.ob-linkbtn {
+  border: 0; padding: 6px 2px; background: none; cursor: pointer;
+  font: inherit; font-weight: 600; color: var(--fg);
+  text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--volt) 70%, transparent);
+  text-underline-offset: .25em; text-decoration-thickness: 1.5px;
+  transition: color var(--dur-1), text-decoration-color var(--dur-1);
+}
+.ob-linkbtn:hover { color: var(--volt); text-decoration-color: var(--volt); }
+.ob-login-row { display: flex; justify-content: flex-end; margin: -4px 0 -2px; font-size: var(--fs-small); }
+.ob-switch { margin: 0; font-size: var(--fs-small); color: var(--fg-muted); }
+.ob-login-panel:empty { display: none; }
+
+.ob-panel {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-strong); border-radius: var(--r-lg);
+  background: color-mix(in oklab, var(--ink-2) 88%, transparent);
+  font-size: var(--fs-small); line-height: 1.55; color: var(--fg-muted);
+  animation: ob-rise var(--dur-3) var(--ease-out);
+}
+.ob-panel p { margin: 0; }
+.ob-panel-title { color: var(--fg); font-weight: 600; font-size: .9375rem; }
+.ob-panel-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.ob-panel .ob-line-btn { height: 42px; font-size: var(--fs-small); }
+.ob-line-btn--volt { border-color: var(--volt); color: var(--volt); }
+
+.ob-welcome .ob-main { align-items: center; }
+.ob-welcome .ob-stage { align-items: center; text-align: center; margin: auto; padding-block: clamp(24px, 8vh, 96px); }
+.ob-welcome .ob-lede { margin-inline: auto; }
+.ob-welcome-check {
+  width: 96px; height: 96px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--volt); color: var(--ink-0);
+  box-shadow: var(--glow);
+  animation: ob-pop .6s var(--ease-out) both;
+}
+.ob-welcome-check .ob-check path { animation: ob-draw .55s var(--ease-out) .25s forwards; }
+.ob-welcome-title { display: flex; flex-direction: column; font-size: clamp(2.2rem, 5vw, 3.4rem); }
+.ob-welcome-name { color: var(--volt); }
+@keyframes ob-draw { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ob-welcome-check { animation: none; }
+  .ob-welcome-check .ob-check path { animation: none; stroke-dashoffset: 0; }
+}

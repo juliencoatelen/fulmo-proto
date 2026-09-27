@@ -1,27 +1,38 @@
 # Fulmo
 
-> Fulmo est une application web (en français) qui retient où sont rangés les objets d'une maison — pièce, meuble, tiroir ou bac — et permet de les retrouver en quelques secondes. « Fulmo » signifie « éclair » en espéranto.
+> « Vous ne perdez jamais rien. Vous oubliez où. » FULMO est une application web, en français, qui référence chaque objet d'un logement et dit exactement où il se trouve : pièce, meuble, tiroir ou bac. « Fulmo » signifie « éclair » en espéranto.
 
-## Ce que fait Fulmo
-- Décrire son logement : type (maison ou appartement), niveaux, pièces, meubles de rangement, contenants (tiroirs, bacs, boîtes).
-- Référencer ses objets à la main (nom, mots-clés, photo, dates) ou avec le Scan Éclair : on photographie une étagère, l'IA identifie les objets et les pré-range ; l'utilisateur vérifie et valide.
-- Retrouver un objet par une recherche tolérante aux fautes de frappe, par mots-clés, ou en langage naturel (IA) ; le résultat donne le chemin exact, par exemple « Bureau / Commode / Tiroir du haut ».
-- Plan du logement en coupe, par niveaux, avec les pièces et leurs meubles.
-- Espace 3D : import d'un scan de pièce au format .ply (nuage de points ou splats gaussiens), ou relevé panoramique.
-- Alertes : péremption (médicaments, produits), fin de garantie, objets prêtés.
-- Foyer partagé entre plusieurs membres ; export des données.
+## Le problème
+Un logement contient plusieurs milliers d'objets ; la mémoire en suit quelques dizaines. Selon une étude Pixie (2017), on passe 2,5 jours par an à chercher ses affaires.
+
+## Comment ça marche
+1. Vous décrivez votre logement : maison ou appartement, étages, pièces, meubles. En cliquant, pas en tapant ; environ deux minutes, une seule fois, modifiable à vie.
+2. Vous référencez en rangeant : un objet, un endroit (nom, endroit précis, photo, mots-clés, quantité). Des mots-clés libres relient les objets entre eux (« Noël », « bébé », « camping », « papiers »).
+3. Vous cherchez : un champ, une réponse. Le chemin complet jusqu'à l'objet, insensible aux accents, à la casse et aux fautes de frappe (« noel » trouve « Décorations de Noël »).
+
+## Fonctions gratuites (formule Libre)
+- Recherche instantanée tolérante aux fautes, aux accents, aux majuscules et aux pluriels.
+- Mots-clés transverses : une requête comme « Noël » fait remonter ensemble tous les objets concernés, où qu'ils soient.
+- Foyer partagé : jusqu'à 5 membres voient et rangent dans le même logement.
+- Aucun matériel : pas de balise Bluetooth ni d'étiquette à acheter.
+- Fonctionne dans le navigateur, sur mobile et sur ordinateur ; ajout possible à l'écran d'accueil, sans store.
+- Objets, pièces, zones et meubles illimités ; photo par objet ; export des données à tout moment.
+
+## Pour qui
+Familles (chacun range, tout le monde retrouve), aidants (savoir à distance où sont les médicaments, papiers et clés d'un parent), bricoleurs (visserie, outillage et consommables adressables), déménagements (savoir ce que contient chaque carton).
 
 ## Formules et prix
-- Libre — 0 € : objets illimités, pièces/zones/meubles illimités, recherche tolérante aux fautes, mots-clés et métadonnées, foyer partagé jusqu'à 5 membres, export des données. Sans carte bancaire.
-- Éclair — 9 € par mois : tout Libre, plus Scan Éclair, plan interactif du logement, recherche en langage naturel, alertes (péremption, garantie, prêts), membres du foyer illimités.
+- Libre — 0 €, sans limite de durée : objets illimités, pièces, zones et meubles illimités, recherche instantanée tolérante aux fautes, mots-clés et métadonnées, photo par objet, foyer partagé jusqu'à 5 membres, installation sur l'écran d'accueil, export des données. Sans carte bancaire.
+- Éclair — 9 € par mois, résiliable en un clic depuis le compte : tout Libre, plus Scan Éclair (référencement par la caméra : l'IA détecte, nomme et pré-range les objets), plan 2D/3D interactif du logement, recherche en langage naturel, alertes péremption, garantie et prêts, accès délégué pour proche aidant, historique et journal des déplacements, membres illimités, export PDF assurance et sinistre, support prioritaire.
 
 ## Confidentialité
-- L'inventaire est stocké dans le navigateur de l'appareil de l'utilisateur, pas sur un serveur central.
-- La recherche en langage naturel n'envoie à l'IA que la phrase tapée. Le Scan Éclair envoie la photo prise, pour analyse. L'inventaire ne quitte pas l'appareil.
-- L'inventaire et la recherche classique fonctionnent sans connexion une fois l'application ouverte ; le Scan Éclair et la recherche en langage naturel demandent une connexion.
+- L'inventaire est enregistré sur l'appareil de l'utilisateur, pas dans une base centrale.
+- La recherche en langage naturel n'envoie à l'IA que la phrase tapée ; le Scan Éclair envoie les images prises pour analyse.
+- L'inventaire et la recherche classique fonctionnent sans connexion une fois l'application ouverte.
 
 ## Liens
 - Présentation : https://juliencoatelen.github.io/fulmo-proto/
 - Créer un compte gratuit : https://juliencoatelen.github.io/fulmo-proto/app.html#signup
-- Démo (logement pré-rempli de 40 objets) : https://juliencoatelen.github.io/fulmo-proto/app.html#demo
-- Questions fréquentes : https://juliencoatelen.github.io/fulmo-proto/#faq
+- Se connecter : https://juliencoatelen.github.io/fulmo-proto/app.html#login
+- Démo (logement pré-rempli) : https://juliencoatelen.github.io/fulmo-proto/app.html#demo
+- Questions fréquentes : https://juliencoatelen.github.io/fulmo-proto/#questions

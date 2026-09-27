@@ -85,11 +85,12 @@ export function buildParticles(sampled, total) {
       ...scanUniforms,
       uSize: { value: 30 },
       uPR: { value: 1 },
-      uDrift: { value: 1 }
+      uDrift: { value: 1 },
+      uDay: { value: 0 }
     },
     vertexShader: /* glsl */`
       attribute vec3 aNormal; attribute vec4 aRand; attribute vec3 color;
-      uniform float uA, uB, uTime, uSize, uPR, uDrift, uFocusAmt;
+      uniform float uA, uB, uTime, uSize, uPR, uDrift, uFocusAmt, uDay;
       uniform vec3 uFocus, uVolt;
       varying vec3 vColor; varying float vAlpha;
       float fulmoHash(vec3 p){ p = floor(p * ${VOXEL.toFixed(1)}); return fract(sin(dot(p, vec3(12.9898,78.233,37.719))) * 43758.5453); }
@@ -111,20 +112,22 @@ export function buildParticles(sampled, total) {
         float rear = 1.0 - smoothstep(0.0, 0.16, xj - uB);
         float edge = max(front, rear);
         float focus = uFocusAmt * (1.0 - smoothstep(0.08, 0.3, distance(position, uFocus)));
-        vColor = mix(color, uVolt * 2.4, clamp(edge * 0.95 + focus, 0.0, 1.0));
+        vec3 base = mix(color, color * 0.32, uDay);
+        vec3 hot = mix(uVolt * 2.4, vec3(0.31, 0.41, 0.03), uDay * (1.0 - edge));
+        vColor = mix(base, hot, clamp(edge * 0.95 + focus, 0.0, 1.0));
         vAlpha = 0.85 * smoothstep(0.0, 0.04, uA - xj + 0.04) * (0.55 + 0.45 * aRand.w);
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         gl_PointSize = uSize * uPR * (0.55 + aRand.w * 0.7) * (1.0 + edge * 1.2 + focus * 0.8) / max(-mv.z, 0.5);
       }`,
     fragmentShader: /* glsl */`
-      varying vec3 vColor; varying float vAlpha;
+      varying vec3 vColor; varying float vAlpha; uniform float uDay;
       void main(){
         vec2 q = gl_PointCoord - 0.5;
         float r = length(q);
         if (r > 0.5) discard;
         float a = smoothstep(0.5, 0.08, r) * vAlpha;
-        gl_FragColor = vec4(vColor * a, a);
+        gl_FragColor = uDay > 0.5 ? vec4(vColor, a) : vec4(vColor * a, a);
       }`,
     transparent: true,
     depthWrite: false,
