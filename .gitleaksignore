@@ -1,0 +1,2 @@
+# Faux positif : nom de clé localStorage (« fulmo.consent.v1 »), pas un secret. Commit antérieur au renommage.
+97ed8cd53157ab4185b2b2d16fc0548ff6fe4996:assets/js/consent.js:generic-api-key:23

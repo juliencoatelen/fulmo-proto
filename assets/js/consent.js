@@ -20,7 +20,7 @@
 (function () {
   "use strict";
 
-  var KEY = "fulmo.consent.v1";
+  var STORAGE_NAME = "fulmo.consent.v1";   // nom de clé localStorage, pas un secret
   var VERSION = 1;
   var MAX_AGE = 1000 * 60 * 60 * 24 * 182;   // 6 mois (recommandation CNIL)
   var POLICY = "confidentialite.html#cookies";
@@ -53,7 +53,7 @@
 
   function read() {
     try {
-      var saved = JSON.parse(localStorage.getItem(KEY));
+      var saved = JSON.parse(localStorage.getItem(STORAGE_NAME));
       if (!saved || saved.version !== VERSION) return null;
       if (Date.now() - new Date(saved.date).getTime() > MAX_AGE) return null;
       return saved;
@@ -69,7 +69,7 @@
 
   function write(map) {
     var record = { version: VERSION, date: new Date().toISOString(), choices: map };
-    try { localStorage.setItem(KEY, JSON.stringify(record)); } catch (e) {}
+    try { localStorage.setItem(STORAGE_NAME, JSON.stringify(record)); } catch (e) {}
     var current = choices();
     listeners.forEach(function (fn) { try { fn(current); } catch (e) {} });
   }
