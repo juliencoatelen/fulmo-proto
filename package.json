@@ -10,7 +10,7 @@
     "serve": "http-server -p 8080 -c-1 -s ."
   },
   "devDependencies": {
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.2",
     "three": "0.186.1"
   }
 }
