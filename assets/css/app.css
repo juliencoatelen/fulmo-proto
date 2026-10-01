@@ -1292,3 +1292,8 @@ p.label[style*="text-transform:none"] { font-weight: 400; line-height: 1.6 !impo
   .scan-overlay::before { animation: none; top: 50%; }
   .result.found .crumbs { animation: none; }
 }
+
+/* ─── Informations légales (Réglages) ─────────────────────────────────── */
+.set-list li a { color: var(--fg); text-decoration: underline; text-underline-offset: .22em; }
+.set-list li a:hover { color: var(--accent); }
+.confirm-body a { color: var(--accent); }

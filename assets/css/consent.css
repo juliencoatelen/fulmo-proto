@@ -1,0 +1,21 @@
+/* ═══ FULMO — préférences de cookies (assets/js/consent.js). Chargé sur toutes les pages. ═══ */
+.fc-banner, .fc-dialog { font-family: var(--font-sans); color: var(--fg); }
+.fc-banner {
+  position: fixed; z-index: 1000; left: 16px; right: 16px; bottom: 16px; margin-inline: auto; max-width: 640px;
+  padding: 20px; border: 1px solid var(--line-strong); border-radius: var(--r-lg); background: var(--raised); box-shadow: var(--shadow-3);
+}
+.fc-banner h2, .fc-dialog h2 { margin: 0 0 6px; font-family: var(--font-display); font-size: 1.15rem; letter-spacing: -.02em; }
+.fc-banner p, .fc-dialog p { margin: 0 0 14px; color: var(--fg-muted); font-size: var(--fs-small); line-height: 1.55; }
+.fc-banner a, .fc-dialog a { color: var(--accent); }
+.fc-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Accepter et refuser pèsent exactement le même poids (CNIL, 2020). */
+.fc-actions button { flex: 1 1 160px; min-height: 44px; padding: 0 16px; border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: var(--surface); color: var(--fg); font: 600 var(--fs-small)/1 var(--font-sans); cursor: pointer; }
+.fc-actions button:hover { border-color: var(--fg-muted); }
+.fc-dialog { width: min(100% - 32px, 560px); max-height: calc(100svh - 32px); overflow: auto; padding: 24px; border: 1px solid var(--line-strong); border-radius: var(--r-lg); background: var(--raised); box-shadow: var(--shadow-3); }
+.fc-dialog::backdrop { background: rgb(7 7 10 / .6); }
+.fc-cat { display: grid; grid-template-columns: 1fr auto; gap: 4px 16px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
+.fc-cat b { font-size: .95rem; }
+.fc-cat span { grid-column: 1; color: var(--fg-muted); font-size: var(--fs-small); line-height: 1.5; }
+.fc-cat input { grid-column: 2; grid-row: 1 / span 2; width: 22px; height: 22px; margin: 2px 0 0; }
+.fc-cat ul { grid-column: 1 / -1; margin: 6px 0 0; padding-left: 1.1em; color: var(--fg-faint); font-size: var(--fs-micro); }
+.fc-cat code { font-family: var(--font-mono); }

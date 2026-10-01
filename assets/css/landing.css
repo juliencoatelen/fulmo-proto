@@ -789,6 +789,10 @@ html:not(.js) .pb-bars span, .reduced .pb-bars span { background: var(--fg-muted
 .footer-nav a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; color: var(--fg-muted); text-decoration: none; font-size: .92rem; }
 .footer-nav a:hover { color: var(--fg); text-decoration: underline; }
 .footer-legal { grid-column: 1 / -1; padding-top: 24px; border-top: 1px solid var(--line); color: var(--fg-faint); font-size: .85rem; }
+.footer-legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
+.footer-legal-links { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.footer-legal-links a, .footer-legal-links button { color: var(--fg-muted); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: .22em; }
+.footer-legal-links a:hover, .footer-legal-links button:hover { color: var(--fg); }
 @media (max-width: 719px) { .footer-grid { grid-template-columns: 1fr; } .footer-nav { justify-content: flex-start; margin-left: -10px; } }
 
 /* ─── Bascule de thème : un fondu, pas un clignement ────────────────────── */

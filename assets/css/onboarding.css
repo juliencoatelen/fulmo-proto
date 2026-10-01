@@ -947,3 +947,8 @@ button.ob-chip-pic:hover { background: rgb(255 255 255 / .14); box-shadow: 0 0 0
   .ob-house-under.is-new { animation: none; }
 }
 .ob-fp-cell:has(.ob-fp-less) > .fpick-card { padding-bottom: 50px; }
+
+/* Mention légale sous la création de compte : lisible, jamais criarde. */
+.ob-legal { margin: 0; font-size: var(--fs-micro); line-height: 1.5; color: var(--fg-faint); text-align: center; }
+.ob-legal a { color: var(--fg-muted); text-decoration: underline; text-underline-offset: .22em; }
+.ob-legal a:hover { color: var(--fg); }
