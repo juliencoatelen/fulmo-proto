@@ -1,0 +1,22 @@
+name: garde-fous
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  securite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Secrets dans l'historique
+        uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+      - name: Règles P1–P6 (CLAUDE.md)
+        run: bash tools/check-security.sh
+      - name: Dépendances vulnérables
+        run: npm audit --audit-level=high
