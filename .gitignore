@@ -1,2 +1,7 @@
 node_modules/
 .DS_Store
+
+# Secrets : jamais dans le repo
+.env*
+!.env.example
+*.pem

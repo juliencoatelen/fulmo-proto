@@ -709,7 +709,7 @@
         if (value == null || value === false) return;
         if (key === "class") node.className = value;
         else if (key === "text") node.textContent = value;
-        else if (key === "html") node.innerHTML = value;
+        else if (key === "html") node.innerHTML = value; // html-sûr : n'accepte que des chaînes SVG écrites dans ce fichier, jamais une saisie
         else if (key.indexOf("on") === 0) node.addEventListener(key.slice(2).toLowerCase(), value);
         else if (key === "style") node.setAttribute("style", value);
         else node.setAttribute(key, value === true ? "" : String(value));
@@ -766,7 +766,7 @@
       el("span", { "aria-hidden": "true", text: "FULM" }),
       (function () {
         var wrap = document.createElement("span");
-        wrap.innerHTML = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:block">' +
+        wrap.innerHTML = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:block">' + // html-sûr : SVG constant
           '<circle cx="24" cy="24" r="19.8" stroke="currentColor" stroke-width="4.2"/>' +
           '<path d="M28.5 4.5 L13.5 27 h8.4 L19 43.5 L34.5 20 h-8.5 Z" fill="#d9ff3d" stroke="#050506" stroke-width="1.7" stroke-linejoin="round"/></svg>';
         wrap.style.display = "inline-flex";
@@ -935,7 +935,7 @@
      d'icônes. */
   function emptyArt() {
     var wrap = el("span", { "aria-hidden": "true" });
-    wrap.innerHTML =
+    wrap.innerHTML = // html-sûr : SVG constant
       '<svg class="empty-art" viewBox="0 0 148 112" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
       '<path class="ground" d="M8 100h132"/>' +
       '<path stroke="currentColor" d="M24 100V54L58 26l34 28v46"/>' +
@@ -2625,7 +2625,7 @@
        application ouvrira un compte en un geste. Ici, aucun fournisseur
        n'est contacté, et le bouton le dit. */
     function social(provider, markup) {
-      var glyph = el("span", { class: "ob-social-ic", html: markup });
+      var glyph = el("span", { class: "ob-social-ic", html: markup }); // html-sûr : markup = SVG constant des appels ci-dessous
       return el("button", {
         class: "ob-social-btn", type: "button",
         "aria-label": "Continuer avec " + provider + " (compte fictif dans ce prototype)",
@@ -2655,7 +2655,10 @@
         ". Vos données sont traitées selon notre ",
         el("a", { href: "confidentialite.html", target: "_blank", rel: "noopener", text: "politique de confidentialité" }),
         "."
-      ])
+      ]),
+      // Prototype public : rien n'est transmis, mais on ne doit pas habituer les
+      // visiteurs à confier un mot de passe qui leur sert ailleurs.
+      el("p", { class: "ob-fine", text: "Prototype : choisissez un mot de passe inventé, que vous n'utilisez nulle part ailleurs." })
     ]);
     paintMeter();
 
@@ -4283,7 +4286,7 @@
     wrap.setAttribute("aria-hidden", "true");
     wrap.className = "logo-mark";
     wrap.style.flexShrink = "0";
-    wrap.innerHTML = '<svg viewBox="0 0 48 48" fill="none" style="display:block;width:100%;height:100%">' +
+    wrap.innerHTML = '<svg viewBox="0 0 48 48" fill="none" style="display:block;width:100%;height:100%">' + // html-sûr : SVG constant
       '<circle cx="24" cy="24" r="19.8" stroke="currentColor" stroke-width="4.2"/>' +
       '<path d="M28.5 4.5 L13.5 27 h8.4 L19 43.5 L34.5 20 h-8.5 Z" fill="#d9ff3d" stroke="var(--bg)" stroke-width="1.7" stroke-linejoin="round"/></svg>';
     return wrap;

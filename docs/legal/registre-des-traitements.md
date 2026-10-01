@@ -1,6 +1,6 @@
 # Registre des activités de traitement — Fulmo (article 30 du RGPD)
 
-Responsable : Fulmo, [raison sociale, adresse, SIREN — à compléter]. Contact : [email vie privée — à compléter].
+Responsable : BASICX Marketing (service Fulmo), SIRET 751 919 101 00038, [adresse — à compléter]. Contact : [email vie privée — à compléter].
 Dernière mise à jour : 1er octobre 2026.
 
 | # | Traitement | Finalité | Base légale | Personnes | Données | Destinataires / sous-traitants | Transfert hors UE | Durée | Sécurité |

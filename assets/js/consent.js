@@ -84,7 +84,7 @@
     var n = document.createElement(tag);
     Object.keys(attrs || {}).forEach(function (k) {
       if (k === "text") n.textContent = attrs[k];
-      else if (k === "html") n.innerHTML = attrs[k];
+      else if (k === "html") n.innerHTML = attrs[k];   // html-sûr : appelé uniquement avec des constantes
       else if (k.indexOf("on") === 0) n.addEventListener(k.slice(2), attrs[k]);
       else n.setAttribute(k, attrs[k]);
     });
@@ -99,6 +99,7 @@
     if (banner || !optional().length) return;
     banner = node("section", { class: "fc-banner", role: "region", "aria-label": "Cookies" }, [
       node("h2", { text: "Vos choix sur les cookies" }),
+      // html-sûr : chaînes constantes du module, aucune saisie utilisateur.
       node("p", { html: "Fulmo utilise des traceurs nécessaires à son fonctionnement et, avec votre accord, d'autres pour " +
         optional().map(function (c) { return c.label.toLowerCase(); }).join(", ") +
         ". Vous pouvez changer d'avis à tout moment. <a href=\"" + POLICY + "\">En savoir plus</a>" }),
@@ -130,6 +131,7 @@
     });
     function finish(map) { if (map) write(map); dialog.close(); dialog.remove(); closeBanner(); }
     dialog.appendChild(node("h2", { id: "fc-title", text: "Gérer les cookies" }));
+    // html-sûr : chaîne constante.
     dialog.appendChild(node("p", { html: "Ce que Fulmo enregistre dans votre navigateur, et ce que vous acceptez. " +
       "<a href=\"" + POLICY + "\">Politique de confidentialité</a>" }));
     cats.forEach(function (c) { dialog.appendChild(c); });
