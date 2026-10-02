@@ -32,10 +32,10 @@
 <main class="lg">
   <div class="lg-wrap">
     <h1>Politique de confidentialité</h1>
-    <p class="lg-updated">Version 1 · en vigueur le <time datetime="2026-10-01">1<sup>er</sup> octobre 2026</time></p>
+    <p class="lg-updated">Version 2 · en vigueur le <time datetime="2026-10-02">2 octobre 2026</time></p>
     <p class="lg-lede">Fulmo est conçu pour savoir le moins de choses possible sur vous. Cette page explique, conformément aux articles 12 à 14 du Règlement général sur la protection des données (RGPD) et à la loi Informatique et Libertés, quelles données sont traitées, pourquoi, où elles se trouvent et comment exercer vos droits.</p>
 
-    <div class="lg-note"><p><strong>En bref.</strong> Votre compte et votre inventaire sont enregistrés dans le navigateur de votre appareil, pas sur nos serveurs. Rien n'est vendu, rien n'est utilisé pour de la publicité. Seules les fonctions d'IA, si vous les lancez et après votre accord, envoient la phrase tapée ou la photo prise à notre fournisseur d'IA, aux États-Unis.</p></div>
+    <div class="lg-note"><p><strong>En bref.</strong> Sur ce site, votre compte et votre inventaire restent dans le navigateur de votre appareil. Si vous créez un compte en ligne sur app.getfulmo.com, il est enregistré dans l'Union européenne (Francfort). Rien n'est vendu, rien n'est utilisé pour de la publicité. Les fonctions d'IA, seulement si vous les lancez et après votre accord, envoient la phrase tapée ou la photo prise à notre fournisseur d'IA, aux États-Unis.</p></div>
 
     <nav class="lg-toc" aria-label="Sommaire">
       <p>Sommaire</p>
@@ -68,13 +68,14 @@
       <table>
         <thead><tr><th scope="col">Données</th><th scope="col">Pourquoi</th><th scope="col">Base légale (art. 6 RGPD)</th><th scope="col">Durée de conservation</th></tr></thead>
         <tbody>
-          <tr><td>Prénom, nom, adresse email, empreinte salée du mot de passe (jamais le mot de passe en clair)</td><td>Créer et ouvrir votre compte</td><td>Exécution du contrat (CGU)</td><td>Jusqu'à la suppression du compte, ou 3 ans sans connexion une fois les comptes en ligne</td></tr>
+          <tr><td>Prénom, nom, adresse email, empreinte salée du mot de passe (jamais le mot de passe en clair), formule</td><td>Créer et ouvrir votre compte, envoyer l'email de confirmation</td><td>Exécution du contrat (CGU)</td><td>Jusqu'à la suppression du compte ; compte en ligne supprimé après 3 ans sans connexion</td></tr>
           <tr><td>Logement, pièces, meubles, objets, photos d'objets, alertes, historique de recherche</td><td>Fournir le service : ranger et retrouver vos objets</td><td>Exécution du contrat</td><td>Jusqu'à ce que vous les supprimiez ou supprimiez le compte</td></tr>
           <tr><td>Relevés 3D et panoramiques de vos pièces</td><td>Afficher votre logement en 3D</td><td>Exécution du contrat</td><td>Jusqu'à ce que vous les supprimiez</td></tr>
           <tr><td>Phrase de recherche en langage naturel, photo du Scan Éclair</td><td>Interroger l'IA pour vous proposer des objets</td><td>Votre consentement (art. 6.1.a), demandé avant le premier envoi</td><td>Non conservées par Fulmo. Chez le fournisseur d'IA : voir <a href="#ia">section 6</a></td></tr>
           <tr><td>Preuve de vos consentements (date, version)</td><td>Démontrer votre accord</td><td>Obligation légale (art. 7.1 RGPD)</td><td>Durée du compte ; 6 mois pour le choix sur les cookies</td></tr>
           <tr><td>Préférence de thème</td><td>Afficher le site en clair ou en sombre</td><td>Intérêt légitime (confort d'usage)</td><td>Jusqu'à ce que vous effaciez les données du site</td></tr>
           <tr><td>Adresse IP et journaux techniques de connexion</td><td>Servir les pages, sécuriser l'hébergement</td><td>Intérêt légitime (sécurité)</td><td>Selon la politique de l'hébergeur, voir <a href="#destinataires">section 4</a></td></tr>
+          <tr><td>Empreinte de l'adresse IP (hachée et salée, l'adresse elle-même n'est pas conservée)</td><td>Limiter les tentatives de connexion et les abus</td><td>Intérêt légitime (sécurité du service)</td><td>De 1 minute à 24 heures selon le compteur</td></tr>
           <tr><td>Abonnement Éclair : formule, historique de facturation (le paiement est saisi chez Stripe, Fulmo ne voit jamais votre numéro de carte)</td><td>Gérer l'abonnement et la facturation</td><td>Exécution du contrat ; obligation légale pour les factures</td><td>Durée de l'abonnement ; factures 10 ans (article L123-22 du Code de commerce)</td></tr>
         </tbody>
       </table>
@@ -90,7 +91,9 @@
           <tr><td>Compte, logement, objets, photos, relevés 3D, alertes, historique</td><td>Stockage local du navigateur de votre appareil (localStorage et IndexedDB)</td><td>Le pays où se trouve votre appareil. Fulmo n'en reçoit aucune copie.</td><td>Aujourd'hui</td></tr>
           <tr><td>Fichiers du site (pages, images, code) et journaux techniques de visite (adresse IP)</td><td>GitHub Pages, GitHub, Inc.</td><td>États-Unis, avec un réseau de diffusion mondial</td><td>Aujourd'hui</td></tr>
           <tr><td>Phrase de recherche IA, photo du Scan Éclair</td><td>Anthropic, fournisseur du modèle d'IA</td><td>États-Unis</td><td>Aujourd'hui, uniquement après votre accord</td></tr>
-          <tr><td>Compte et inventaire synchronisés entre vos appareils et votre foyer</td><td>Supabase (base PostgreSQL et authentification)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>À l'ouverture des comptes en ligne</td></tr>
+          <tr><td>Compte en ligne (app.getfulmo.com) : nom, email, empreinte du mot de passe, formule ; plus tard l'inventaire synchronisé</td><td>Supabase (base PostgreSQL, authentification et envoi des emails de confirmation)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui, pour les comptes en ligne</td></tr>
+          <tr><td>Application app.getfulmo.com : exécution du code serveur et journaux techniques (adresse IP)</td><td>Vercel Inc.</td><td>Union européenne, région Francfort, Allemagne (fra1), avec un réseau de diffusion mondial</td><td>Aujourd'hui</td></tr>
+          <tr><td>Compteurs anti-abus (empreinte de l'adresse IP)</td><td>Upstash (Redis)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui</td></tr>
           <tr><td>Paiement de l'abonnement Éclair</td><td>Stripe Payments Europe, Ltd.</td><td>Irlande (Union européenne), avec transferts possibles vers les États-Unis</td><td>À l'ouverture des paiements</td></tr>
         </tbody>
       </table>
@@ -102,12 +105,14 @@
     <ul>
       <li><strong>GitHub, Inc.</strong> (États-Unis) : hébergement des fichiers du site. <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">Déclaration de confidentialité de GitHub</a>.</li>
       <li><strong>Anthropic</strong> (États-Unis) : traitement par IA des phrases de recherche et des photos du Scan Éclair. <a href="https://www.anthropic.com/legal/privacy">Politique de confidentialité d'Anthropic</a>.</li>
-      <li><strong>Supabase, Inc.</strong> (serveurs dans l'Union européenne) : base de données et authentification, à l'ouverture des comptes en ligne.</li>
+      <li><strong>Supabase, Inc.</strong> (serveurs dans l'Union européenne, Francfort) : base de données, authentification et emails de confirmation des comptes en ligne. <a href="https://supabase.com/privacy">Politique de confidentialité de Supabase</a>.</li>
+      <li><strong>Vercel Inc.</strong> (États-Unis ; exécution à Francfort) : hébergement de l'application app.getfulmo.com. <a href="https://vercel.com/legal/privacy-policy">Politique de confidentialité de Vercel</a>.</li>
+      <li><strong>Upstash, Inc.</strong> (États-Unis ; serveurs à Francfort) : compteurs de limitation des abus, qui ne contiennent qu'une empreinte de l'adresse IP. <a href="https://upstash.com/trust/privacy.pdf">Politique de confidentialité d'Upstash</a>.</li>
       <li><strong>Stripe Payments Europe, Ltd.</strong> (Irlande) : paiement de l'abonnement, à l'ouverture des paiements. Stripe agit aussi comme responsable de traitement pour ses obligations propres (lutte contre la fraude).</li>
     </ul>
 
     <h2 id="transferts">5. Transferts hors de l'Union européenne</h2>
-    <p>Certains sous-traitants sont établis aux États-Unis (GitHub, Anthropic, et les sociétés mères de Supabase et de Stripe). Ces transferts sont encadrés, selon le prestataire, par la décision d'adéquation de la Commission européenne du 10 juillet 2023 relative au cadre de protection des données UE–États-Unis (Data Privacy Framework) lorsque le prestataire y adhère, et à défaut par les clauses contractuelles types adoptées par la Commission européenne (décision 2021/914), complétées de mesures de sécurité. Vous pouvez obtenir une copie de ces garanties en écrivant au contact vie privée.</p>
+    <p>Certains sous-traitants sont établis aux États-Unis (GitHub, Anthropic, Vercel, Upstash, et les sociétés mères de Supabase et de Stripe). Même lorsque les serveurs sont situés à Francfort, ces sociétés peuvent y accéder depuis les États-Unis pour l'assistance ou la sécurité. Ces transferts sont encadrés, selon le prestataire, par la décision d'adéquation de la Commission européenne du 10 juillet 2023 relative au cadre de protection des données UE–États-Unis (Data Privacy Framework) lorsque le prestataire y adhère, et à défaut par les clauses contractuelles types adoptées par la Commission européenne (décision 2021/914), complétées de mesures de sécurité. Vous pouvez obtenir une copie de ces garanties en écrivant au contact vie privée.</p>
 
     <h2 id="ia">6. Fonctions d'intelligence artificielle</h2>
     <p>La recherche en langage naturel et le Scan Éclair (formule Éclair) s'appuient sur un modèle d'IA fourni par Anthropic. Avant le premier envoi, Fulmo vous demande votre accord. Vous pouvez le retirer à tout moment dans <strong>Réglages › Vos données</strong> : les fonctions d'IA s'arrêtent, le reste de Fulmo continue de fonctionner.</p>
