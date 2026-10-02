@@ -1697,23 +1697,21 @@
 
   /* ═══ Bandeau de démonstration ══════════════════════════════════════ */
 
-  /* Une ligne, discrète : elle dit la vérité sur le prototype sans voler la
-     vedette. Sur les écrans de nuit (inscription, onboarding), elle prend la
-     nuit elle aussi. */
+  /* Une ligne, discrète : la bêta et ce qu'elle offre. Que les données
+     restent dans ce navigateur est dit là où cela compte (connexion,
+     inscription, Réglages), et l'effacement complet vit dans les Réglages :
+     un bouton « tout effacer » n'a pas sa place en haut de chaque écran. Sur
+     les écrans de nuit (inscription, onboarding), elle prend la nuit elle
+     aussi. */
   function demoBar() {
     var night = !state.account || !state.household || !state.session;
     return el("div", { class: "demo-bar" + (night ? " night" : "") }, [
       el("span", { class: "demo-dot", "aria-hidden": "true" }),
       el("span", { class: "demo-text" }, [
         el("strong", { text: "Bêta" }),
-        el("span", { class: "demo-long", text: " · données locales à ce navigateur, Éclair offert aux early adopters" }),
-        el("span", { class: "demo-short", text: " · données locales" })
-      ]),
-      el("span", { class: "spacer" }),
-      state.account ? el("button", {
-        class: "demo-reset", type: "button", "aria-label": "Réinitialiser le prototype", title: "Réinitialiser le prototype",
-        onclick: confirmReset
-      }, [icon("loop", 13), el("span", { class: "lbl", text: "Réinitialiser" })]) : null
+        el("span", { class: "demo-long", text: " · Éclair offert aux early adopters" }),
+        el("span", { class: "demo-short", text: " · Éclair offert" })
+      ])
     ]);
   }
 
@@ -1733,7 +1731,7 @@
 
   function confirmReset() {
     confirmSheet({
-      title: "Réinitialiser le prototype ?",
+      title: "Tout effacer sur ce navigateur ?",
       body: "Tous les comptes de ce navigateur, avec leurs logements, objets, relevés et historiques, seront effacés, et vous repartirez de l'inscription.",
       confirmLabel: "Tout effacer",
       danger: true,
@@ -1742,7 +1740,7 @@
         try { localStorage.removeItem(ACCOUNTS_KEY); } catch (e) {}
         resetViews();
         applyTheme(); save(); render();
-        toast("Prototype réinitialisé.");
+        toast("Tout a été effacé de ce navigateur.");
       }
     });
   }
@@ -2470,15 +2468,6 @@
     return first ? "Chez " + first : "Chez vous";
   }
 
-  var OB_GOOGLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">' +
-    '<path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.2-2.1 3.5-5.2 3.5-8.8z"/>' +
-    '<path fill="#34A853" d="M12 24c3.2 0 6-1.1 7.9-2.9l-3.9-3c-1 .7-2.4 1.2-4 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/>' +
-    '<path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/>' +
-    '<path fill="#EA4335" d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg>';
-
-  var OB_APPLE = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false" fill="currentColor">' +
-    '<path d="M16.4 1.4c0 1.1-.5 2.3-1.2 3.1-.7.9-2 1.6-3 1.6l-.3-.1c0-1.1.6-2.3 1.2-3 .8-.9 2.1-1.6 3.2-1.7l.1.1zm4.5 15.7c0 .1-.5 1.6-1.5 3.1-.9 1.3-1.9 2.7-3.4 2.7s-1.9-.9-3.6-.9c-1.7 0-2.3.9-3.7.9-1.4 0-2.3-1.3-3.4-2.8C4 18.3 3 15.5 3 12.8c0-4.3 2.8-6.6 5.6-6.6 1.4 0 2.7 1 3.6 1 .9 0 2.2-1 3.9-1 .6 0 2.9.1 4.4 2.2-.1.1-2.4 1.4-2.4 4.2 0 3.3 2.9 4.4 2.8 4.5z"/></svg>';
-
   function screenSignup() {
     obKeys = null;
     var fields = {};
@@ -2622,24 +2611,6 @@
       });
     }
 
-    /* Google et Apple : présents parce que c'est ainsi que la vraie
-       application ouvrira un compte en un geste. Ici, aucun fournisseur
-       n'est contacté, et le bouton le dit. */
-    function social(provider, markup) {
-      var glyph = el("span", { class: "ob-social-ic", html: markup }); // html-sûr : markup = SVG constant des appels ci-dessous
-      return el("button", {
-        class: "ob-social-btn", type: "button",
-        "aria-label": "Continuer avec " + provider + " (compte fictif dans ce prototype)",
-        onclick: function () {
-          // Un compte fictif par fournisseur, distinct de la démonstration.
-          var mail = provider.toLowerCase() + ".demo@exemple.fr";
-          if (accountFind(mail)) { obOpenAccount(mail, null); toast("Bêta : compte " + provider + " fictif rouvert."); return; }
-          enter({ name: "Camille Dupont", email: mail }, false);
-          toast("Bêta : compte fictif créé, sans connexion à " + provider + ".");
-        }
-      }, [glyph, el("span", { text: provider })]);
-    }
-
     cta = obCta("Créer mon compte gratuit", { type: "submit" });
     ctaLabel = cta.querySelector(".ob-cta-label");
     if (signup.busy) signup.busy = false;
@@ -2695,9 +2666,10 @@
       el("p", { class: "ob-lede", text: "Créez votre compte gratuit. Deux minutes pour décrire votre logement, puis chaque objet se retrouve en deux secondes." }),
       existing,
       form,
+      /* Pas de « Continuer avec Google ou Apple » ici : sans serveur, ces
+         boutons ne pourraient que créer un compte fictif. Ils viendront avec
+         l'application en ligne (app.getfulmo.com), via Supabase Auth. */
       el("div", { class: "ob-or", role: "separator" }, [el("span", { text: "ou" })]),
-      el("div", { class: "ob-social" }, [social("Google", OB_GOOGLE), social("Apple", OB_APPLE)]),
-      el("p", { class: "ob-fine", text: "Bêta : ces deux boutons créent un compte fictif. Ni Google ni Apple ne sont contactés." }),
       /* Entrée directe : un prototype qu'on n'atteint qu'après avoir passé
          une validation de mot de passe n'est pas un prototype utile. */
       el("button", {
@@ -2729,12 +2701,15 @@
     stash();
     resetViews();
 
-    // La démonstration existe déjà sur cet appareil : on la rouvre telle
-    // qu'on l'a laissée plutôt que de la remplir à nouveau.
+    // La démonstration repart toujours du même logement : ce qu'un visiteur
+    // y a changé la dernière fois ne se voit pas à la suivante. Ses relevés
+    // importés partent avec elle.
     if (seeded && accountFind(account.email)) {
-      obOpenAccount(account.email, null);
-      toast("Compte de démonstration ouvert.");
-      return;
+      var stale = accountFind(account.email);
+      (stale.scans || []).forEach(function (scan) { if (scan && scan.id && scan.source !== "demo") scanStore.del(scan.id); });
+      var registry = accountsRead();
+      delete registry[accountKey(account.email)];
+      accountsWrite(registry);
     }
 
     // Un nouveau compte part d'un état propre : il ne doit pas hériter du
@@ -3017,7 +2992,7 @@
           "aria-pressed": accountKey(obLogin.email) === mailOf ? "true" : "false",
           onclick: function (event) {
             // La démonstration n'a pas de mot de passe : on l'ouvre d'un geste.
-            if (mailOf === DEMO_ACCOUNT.email) { obOpenAccount(mailOf, null); toast("Compte de démonstration ouvert."); return; }
+            if (mailOf === DEMO_ACCOUNT.email) { enter(DEMO_ACCOUNT, true); return; }
             obLogin.email = mailOf;
             fields.email.input.value = mailOf;
             setErr("email", null);
@@ -3066,7 +3041,7 @@
       form,
       panel,
       el("p", { class: "ob-fine", text: "Bêta : votre compte vit dans ce navigateur. Le mot de passe n'y est jamais stocké en clair, seulement son empreinte." }),
-      el("p", { class: "ob-switch" }, [
+      el("p", { class: "ob-auth-switch" }, [
         "Pas encore de compte ? ",
         el("button", { class: "ob-linkbtn", type: "button", onclick: function () { toSignup(null); } }, "Créer un compte")
       ])
@@ -4134,20 +4109,19 @@
   }
 
   /* ─── Ancres d'entrée ─────────────────────────────────────────────────
-     app.html#demo : le compte de démonstration, un compte à part — ouvert tel
-     qu'on l'a laissé, ou rempli la première fois. Le compte en cours reste
-     rangé sur l'appareil.
-     app.html#signup : toujours le formulaire d'inscription. Une session
+     app#demo : le compte de démonstration, un compte à part, toujours
+     rouvert sur le même logement d'exemple. Le compte en cours reste rangé
+     sur l'appareil.
+     app#signup : toujours le formulaire d'inscription. Une session
      ouverte est fermée d'abord (rien n'est effacé) : on crée un compte de
      plus, on ne remplace personne.
-     app.html#login : l'écran de connexion ; connecté, on reste dans l'app. */
+     app#login : l'écran de connexion ; connecté, on reste dans l'app. */
   function obRoute() {
     var hash = String(location.hash || "").toLowerCase();
     if (hash !== "#demo" && hash !== "#signup" && hash !== "#login") return;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
     if (hash === "#demo") {
-      var onDemo = state.session && state.account && accountKey(state.account.email) === DEMO_ACCOUNT.email;
-      if (!onDemo) enter(DEMO_ACCOUNT, true);
+      enter(DEMO_ACCOUNT, true);
       return;
     }
     if (hash === "#signup") {
@@ -7599,6 +7573,233 @@
 
   /* ─── Vue : réglages ──────────────────────────────────────────────── */
 
+  /* Nom, email et mot de passe du compte ouvert. Le registre des comptes est
+     indexé par email : changer d'adresse déplace l'entrée, sans doublon.
+     Changer de mot de passe demande l'actuel, comme partout ailleurs. */
+  function accountSheet() {
+    var acct = state.account;
+    if (!acct) return;
+    var draft = { name: acct.name || "", email: acct.email || "", current: "", next: "" };
+    var errs = {};
+
+    function input(key, label, type, auto, hint) {
+      var box = el("input", {
+        class: "input", type: type, value: draft[key], maxlength: 200, autocomplete: auto,
+        "aria-describedby": "acct-" + key + "-err",
+        oninput: function (event) { draft[key] = event.target.value; setErr(key, null); }
+      });
+      var err = el("span", { class: "err", id: "acct-" + key + "-err", role: "alert", hidden: true });
+      errs[key] = { input: box, err: err };
+      return el("label", { class: "field" }, [
+        el("span", { text: label }), box, err,
+        hint ? el("span", { class: "field-hint", text: hint }) : null
+      ]);
+    }
+    function setErr(key, message) {
+      var f = errs[key];
+      if (!f) return;
+      f.err.hidden = !message;
+      f.err.textContent = message || "";
+      if (message) f.input.setAttribute("aria-invalid", "true"); else f.input.removeAttribute("aria-invalid");
+    }
+    function fail(key, message) { setErr(key, message); errs[key].input.focus(); }
+
+    var busy = false;
+    function commit() {
+      if (busy) return;
+      var name = draft.name.trim();
+      var mail = draft.email.trim().toLowerCase();
+      var nameErr = obFieldError("fullName", name);
+      if (nameErr) { fail("name", nameErr); return; }
+      var mailErr = obFieldError("email", mail);
+      if (mailErr) { fail("email", mailErr); return; }
+      var moved = mail !== accountKey(acct.email);
+      if (moved && accountFind(mail)) { fail("email", "Un autre compte de cet appareil utilise déjà cette adresse."); return; }
+      var changePw = !!draft.next;
+      if (changePw) {
+        var pwErr = obFieldError("password", draft.next);
+        if (pwErr) { fail("next", pwErr); return; }
+        if (acct.secret && !draft.current) { fail("current", "Indiquez votre mot de passe actuel."); return; }
+      }
+
+      busy = true;
+      var checked = changePw ? obVerify(acct.secret, draft.current) : Promise.resolve(true);
+      checked.then(function (ok) {
+        if (!ok) { busy = false; fail("current", "Mot de passe actuel incorrect."); return null; }
+        return changePw ? obSeal(draft.next).then(function (secret) { return { secret: secret }; }) : {};
+      }).then(function (result) {
+        if (!result) return;
+        if (moved) {
+          var map = accountsRead();
+          delete map[accountKey(acct.email)];
+          accountsWrite(map);
+        }
+        acct.name = name;
+        acct.email = mail;
+        if (result.secret !== undefined) acct.secret = result.secret;
+        save();
+        closeSheet();
+        render();
+        toast(changePw ? "Compte mis à jour, nouveau mot de passe enregistré." : "Compte mis à jour.");
+      });
+    }
+
+    var form = el("form", {
+      class: "acct-form", novalidate: true,
+      onsubmit: function (event) { event.preventDefault(); commit(); }
+    }, [
+      input("name", "Prénom et nom", "text", "name"),
+      input("email", "Adresse email", "email", "email", "Elle sert à vous connecter."),
+      el("p", { class: "acct-sub", text: "Changer de mot de passe" }),
+      acct.secret ? input("current", "Mot de passe actuel", "password", "current-password") : null,
+      input("next", "Nouveau mot de passe", "password", "new-password", "Laissez vide pour le garder. 12 caractères minimum, dont 5 différents."),
+      // Entrée dans un champ envoie le formulaire.
+      el("button", { type: "submit", hidden: true, tabindex: "-1", "aria-hidden": "true" })
+    ]);
+
+    sheet({
+      title: "Mes informations",
+      body: [form],
+      foot: [
+        el("button", { class: "btn btn-line", type: "button", onclick: function () { closeSheet(); } }, "Annuler"),
+        el("button", { class: "btn btn-volt", type: "button", onclick: commit }, [icon("check", 15), "Enregistrer"])
+      ],
+      initialFocus: errs.name.input
+    });
+  }
+
+  /* Le nom du logement, tel qu'il s'affiche partout. */
+  function homeSheet() {
+    if (!state.household) return;
+    var value = state.household.name || "";
+    var box, err;
+    function commit() {
+      var name = value.trim();
+      if (!name) { err.hidden = false; box.setAttribute("aria-invalid", "true"); box.focus(); return; }
+      state.household.name = name.slice(0, 80);
+      save(); closeSheet(); render();
+      toast("Logement renommé.");
+    }
+    sheet({
+      title: "Renommer le logement",
+      body: [el("label", { class: "field" }, [
+        el("span", { text: "Nom du logement" }),
+        box = el("input", {
+          class: "input", type: "text", value: value, maxlength: 80, autocomplete: "off",
+          "aria-describedby": "home-name-err",
+          oninput: function (event) { value = event.target.value; err.hidden = true; box.removeAttribute("aria-invalid"); },
+          onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); commit(); } }
+        }),
+        err = el("span", { class: "err", id: "home-name-err", role: "alert", hidden: true, text: "Donnez un nom à votre logement." })
+      ])],
+      foot: [
+        el("button", { class: "btn btn-line", type: "button", onclick: function () { closeSheet(); } }, "Annuler"),
+        el("button", { class: "btn btn-volt", type: "button", onclick: commit }, [icon("check", 15), "Enregistrer"])
+      ],
+      initialFocus: box
+    });
+  }
+
+  /* ─── Installer sur l'écran d'accueil ───────────────────────────────
+
+     Chrome et Edge (Android, ordinateur) proposent une vraie fenêtre
+     d'installation : on garde l'événement et le bouton l'ouvre. Safari
+     (iPhone, iPad, Mac) n'en a pas : le même bouton montre alors les trois
+     gestes à faire, avec les icônes que l'on verra à l'écran. Un survol
+     n'existe pas sur un téléphone : d'où une feuille, pas une animation au
+     survol. Déjà installée, l'application ne propose rien. */
+  var installPrompt = null;
+  window.addEventListener("beforeinstallprompt", function (event) {
+    event.preventDefault();
+    installPrompt = event;
+    if (state.session && state.tab === "settings") render();
+  });
+  window.addEventListener("appinstalled", function () {
+    installPrompt = null;
+    toast("Fulmo est installé sur votre écran d'accueil.");
+    if (state.session && state.tab === "settings") render();
+  });
+
+  function appInstalled() {
+    try {
+      return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+    } catch (e) { return false; }
+  }
+  function installPlatform() {
+    var ua = navigator.userAgent || "";
+    // L'iPad se présente comme un Mac : seul l'écran tactile le trahit.
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return "ios";
+    if (/Android/.test(ua)) return "android";
+    if (/Safari/.test(ua) && !/Chrome|Chromium|Edg|OPR|Firefox/.test(ua)) return "mac-safari";
+    return "desktop";
+  }
+
+  function installApp() {
+    if (installPrompt) {
+      var prompt = installPrompt;
+      installPrompt = null;
+      prompt.prompt();
+      prompt.userChoice.then(function (choice) {
+        if (choice && choice.outcome !== "accepted") toast("Installation annulée. Le bouton reste dans les Réglages.");
+        render();
+      }, function () { render(); });
+      return;
+    }
+    installGuide();
+  }
+
+  function installGuide() {
+    var platform = installPlatform();
+    function step(n, glyph, title, detail) {
+      return el("li", { class: "install-step" }, [
+        el("span", { class: "install-n", "aria-hidden": "true", text: String(n) }),
+        el("span", { class: "install-ic", "aria-hidden": "true" }, [icon(glyph, 22)]),
+        el("span", { class: "install-txt" }, [el("b", { text: title }), detail ? el("span", { text: detail }) : null])
+      ]);
+    }
+    var steps, note = null, title = "Ajouter Fulmo à l'écran d'accueil";
+    if (platform === "ios") {
+      steps = [
+        step(1, "share", "Touchez le bouton Partager", "En bas de l'écran dans Safari (en haut sur iPad), le carré d'où sort une flèche."),
+        step(2, "add-box", "Choisissez « Sur l'écran d'accueil »", "Faites défiler la liste vers le bas si vous ne le voyez pas."),
+        step(3, "check", "Touchez « Ajouter »", "L'icône Fulmo apparaît parmi vos applications.")
+      ];
+      // Sur iPhone, l'icône ouvre un espace de stockage distinct de Safari.
+      note = "Sur iPhone et iPad, l'application ajoutée garde ses propres données, séparées de celles de Safari : créez votre compte depuis l'icône, une fois ajoutée.";
+    } else if (platform === "android") {
+      steps = [
+        step(1, "dots-v", "Ouvrez le menu du navigateur", "Les trois points, en haut à droite dans Chrome."),
+        step(2, "add-box", "Choisissez « Installer l'application »", "Ou « Ajouter à l'écran d'accueil », selon le navigateur."),
+        step(3, "check", "Confirmez", "L'icône Fulmo apparaît parmi vos applications.")
+      ];
+    } else if (platform === "mac-safari") {
+      title = "Ajouter Fulmo au Dock";
+      steps = [
+        step(1, "share", "Ouvrez le menu Fichier de Safari", "Ou le bouton Partager de la barre d'outils."),
+        step(2, "add-box", "Choisissez « Ajouter au Dock »", null),
+        step(3, "check", "Confirmez avec « Ajouter »", "Fulmo s'ouvre ensuite comme une application.")
+      ];
+    } else {
+      title = "Installer Fulmo";
+      steps = [
+        step(1, "download", "Cherchez l'icône d'installation", "À droite de la barre d'adresse dans Chrome ou Edge."),
+        step(2, "add-box", "Ou passez par le menu", "« Caster, enregistrer et partager » puis « Installer la page en tant qu'application »."),
+        step(3, "check", "Confirmez avec « Installer »", "Fulmo s'ouvre ensuite dans sa propre fenêtre.")
+      ];
+    }
+    var done = el("button", { class: "btn btn-volt", type: "button", onclick: function () { closeSheet(); } }, "J'ai compris");
+    sheet({
+      title: title,
+      body: [
+        el("p", { class: "muted install-lede", text: "Fulmo s'ouvre alors en plein écran, d'un geste, comme une application." }),
+        el("ol", { class: "install-steps" }, steps),
+        note ? el("p", { class: "install-note" }, [icon("warn", 15), el("span", { text: note })]) : null
+      ],
+      foot: [done],
+      initialFocus: done
+    });
+  }
+
   function viewSettings() {
     var premium = state.plan === "premium";
 
@@ -7679,17 +7880,34 @@
             el("span", { class: "txt" }, [
               el("b", { text: household.name || "Mon logement" }),
               el("span", { text: plural(roomsCount, "pièce", "pièces") + " · " + plural(state.items.length, "objet", "objets") })
-            ])
+            ]),
+            state.household ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Renommer le logement", onclick: homeSheet }, [icon("pencil", 14), "Renommer"]) : null
           ]),
           el("div", { class: "set-row" }, [
             el("span", { class: "fig" }, [icon("shield", 19)]),
             el("span", { class: "txt" }, [
               el("b", { text: state.account ? state.account.name : "—" }),
               el("span", { text: state.account ? state.account.email : "" })
-            ])
+            ]),
+            // La démonstration se remet à zéro à chaque ouverture : rien à y modifier.
+            state.account && !tourIsDemo() ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Modifier mes informations", onclick: accountSheet }, [icon("pencil", 14), "Modifier"]) : null
           ]),
           el("div", { class: "set-actions" }, [
             el("button", { class: "btn btn-line", type: "button", onclick: obLogout }, [icon("logout", 15), "Se déconnecter"])
+          ])
+        ])
+      ]),
+
+      appInstalled() ? null : el("section", { class: "set-section" }, [
+        el("h2", { text: "Application" }),
+        el("div", { class: "set-group" }, [
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("phone", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Fulmo sur l'écran d'accueil" }),
+              el("span", { text: "Une icône pour ouvrir Fulmo d'un geste, en plein écran, comme une application." })
+            ]),
+            el("button", { class: "btn btn-sm btn-volt", type: "button", onclick: installApp }, [icon("add-box", 14), installPrompt ? "Installer" : "Ajouter"])
           ])
         ])
       ]),
@@ -7799,6 +8017,7 @@
         el("h2", { text: "Ce qui diffère de la vraie application" }),
         el("ul", { class: "set-group set-list" }, [
           "L'inscription n'envoie pas d'email de confirmation et n'appelle pas Supabase Auth.",
+          "La connexion avec Google ou Apple n'existe que dans l'application en ligne.",
           "L'abonnement ne passe pas par Stripe : la bascule Éclair est libre.",
           "Le foyer partagé et les invitations par email ne sont pas rejouables sans serveur.",
           "Les données vivent dans ce navigateur, pas dans PostgreSQL avec sa Row Level Security.",
@@ -8651,8 +8870,15 @@
     afterRender(screen, previousScroll, before);
   }
 
+  /* L'adresse propre est getfulmo.com/app : GitHub Pages sert app.html sous
+     ce nom. Un ancien lien en .html s'affiche sous la forme courte, sans
+     recharger. Pas en local (file://), où /app n'existe pas. */
+  if (location.protocol === "https:" && /\/app\.html$/.test(location.pathname)) {
+    try { history.replaceState(null, "", location.pathname.replace(/\.html$/, "") + location.search + location.hash); } catch (e) {}
+  }
+
   applyTheme();
-  obRoute();   // app.html#demo / #signup / #login (section inscription)
+  obRoute();   // app#demo / #signup / #login (section inscription)
   render();
 
   /* Ce que l'appareil sait faire en matière de relevé 3D. Résolu une fois,
