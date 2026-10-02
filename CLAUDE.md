@@ -1,7 +1,7 @@
 # Fulmo — prototype public : règles pour Claude
 
 Ce repo est **public** et publié tel quel sur GitHub Pages
-(https://juliencoatelen.github.io/fulmo-proto/). Tout ce qui est mergé sur `main`
+(https://getfulmo.com/, ex-juliencoatelen.github.io/fulmo-proto). Tout ce qui est mergé sur `main`
 est en ligne quelques minutes plus tard. Lis aussi `PRODUCT.md` et `DESIGN.md`.
 
 ## Ce que ce repo est, et n'est pas

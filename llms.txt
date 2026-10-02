@@ -31,8 +31,8 @@ Familles (chacun range, tout le monde retrouve), aidants (savoir à distance où
 - L'inventaire et la recherche classique fonctionnent sans connexion une fois l'application ouverte.
 
 ## Liens
-- Présentation : https://juliencoatelen.github.io/fulmo-proto/
-- Créer un compte gratuit : https://juliencoatelen.github.io/fulmo-proto/app.html#signup
-- Se connecter : https://juliencoatelen.github.io/fulmo-proto/app.html#login
-- Démo (logement pré-rempli) : https://juliencoatelen.github.io/fulmo-proto/app.html#demo
-- Questions fréquentes : https://juliencoatelen.github.io/fulmo-proto/#questions
+- Présentation : https://getfulmo.com/
+- Créer un compte gratuit : https://getfulmo.com/app.html#signup
+- Se connecter : https://getfulmo.com/app.html#login
+- Démo (logement pré-rempli) : https://getfulmo.com/app.html#demo
+- Questions fréquentes : https://getfulmo.com/#questions

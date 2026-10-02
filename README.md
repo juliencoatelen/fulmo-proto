@@ -42,8 +42,7 @@ pour le publier. Il ne dépend d'aucun CDN (polices et Three.js sont auto-héber
 ## Publier sur GitHub Pages
 
 Settings → Pages → *Deploy from a branch* → `main` / racine. L'URL canonique déclarée dans les
-métadonnées est `https://juliencoatelen.github.io/fulmo-proto/` : à adapter en cas de domaine propre
-(`index.html`, `sitemap.xml`, `robots.txt`, `llms.txt`).
+métadonnées est `https://getfulmo.com/` (fichier `CNAME`). En cas de changement de domaine, adapter `CNAME`, `index.html`, `sitemap.xml`, `robots.txt`, `llms.txt` et les pages légales.
 
 ## Prototype
 
