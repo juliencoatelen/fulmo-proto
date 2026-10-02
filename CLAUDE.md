@@ -29,3 +29,10 @@ est en ligne quelques minutes plus tard. Lis aussi `PRODUCT.md` et `DESIGN.md`.
    Si `src/landing/` change : `npm run build`, puis commite le bundle régénéré.
 3. Si une demande impose de casser une règle, ne le fais pas : explique pourquoi en une
    phrase et propose l'alternative (souvent : « à faire dans fulmo-app »).
+
+## Juridique (RGPD)
+- Ne jamais fusionner une PR ni modifier les réglages GitHub Pages sans l'accord écrit de Julien.
+- Pages : `mentions-legales.html`, `confidentialite.html`, `conditions.html`. Tout nouveau traitement de données, sous-traitant, pays d'hébergement ou traceur doit y être ajouté AVANT la mise en ligne, ainsi que dans `docs/legal/registre-des-traitements.md`.
+- Un traceur facultatif (mesure d'audience…) ne se charge qu'après consentement, via `FulmoConsent.onChange` (`assets/js/consent.js`).
+- Les fonctions d'IA n'envoient rien sans `aiConsented()` (`assets/js/app.js`). Une modification importante des conditions incrémente `LEGAL_VERSION`.
+- Les champs `[À COMPLÉTER]` (balises `mark.todo`) doivent être remplis avant l'ouverture au public.

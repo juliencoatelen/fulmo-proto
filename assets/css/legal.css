@@ -1,0 +1,67 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   FULMO — pages juridiques (mentions légales, confidentialité, conditions)
+   De nuit comme la landing, mais sans scène : une colonne de texte lisible.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-sans); font-size: var(--fs-body); line-height: 1.65;
+}
+
+.lg-wrap { width: min(100% - 32px, 760px); margin-inline: auto; }
+
+.lg-top { border-bottom: 1px solid var(--line); }
+.lg-top .lg-wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; min-height: 64px; padding-block: 10px; }
+.lg-brand { display: inline-flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; }
+.lg-brand svg { width: 30px; height: 30px; }
+.lg-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.lg-tabs a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 12px; border-radius: var(--r-pill); color: var(--fg-muted); text-decoration: none; font-size: var(--fs-small); }
+.lg-tabs a:hover { color: var(--fg); background: var(--surface); }
+.lg-tabs a[aria-current="page"] { color: var(--on-accent); background: var(--accent-fill); font-weight: 600; }
+
+main.lg { padding-block: var(--sp-7) var(--sp-8); }
+.lg h1 { font-family: var(--font-display); font-weight: 700; font-size: var(--fs-h2); line-height: 1.08; letter-spacing: -.03em; margin: 0 0 var(--sp-3); }
+.lg h2 { font-family: var(--font-display); font-weight: 650; font-size: var(--fs-h3); letter-spacing: -.02em; line-height: 1.25; margin: var(--sp-7) 0 var(--sp-3); padding-top: var(--sp-5); border-top: 1px solid var(--line); scroll-margin-top: 24px; }
+.lg h3 { font-size: 1.02rem; font-weight: 650; margin: var(--sp-5) 0 var(--sp-2); }
+.lg p, .lg li { color: var(--fg-muted); max-width: 72ch; }
+.lg strong { color: var(--fg); font-weight: 600; }
+.lg a { color: var(--accent); }
+.lg ul { padding-left: 1.2em; }
+.lg li { margin-block: 4px; }
+.lg-updated { color: var(--fg-faint); font-size: var(--fs-small); margin: 0 0 var(--sp-5); }
+.lg-lede { font-size: var(--fs-lede); color: var(--fg-muted); }
+
+.lg-toc { margin: var(--sp-5) 0 0; padding: var(--sp-4) var(--sp-5); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--sunken); }
+.lg-toc p { margin: 0 0 6px; color: var(--fg); font-weight: 600; font-size: var(--fs-small); }
+.lg-toc ol { margin: 0; padding-left: 1.2em; columns: 2 240px; column-gap: 32px; }
+.lg-toc li { font-size: var(--fs-small); break-inside: avoid; }
+
+.lg-card { margin: var(--sp-4) 0; padding: var(--sp-4) var(--sp-5); border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.lg-card dl { display: grid; grid-template-columns: minmax(130px, max-content) 1fr; gap: 6px 20px; margin: 0; }
+.lg-card dt { color: var(--fg-faint); font-size: var(--fs-small); }
+.lg-card dd { margin: 0; color: var(--fg); overflow-wrap: anywhere; }
+@media (max-width: 560px) { .lg-card dl { grid-template-columns: 1fr; gap: 2px; } .lg-card dd { margin-bottom: 10px; } }
+
+/* Tableaux : défilent dans leur cadre, jamais la page. */
+.lg-table { margin: var(--sp-4) 0; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-md); }
+.lg-table table { width: 100%; min-width: 620px; border-collapse: collapse; font-size: var(--fs-small); }
+.lg-table th, .lg-table td { padding: 10px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.lg-table th { color: var(--fg); font-weight: 600; background: var(--sunken); }
+.lg-table td { color: var(--fg-muted); }
+.lg-table tr:last-child td { border-bottom: 0; }
+
+/* Champ à compléter avant la mise en ligne : il doit sauter aux yeux. */
+mark.todo { background: color-mix(in oklab, var(--warn) 22%, transparent); color: var(--fg); padding: 0 4px; border-radius: 4px; border: 1px dashed var(--warn); }
+
+.lg-note { padding: var(--sp-3) var(--sp-4); border-left: 3px solid var(--arc); background: var(--ai-soft); border-radius: 0 var(--r-sm) var(--r-sm) 0; }
+.lg-note p { margin: 0; color: var(--fg); }
+
+.lg-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 20px; border-radius: var(--r-pill); border: 1px solid var(--line-strong); background: transparent; color: var(--fg); font: 600 var(--fs-small)/1 var(--font-sans); cursor: pointer; text-decoration: none; }
+.lg-btn:hover { border-color: var(--fg-muted); }
+.lg-btn--volt { background: var(--accent-fill); color: var(--on-accent); border-color: transparent; }
+
+.lg-foot { border-top: 1px solid var(--line); padding-block: var(--sp-6); color: var(--fg-faint); font-size: var(--fs-small); }
+.lg-foot .lg-wrap { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.lg-foot a, .lg-foot button { color: var(--fg-muted); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: .22em; }

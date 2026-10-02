@@ -10,6 +10,10 @@ Scan Éclair), puis on cherche — par mot-clé, en langage naturel, sur le plan
 index.html              Landing page (statique, SEO/GEO, scène 3D Three.js)
 app.html                Application (inscription, onboarding, recherche, lieux, plan, 3D, alertes…)
 404.html                Page d'erreur
+mentions-legales.html, confidentialite.html, conditions.html  Pages juridiques (LCEN, RGPD, CGU/CGV)
+assets/js/consent.js    Gestion du consentement aux cookies (bandeau seulement si traceur facultatif)
+docs/legal/             Registre des traitements (art. 30 RGPD)
+CLAUDE.md               Consignes de sécurité et juridiques à respecter avant toute modification
 assets/css/tokens.css   Jetons de design partagés + polices auto-hébergées
 assets/css/landing.css  Styles de la landing
 assets/css/app.css      Styles de l'application

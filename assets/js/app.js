@@ -38,6 +38,7 @@
       screen: "signup",
       tab: "search",
       theme: "light",
+      consents: {},     // { ai: { granted, at, version } } : preuve des accords (art. 7.1 RGPD)
       tourSeen: false   // visite guidée vue ou terminée : elle ne s'impose qu'une fois
     };
   }
@@ -827,6 +828,74 @@
         if (done) return;
         done = true;
         if (options.onCancel) options.onCancel();
+      }
+    });
+  }
+
+  /* ─── Consentements (RGPD) ───────────────────────────────────────────
+
+     Les fonctions d'IA envoient une phrase ou une photo à un fournisseur
+     établi aux États-Unis : on le dit, et on attend un accord explicite
+     avant le premier envoi. L'accord est daté et versionné (la preuve exigée
+     par l'article 7.1 du RGPD) et se retire dans les Réglages. Changer
+     LEGAL_VERSION réinterroge tout le monde. */
+
+  var LEGAL_VERSION = 1;
+
+  function aiConsented() {
+    var c = state.consents && state.consents.ai;
+    return !!(c && c.granted && c.version === LEGAL_VERSION);
+  }
+  function aiConsentSet(granted) {
+    if (!state.consents) state.consents = {};
+    state.consents.ai = { granted: granted, at: new Date().toISOString(), version: LEGAL_VERSION };
+    save();
+  }
+  /* Lance `run` tout de suite si l'accord est déjà donné, sinon après lui.
+     `run` part dans le clic de confirmation : un sélecteur de fichier peut
+     encore s'y ouvrir. */
+  function aiConsentThen(run) {
+    if (aiConsented()) { run(); return; }
+    var body = el("span", {}, [
+      "Pour vous répondre, Fulmo envoie à son fournisseur d'IA, Anthropic, établi aux États-Unis, uniquement la phrase que vous tapez ou la photo que vous prenez. Votre inventaire reste sur cet appareil. Évitez de photographier des personnes ou des documents. Vous pourrez retirer cet accord dans les Réglages. ",
+      el("a", { href: "confidentialite.html#ia", target: "_blank", rel: "noopener", text: "En savoir plus" })
+    ]);
+    confirmSheet({
+      title: "Utiliser l'IA ?",
+      body: body,
+      cancelLabel: "Pas maintenant",
+      confirmLabel: "J'accepte",
+      onConfirm: function () { aiConsentSet(true); run(); }
+    });
+  }
+
+  /* Droit à l'effacement : seul le compte ouvert disparaît, avec ses relevés
+     3D. Les autres comptes de l'appareil ne sont pas touchés. */
+  function deleteAccount() {
+    var who = state.account ? state.account.email : null;
+    confirmSheet({
+      title: "Supprimer votre compte ?",
+      body: "Votre compte" + (who ? " (" + who + ")" : "") + ", votre logement, vos objets, vos photos et vos relevés 3D seront effacés de cet appareil, définitivement. Pensez à exporter vos données avant.",
+      confirmLabel: "Supprimer mon compte",
+      danger: true,
+      onConfirm: function () {
+        (state.scans || []).forEach(function (scan) { if (scan && scan.id) scanStore.del(scan.id); });
+        if (who) {
+          var map = accountsRead();
+          delete map[accountKey(who)];
+          accountsWrite(map);
+        }
+        var theme = state.theme;
+        state = blank();
+        state.theme = theme;
+        // save() rangerait de nouveau le compte : on écrit l'état vide à la main.
+        try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+        resetViews();
+        obAuthView = "signup";
+        closeSheet();
+        render();
+        window.scrollTo(0, 0);
+        toast("Compte supprimé. Ses données ont été effacées de cet appareil.");
       }
     });
   }
@@ -2580,6 +2649,13 @@
       field("password", "Mot de passe", "password", "new-password", [eye, meter]),
       cta,
       el("p", { class: "ob-trust" }, [icon("shield", 14), el("span", { text: "Votre inventaire reste sur votre appareil. Aucun email n'est envoyé." })]),
+      el("p", { class: "ob-legal" }, [
+        "En créant votre compte, vous acceptez les ",
+        el("a", { href: "conditions.html", target: "_blank", rel: "noopener", text: "conditions d'utilisation" }),
+        ". Vos données sont traitées selon notre ",
+        el("a", { href: "confidentialite.html", target: "_blank", rel: "noopener", text: "politique de confidentialité" }),
+        "."
+      ]),
       // Prototype public : rien n'est transmis, mais on ne doit pas habituer les
       // visiteurs à confier un mot de passe qui leur sert ailleurs.
       el("p", { class: "ob-fine", text: "Prototype : choisissez un mot de passe inventé, que vous n'utilisez nulle part ailleurs." })
@@ -2665,7 +2741,10 @@
     var theme = state.theme;
     state = blank();
     state.theme = theme;
-    state.account = { name: account.name, email: account.email, createdAt: Date.now(), secret: account.secret || null };
+    state.account = {
+      name: account.name, email: account.email, createdAt: Date.now(), secret: account.secret || null,
+      terms: { version: LEGAL_VERSION, acceptedAt: new Date().toISOString() }
+    };
     state.session = true;
     obAuthView = null;
     signup = obBlankSignup();
@@ -4546,6 +4625,7 @@
       toast("L'assistant n'est pas disponible dans cette vue.");
       return;
     }
+    if (!aiConsented()) { aiConsentThen(runAiSearch); return; }
 
     searchState.aiBusy = true;
     searchState.aiTried = query;
@@ -5018,7 +5098,7 @@
               });
               var button = el("button", {
                 class: "btn btn-volt", type: "button", disabled: scanState.busy,
-                onclick: function () { input.click(); }
+                onclick: function () { aiConsentThen(function () { input.click(); }); }
               }, [icon("scan", 16), scanState.image ? "Reprendre une photo" : "Prendre ou importer une photo"]);
               return el("span", { class: "inline" }, [input, button]);
             })()
@@ -7534,7 +7614,16 @@
     function exportData() {
       var payload = {
         exported_at: new Date().toISOString(), format: "fulmo.export.v1",
-        household: state.household, locations: state.locations, items: state.items
+        // Le compte sans l'empreinte du mot de passe : elle n'apprend rien à
+        // personne et n'a pas à circuler dans un fichier.
+        account: state.account ? {
+          name: state.account.name, email: state.account.email,
+          created_at: state.account.createdAt ? new Date(state.account.createdAt).toISOString() : null,
+          terms: state.account.terms || null
+        } : null,
+        plan: state.plan, consents: state.consents || {},
+        household: state.household, locations: state.locations, items: state.items,
+        history: state.history, scans: state.scans
       };
       var filename = "fulmo-export-" + new Date().toISOString().slice(0, 10) + ".json";
       var data = JSON.stringify(payload, null, 2);
@@ -7669,15 +7758,40 @@
             el("span", { class: "fig" }, [icon("shield", 19)]),
             el("span", { class: "txt" }, [
               el("b", { text: "Stockées sur cet appareil" }),
-              el("span", { text: "Rien n'est envoyé à un serveur. Seule la phrase d'une recherche IA part vers l'assistant." })
+              el("span", { text: "Rien n'est envoyé à un serveur. Seules la phrase d'une recherche IA et la photo d'un Scan Éclair partent vers l'assistant, avec votre accord." })
             ])
           ]),
+          switchRow(
+            "Fonctions d'IA",
+            aiConsented()
+              ? "Accord donné le " + new Date(state.consents.ai.at).toLocaleDateString("fr-FR") + ". Désactivez pour ne plus rien envoyer au fournisseur d'IA (Anthropic, États-Unis)."
+              : "Désactivées. Activez pour envoyer vos recherches en langage naturel et vos photos de Scan Éclair au fournisseur d'IA (Anthropic, États-Unis).",
+            aiConsented(),
+            function () {
+              if (aiConsented()) { aiConsentSet(false); render(); toast("Fonctions d'IA désactivées."); return; }
+              aiConsentThen(function () { render(); toast("Fonctions d'IA activées."); });
+            }
+          ),
           el("div", { class: "set-actions" }, [
             el("button", { class: "btn btn-line", type: "button", onclick: exportData }, [icon("download", 15), "Exporter en JSON"]),
             el("button", { class: "btn btn-line", type: "button", onclick: loadSample }, "Charger le logement d'exemple"),
+            el("button", { class: "btn btn-danger-line", type: "button", onclick: deleteAccount }, [icon("trash", 15), "Supprimer mon compte"]),
             el("button", { class: "btn btn-danger-line", type: "button", onclick: confirmReset }, [icon("trash", 15), "Tout effacer"])
           ])
         ])
+      ]),
+
+      el("section", { class: "set-section" }, [
+        el("h2", { text: "Informations légales" }),
+        el("ul", { class: "set-group set-list" }, [
+          ["Mentions légales", "mentions-legales.html"],
+          ["Politique de confidentialité", "confidentialite.html"],
+          ["Conditions générales d'utilisation et de vente", "conditions.html"]
+        ].map(function (link) {
+          return el("li", {}, [icon("chev", 14), el("a", { href: link[1], target: "_blank", rel: "noopener", text: link[0] })]);
+        }).concat([
+          el("li", {}, [icon("chev", 14), el("a", { href: "confidentialite.html#cookies", "data-consent-open": "", text: "Gérer les cookies" })])
+        ]))
       ]),
 
       el("section", { class: "set-section" }, [
