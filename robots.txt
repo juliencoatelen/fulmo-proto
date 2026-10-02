@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /app.html
 
-Sitemap: https://juliencoatelen.github.io/fulmo-proto/sitemap.xml
+Sitemap: https://getfulmo.com/sitemap.xml

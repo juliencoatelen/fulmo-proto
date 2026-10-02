@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://juliencoatelen.github.io/fulmo-proto/</loc>
+    <loc>https://getfulmo.com/</loc>
     <lastmod>2026-09-27</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://juliencoatelen.github.io/fulmo-proto/mentions-legales.html</loc>
+    <loc>https://getfulmo.com/mentions-legales.html</loc>
     <lastmod>2026-10-01</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://juliencoatelen.github.io/fulmo-proto/confidentialite.html</loc>
+    <loc>https://getfulmo.com/confidentialite.html</loc>
     <lastmod>2026-10-01</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://juliencoatelen.github.io/fulmo-proto/conditions.html</loc>
+    <loc>https://getfulmo.com/conditions.html</loc>
     <lastmod>2026-10-01</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
