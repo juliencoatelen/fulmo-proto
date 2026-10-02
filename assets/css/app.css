@@ -218,18 +218,6 @@ p { margin: 0; }
 .demo-bar .demo-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .demo-bar .demo-long { display: none; }
 @media (min-width: 560px) { .demo-bar .demo-long { display: inline; } .demo-bar .demo-short { display: none; } }
-.demo-bar .spacer { flex: 1 1 auto; }
-.demo-bar .demo-reset {
-  position: relative; display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  height: 26px; padding: 0 8px; border: 0; border-radius: var(--r-pill);
-  background: transparent; color: var(--fg-muted); cursor: pointer;
-  font-size: var(--fs-micro); font-weight: 600;
-  transition: background-color var(--dur-1), color var(--dur-1);
-}
-.demo-bar .demo-reset::before { content: ""; position: absolute; inset: -9px -4px; }
-.demo-bar .demo-reset:hover { background: var(--hover); color: var(--fg); }
-.demo-bar .demo-reset .lbl { display: none; }
-@media (min-width: 480px) { .demo-bar .demo-reset .lbl { display: inline; } }
 
 /* ═══ Écrans plein cadre (inscription, onboarding) ══════════════════════
    Structure seulement : onboarding.css habille ces écrans. */
@@ -1300,3 +1288,21 @@ p.label[style*="text-transform:none"] { font-weight: 400; line-height: 1.6 !impo
 
 /* ─── Badge bêta, à côté du logo ─────────────────────────────────────── */
 .logo .beta-badge { align-self: flex-start; margin-left: .3em; padding: .2em .45em; border: 1px solid currentColor; border-radius: var(--r-pill); font: 600 .38em/1.1 var(--font-sans); letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }
+
+/* Feuille « Mes informations » : les champs du compte, puis le mot de passe. */
+.acct-form { display: flex; flex-direction: column; gap: 16px; }
+.acct-sub { margin: 6px 0 -4px; padding-top: 14px; border-top: 1px solid var(--line); font-size: .8125rem; font-weight: 600; color: var(--fg-muted); }
+.set-row > .btn { flex-shrink: 0; }
+
+/* Installation sur l'écran d'accueil : trois gestes, chacun avec l'icône
+   qu'on verra à l'écran. */
+.install-lede { margin: 0 0 14px; font-size: .9375rem; }
+.install-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.install-step { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.install-n { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-fill); color: var(--on-accent); font-size: .75rem; font-weight: 700; }
+.install-ic { flex-shrink: 0; width: 42px; height: 42px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--hover); color: var(--fg); }
+.install-txt { min-width: 0; }
+.install-txt b { display: block; font-size: .9375rem; font-weight: 600; }
+.install-txt span { display: block; margin-top: 2px; font-size: .8125rem; line-height: 1.5; color: var(--fg-muted); }
+.install-note { display: flex; gap: 8px; align-items: flex-start; margin: 14px 0 0; font-size: .8125rem; line-height: 1.5; color: var(--fg-muted); }
+.install-note .icon { flex-shrink: 0; margin-top: 2px; }

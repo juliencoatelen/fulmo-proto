@@ -310,18 +310,6 @@ html:has(.ob) { background: var(--ink-0); }
 .ob-or { display: flex; align-items: center; gap: 14px; color: var(--fg-faint); font-size: var(--fs-micro); }
 .ob-or::before, .ob-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
-.ob-social { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: -8px; }
-.ob-social-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-  height: 50px; padding: 0 16px;
-  border: 1px solid var(--line-strong); border-radius: var(--r-pill);
-  background: rgb(255 255 255 / .02); color: var(--fg);
-  font-family: var(--font-sans); font-size: .9375rem; font-weight: 500; cursor: pointer;
-  transition: border-color var(--dur-1), background-color var(--dur-1), translate var(--dur-2) var(--ease-out);
-}
-.ob-social-btn:hover { border-color: var(--fg-muted); background: rgb(255 255 255 / .06); translate: 0 -1px; }
-.ob-social-ic { display: inline-flex; }
-.ob-social + .ob-fine { text-align: center; margin-inline: auto; }
 
 .ob-demo {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px;
@@ -756,7 +744,7 @@ html[data-ob-dir="back"]::view-transition-new(ob-stage) { animation-name: ob-in-
 }
 .ob-linkbtn:hover { color: var(--volt); text-decoration-color: var(--volt); }
 .ob-login-row { display: flex; justify-content: flex-end; margin: -4px 0 -2px; font-size: var(--fs-small); }
-.ob-switch { margin: 0; font-size: var(--fs-small); color: var(--fg-muted); }
+.ob-auth-switch { margin: 0; font-size: var(--fs-small); color: var(--fg-muted); }
 .ob-login-panel:empty { display: none; }
 
 .ob-panel {

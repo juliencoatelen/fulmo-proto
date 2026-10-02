@@ -32,7 +32,7 @@ Familles (chacun range, tout le monde retrouve), aidants (savoir à distance où
 
 ## Liens
 - Présentation : https://getfulmo.com/
-- Créer un compte gratuit : https://getfulmo.com/app.html#signup
-- Se connecter : https://getfulmo.com/app.html#login
-- Démo (logement pré-rempli) : https://getfulmo.com/app.html#demo
+- Créer un compte gratuit : https://getfulmo.com/app#signup
+- Se connecter : https://getfulmo.com/app#login
+- Démo (logement pré-rempli) : https://getfulmo.com/app#demo
 - Questions fréquentes : https://getfulmo.com/#questions
