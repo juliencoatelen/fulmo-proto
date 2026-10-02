@@ -65,3 +65,5 @@ mark.todo { background: color-mix(in oklab, var(--warn) 22%, transparent); color
 .lg-foot { border-top: 1px solid var(--line); padding-block: var(--sp-6); color: var(--fg-faint); font-size: var(--fs-small); }
 .lg-foot .lg-wrap { display: flex; flex-wrap: wrap; gap: 6px 18px; }
 .lg-foot a, .lg-foot button { color: var(--fg-muted); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: .22em; }
+
+.beta-badge { align-self: flex-start; padding: 2px 6px; border: 1px solid var(--volt); border-radius: var(--r-pill); color: var(--volt); font: 600 .62rem/1.2 var(--font-sans); letter-spacing: .04em; text-transform: uppercase; }

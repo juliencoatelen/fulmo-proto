@@ -1297,3 +1297,6 @@ p.label[style*="text-transform:none"] { font-weight: 400; line-height: 1.6 !impo
 .set-list li a { color: var(--fg); text-decoration: underline; text-underline-offset: .22em; }
 .set-list li a:hover { color: var(--accent); }
 .confirm-body a { color: var(--accent); }
+
+/* ─── Badge bêta, à côté du logo ─────────────────────────────────────── */
+.logo .beta-badge { align-self: flex-start; margin-left: .3em; padding: .2em .45em; border: 1px solid currentColor; border-radius: var(--r-pill); font: 600 .38em/1.1 var(--font-sans); letter-spacing: .05em; text-transform: uppercase; color: var(--accent); }

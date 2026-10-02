@@ -773,7 +773,8 @@
         wrap.style.width = "0.92em";
         wrap.style.height = "0.92em";
         return wrap;
-      })()
+      })(),
+      el("span", { class: "beta-badge", title: "Version bêta", text: "Bêta" })
     ]);
   }
 
@@ -1704,8 +1705,8 @@
     return el("div", { class: "demo-bar" + (night ? " night" : "") }, [
       el("span", { class: "demo-dot", "aria-hidden": "true" }),
       el("span", { class: "demo-text" }, [
-        el("strong", { text: "Prototype" }),
-        el("span", { class: "demo-long", text: " · données locales à ce navigateur, aucun paiement" }),
+        el("strong", { text: "Bêta" }),
+        el("span", { class: "demo-long", text: " · données locales à ce navigateur, Éclair offert aux early adopters" }),
         el("span", { class: "demo-short", text: " · données locales" })
       ]),
       el("span", { class: "spacer" }),
@@ -2632,9 +2633,9 @@
         onclick: function () {
           // Un compte fictif par fournisseur, distinct de la démonstration.
           var mail = provider.toLowerCase() + ".demo@exemple.fr";
-          if (accountFind(mail)) { obOpenAccount(mail, null); toast("Prototype : compte " + provider + " fictif rouvert."); return; }
+          if (accountFind(mail)) { obOpenAccount(mail, null); toast("Bêta : compte " + provider + " fictif rouvert."); return; }
           enter({ name: "Camille Dupont", email: mail }, false);
-          toast("Prototype : compte fictif créé, sans connexion à " + provider + ".");
+          toast("Bêta : compte fictif créé, sans connexion à " + provider + ".");
         }
       }, [glyph, el("span", { text: provider })]);
     }
@@ -2658,7 +2659,7 @@
       ]),
       // Prototype public : rien n'est transmis, mais on ne doit pas habituer les
       // visiteurs à confier un mot de passe qui leur sert ailleurs.
-      el("p", { class: "ob-fine", text: "Prototype : choisissez un mot de passe inventé, que vous n'utilisez nulle part ailleurs." })
+      el("p", { class: "ob-fine", text: "Bêta : choisissez un mot de passe inventé, que vous n'utilisez nulle part ailleurs." })
     ]);
     paintMeter();
 
@@ -2696,7 +2697,7 @@
       form,
       el("div", { class: "ob-or", role: "separator" }, [el("span", { text: "ou" })]),
       el("div", { class: "ob-social" }, [social("Google", OB_GOOGLE), social("Apple", OB_APPLE)]),
-      el("p", { class: "ob-fine", text: "Prototype : ces deux boutons créent un compte fictif. Ni Google ni Apple ne sont contactés." }),
+      el("p", { class: "ob-fine", text: "Bêta : ces deux boutons créent un compte fictif. Ni Google ni Apple ne sont contactés." }),
       /* Entrée directe : un prototype qu'on n'atteint qu'après avoir passé
          une validation de mot de passe n'est pas un prototype utile. */
       el("button", {
@@ -2936,7 +2937,7 @@
     function showNoAccount(email) {
       panel.replaceChildren(el("div", { class: "ob-panel", role: "alert" }, [
         el("p", { class: "ob-panel-title", text: "Aucun compte avec cette adresse sur cet appareil." }),
-        el("p", { text: "Dans ce prototype, un compte vit dans le navigateur où il a été créé. Vérifiez l'adresse, ou créez votre compte ici." }),
+        el("p", { text: "Pendant la bêta, un compte vit dans le navigateur où il a été créé. Vérifiez l'adresse, ou créez votre compte ici." }),
         el("div", { class: "ob-panel-actions" }, [
           el("button", { class: "ob-line-btn ob-line-btn--volt", type: "button", onclick: function () { toSignup(email); } }, [icon("plus", 15), "Créer un compte"]),
           demoButton()
@@ -2947,7 +2948,7 @@
 
     function showForgot() {
       panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
-        el("p", { class: "ob-panel-title", text: "Pas de réinitialisation dans ce prototype." }),
+        el("p", { class: "ob-panel-title", text: "Pas de réinitialisation pendant la bêta." }),
         el("p", { text: "Sans serveur, aucun email ne peut partir. Votre compte et votre logement restent dans ce navigateur ; si le mot de passe est perdu, créez un nouveau compte avec une autre adresse." }),
         el("div", { class: "ob-panel-actions" }, [
           el("button", { class: "ob-line-btn", type: "button", onclick: function () { toSignup(null); } }, [icon("plus", 15), "Créer un nouveau compte"])
@@ -3064,7 +3065,7 @@
       picker,
       form,
       panel,
-      el("p", { class: "ob-fine", text: "Prototype : votre compte vit dans ce navigateur. Le mot de passe n'y est jamais stocké en clair, seulement son empreinte." }),
+      el("p", { class: "ob-fine", text: "Bêta : votre compte vit dans ce navigateur. Le mot de passe n'y est jamais stocké en clair, seulement son empreinte." }),
       el("p", { class: "ob-switch" }, [
         "Pas encore de compte ? ",
         el("button", { class: "ob-linkbtn", type: "button", onclick: function () { toSignup(null); } }, "Créer un compte")
@@ -3127,7 +3128,7 @@
   ];
   var OB_PLANS = [
     { id: "free", name: "Libre", price: "0 €", suffix: "pour toujours", pitch: "Tout ce qu'il faut pour ne plus jamais chercher.", features: FREE_FEATURES },
-    { id: "premium", name: "Éclair", price: "9 €", suffix: "par mois", pitch: "Pour référencer vite et chercher encore plus vite.", features: PAID_FEATURES, tag: "Recommandé" }
+    { id: "premium", name: "Éclair", price: "0 €", suffix: "pendant la bêta, puis 9 €/mois", pitch: "Pour référencer vite et chercher encore plus vite.", features: PAID_FEATURES, tag: "Offert pendant la bêta" }
   ];
 
   /* Deux cartes en groupe radio : flèches pour passer de l'une à l'autre,
@@ -3193,9 +3194,9 @@
     return { node: group, get: function () { return chosen; }, set: set };
   }
 
-  var OB_PLAN_NOTE = "Prototype : l'Éclair s'active gratuitement. Aucune carte n'est demandée et rien n'est débité. Dans la vraie application, un paiement sécurisé s'ouvrirait ici.";
+  var OB_PLAN_NOTE = "Bêta : l'Éclair est offert aux early adopters. Aucune carte n'est demandée et rien n'est débité. Vous serez prévenu avant toute facturation.";
 
-  function obPlanLabel(id) { return id === "premium" ? "Activer l'Éclair, gratuit en démo" : "Continuer avec Libre"; }
+  function obPlanLabel(id) { return id === "premium" ? "Activer l'Éclair offert" : "Continuer avec Libre"; }
 
   /* Conservé pour un changement de formule hors du parcours (réglages) :
      les mêmes cartes, dans une feuille. */
@@ -3210,7 +3211,7 @@
         save();
         closeSheet();
         render();
-        if (state.plan === "premium") toast("Éclair activé — gratuitement, en mode prototype.");
+        if (state.plan === "premium") toast("Éclair activé : offert pendant la bêta.");
       },
       text: obPlanLabel(chooser.get())
     });
@@ -3550,7 +3551,7 @@
         save();
         if (state.plan === "premium") {
           obBurstFrom(planCta, event, { count: 30, power: 7, up: true });
-          toast("Éclair activé — gratuitement, en mode prototype.");
+          toast("Éclair activé : offert pendant la bêta.");
         }
         go(1);
       };
@@ -7699,13 +7700,13 @@
           el("div", { class: "set-row" }, [
             el("span", { class: "fig" + (premium ? " volt" : "") }, [icon("bolt", 19)]),
             el("span", { class: "txt" }, [
-              el("b", { text: premium ? "Éclair — 9 €/mois" : "Libre — gratuit" }),
+              el("b", { text: premium ? "Éclair — offert pendant la bêta" : "Libre — gratuit" }),
               el("span", { text: premium ? "Scan Éclair, plan du logement, espace 3D et recherche en langage naturel." : "Recherche, lieux et alertes. Passez à l'Éclair pour le scan, le plan et l'IA." })
             ])
           ]),
           switchRow(
             premium ? "Éclair activé" : "Activer l'Éclair",
-            "Dans la vraie application, cette bascule ouvre un paiement Stripe. Ici elle est libre : comparez les deux formules autant que vous voulez.",
+            "Pendant la bêta, l'Éclair est offert aux early adopters, sans paiement. Ensuite 9 €/mois, uniquement avec votre accord : vous serez prévenu avant.",
             premium,
             function () {
               state.plan = premium ? "free" : "premium";
@@ -7818,9 +7819,9 @@
         el("p", { class: "lede", style: "max-width:44ch", text: body }),
         el("button", {
           class: "btn btn-lg btn-volt", type: "button", style: "margin-top:10px",
-          onclick: function () { state.plan = "premium"; save(); render(); toast("Éclair activé — gratuitement, en mode prototype."); }
-        }, [icon("bolt", 16), "Activer l'Éclair (gratuit en démo)"]),
-        el("p", { class: "muted", style: "font-size:.75rem;max-width:40ch", text: "Dans la vraie application, ce bouton ouvre un paiement Stripe à 9 €/mois, résiliable en un clic." })
+          onclick: function () { state.plan = "premium"; save(); render(); toast("Éclair activé : offert pendant la bêta."); }
+        }, [icon("bolt", 16), "Activer l'Éclair (offert pendant la bêta)"]),
+        el("p", { class: "muted", style: "font-size:.75rem;max-width:40ch", text: "Offert aux early adopters pendant la bêta, sans carte bancaire. Ensuite 9 €/mois, uniquement avec votre accord." })
       ])
     ]);
   }

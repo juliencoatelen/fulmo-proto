@@ -120,6 +120,9 @@ h1 em, h2 em {
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; min-height: 44px; }
 .brand-mark { width: 30px; height: 30px; color: var(--fg); }
 .brand-name { font: 700 1.22rem/1 var(--font-display); letter-spacing: -0.03em; }
+.beta-badge { align-self: flex-start; margin-left: 2px; padding: 2px 6px; border: 1px solid var(--volt); border-radius: var(--r-pill); color: var(--volt); font: 600 .62rem/1.2 var(--font-sans); letter-spacing: .04em; text-transform: uppercase; }
+.plan-early { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--r-sm); background: color-mix(in oklab, var(--volt) 12%, transparent); color: var(--fg); font-size: .88rem; line-height: 1.5; }
+.price s { color: var(--fg-faint); }
 .nav-links { display: flex; gap: 2px; margin-inline: auto; }
 .nav-links a, .nav-login {
   display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: var(--r-pill);
