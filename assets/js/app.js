@@ -4366,8 +4366,7 @@
         el("h2", { class: "display t-md", text: "Votre logement est vide pour l'instant" }),
         el("p", { class: "lede", style: "max-width:42ch", text: "Référencez un premier objet : c'est la seule chose à faire avant de pouvoir le retrouver." }),
         el("div", { class: "inline", style: "justify-content:center;margin-top:10px" }, [
-          el("button", { class: "btn btn-volt", type: "button", onclick: function () { itemSheet(null); } }, [icon("plus", 16), "Référencer un objet"]),
-          el("button", { class: "btn btn-line", type: "button", onclick: function () { seedHousehold(); save(); render(); toast("Logement d'exemple chargé : 40 objets."); } }, "Charger un exemple")
+          el("button", { class: "btn btn-volt", type: "button", onclick: function () { itemSheet(null); } }, [icon("plus", 16), "Référencer un objet"])
         ])
       ]);
     } else if (results.length === 0) {
@@ -7853,21 +7852,6 @@
       }
     }
 
-    function loadSample() {
-      function load() {
-        searchState.query = ""; searchState.filter = null; aiResults = null;
-        seedHousehold(); save(); goTab("search");
-        toast("Logement d'exemple chargé : 40 objets.");
-      }
-      if (state.items.length === 0) { load(); return; }
-      confirmSheet({
-        title: "Charger le logement d'exemple ?",
-        body: "Vos " + plural(state.items.length, "objet", "objets") + " et vos lieux actuels seront remplacés par le logement de démonstration.",
-        confirmLabel: "Remplacer",
-        onConfirm: load
-      });
-    }
-
     var household = state.household || {};
     var roomsCount = state.locations.filter(function (l) { return !l.parentId; }).length;
 
@@ -7995,7 +7979,6 @@
           ),
           el("div", { class: "set-actions" }, [
             el("button", { class: "btn btn-line", type: "button", onclick: exportData }, [icon("download", 15), "Exporter en JSON"]),
-            el("button", { class: "btn btn-line", type: "button", onclick: loadSample }, "Charger le logement d'exemple"),
             el("button", { class: "btn btn-danger-line", type: "button", onclick: deleteAccount }, [icon("trash", 15), "Supprimer mon compte"]),
             el("button", { class: "btn btn-danger-line", type: "button", onclick: confirmReset }, [icon("trash", 15), "Tout effacer"])
           ])
