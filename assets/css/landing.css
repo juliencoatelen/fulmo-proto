@@ -110,7 +110,10 @@ h1 em, h2 em {
 .cta-row { display: flex; flex-wrap: wrap; gap: 12px; }
 
 /* ─── Navigation ──────────────────────────────────────────────────────── */
-.nav { position: fixed; inset: 12px var(--gutter) auto; z-index: 50; max-width: var(--wrap); margin-inline: auto; }
+.nav { position: fixed; inset: 12px var(--gutter) auto; z-index: 50; max-width: var(--wrap); margin-inline: auto; pointer-events: none; }
+/* Le menu mobile replié reste dans la boîte de l'en-tête : seuls la barre et le
+   menu ouvert reçoivent les clics, sinon l'en-tête masque les boutons du dessous. */
+.nav-bar, .nav.is-open .nav-panel { pointer-events: auto; }
 .nav-bar {
   display: flex; align-items: center; gap: 16px; height: var(--nav-h); padding: 0 8px 0 18px;
   background: var(--glass); border: 1px solid var(--glass-line); border-radius: var(--r-pill);
