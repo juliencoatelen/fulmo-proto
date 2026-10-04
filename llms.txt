@@ -13,9 +13,10 @@ Un logement contient plusieurs milliers d'objets ; la mémoire en suit quelques 
 ## Fonctions gratuites (formule Libre)
 - Recherche instantanée tolérante aux fautes, aux accents, aux majuscules et aux pluriels.
 - Mots-clés transverses : une requête comme « Noël » fait remonter ensemble tous les objets concernés, où qu'ils soient.
-- Foyer partagé : jusqu'à 5 membres voient et rangent dans le même logement.
+- Foyer partagé : jusqu'à 5 membres voient le même logement, chacun avec un rôle (Admin, Membre ou Invité en lecture seule) ; l'invitation exige un email confirmé.
+- Inventaire enregistré dans l'Union européenne (Francfort) : le même sur tous les appareils du foyer.
 - Aucun matériel : pas de balise Bluetooth ni d'étiquette à acheter.
-- Fonctionne dans le navigateur, sur mobile et sur ordinateur ; ajout possible à l'écran d'accueil, sans store.
+- Fonctionne dans le navigateur (app.getfulmo.com), sur mobile et sur ordinateur ; ajout possible à l'écran d'accueil, sans store.
 - Objets, pièces, zones et meubles illimités ; photo par objet ; export des données à tout moment.
 
 ## Pour qui
@@ -32,7 +33,7 @@ Familles (chacun range, tout le monde retrouve), aidants (savoir à distance où
 
 ## Liens
 - Présentation : https://getfulmo.com/
-- Créer un compte gratuit : https://getfulmo.com/app#signup
-- Se connecter : https://getfulmo.com/app#login
+- Créer un compte gratuit : https://app.getfulmo.com/inscription
+- Se connecter : https://app.getfulmo.com/connexion
 - Démo (logement pré-rempli) : https://getfulmo.com/app#demo
 - Questions fréquentes : https://getfulmo.com/#questions

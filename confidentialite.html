@@ -32,10 +32,10 @@
 <main class="lg">
   <div class="lg-wrap">
     <h1>Politique de confidentialité</h1>
-    <p class="lg-updated">Version 2 · en vigueur le <time datetime="2026-10-02">2 octobre 2026</time></p>
+    <p class="lg-updated">Version 3 · en vigueur le <time datetime="2026-10-04">4 octobre 2026</time></p>
     <p class="lg-lede">Fulmo est conçu pour savoir le moins de choses possible sur vous. Cette page explique, conformément aux articles 12 à 14 du Règlement général sur la protection des données (RGPD) et à la loi Informatique et Libertés, quelles données sont traitées, pourquoi, où elles se trouvent et comment exercer vos droits.</p>
 
-    <div class="lg-note"><p><strong>En bref.</strong> Sur ce site, votre compte et votre inventaire restent dans le navigateur de votre appareil. Si vous créez un compte en ligne sur app.getfulmo.com, il est enregistré dans l'Union européenne (Francfort). Rien n'est vendu, rien n'est utilisé pour de la publicité. Les fonctions d'IA, seulement si vous les lancez et après votre accord, envoient la phrase tapée ou la photo prise à notre fournisseur d'IA, aux États-Unis.</p></div>
+    <div class="lg-note"><p><strong>En bref.</strong> Votre compte et votre inventaire sont enregistrés dans l'Union européenne (Francfort), sur l'application app.getfulmo.com : vous les retrouvez sur tous vos appareils, et seuls les membres de votre foyer y ont accès. La démonstration de ce site (getfulmo.com/app) garde, elle, ses données dans le navigateur de votre appareil. Rien n'est vendu, rien n'est utilisé pour de la publicité. Les fonctions d'IA, seulement si vous les lancez et après votre accord, envoient la phrase tapée ou la photo prise à notre fournisseur d'IA, aux États-Unis.</p></div>
 
     <nav class="lg-toc" aria-label="Sommaire">
       <p>Sommaire</p>
@@ -70,6 +70,8 @@
         <tbody>
           <tr><td>Prénom, nom, adresse email, empreinte salée du mot de passe (jamais le mot de passe en clair), formule</td><td>Créer et ouvrir votre compte, envoyer l'email de confirmation</td><td>Exécution du contrat (CGU)</td><td>Jusqu'à la suppression du compte ; compte en ligne supprimé après 3 ans sans connexion</td></tr>
           <tr><td>Logement, pièces, meubles, objets, photos d'objets, alertes, historique de recherche</td><td>Fournir le service : ranger et retrouver vos objets</td><td>Exécution du contrat</td><td>Jusqu'à ce que vous les supprimiez ou supprimiez le compte</td></tr>
+          <tr><td>Foyer partagé : nom et rôle de chaque membre (visibles des autres membres du foyer)</td><td>Partager un même inventaire et en régler les droits</td><td>Exécution du contrat</td><td>Jusqu'au retrait de l'accès ou à la suppression du compte</td></tr>
+          <tr><td>Invitation : adresse email de la personne invitée, rôle proposé, empreinte du lien (le lien lui-même n'est pas conservé)</td><td>Permettre à un administrateur d'inviter une personne dans son foyer, et vérifier que c'est bien elle qui l'accepte</td><td>Intérêt légitime de l'administrateur du foyer</td><td>Lien valable 7 jours ; invitation effacée 30 jours après son expiration</td></tr>
           <tr><td>Relevés 3D et panoramiques de vos pièces</td><td>Afficher votre logement en 3D</td><td>Exécution du contrat</td><td>Jusqu'à ce que vous les supprimiez</td></tr>
           <tr><td>Phrase de recherche en langage naturel, photo du Scan Éclair</td><td>Interroger l'IA pour vous proposer des objets</td><td>Votre consentement (art. 6.1.a), demandé avant le premier envoi</td><td>Non conservées par Fulmo. Chez le fournisseur d'IA : voir <a href="#ia">section 6</a></td></tr>
           <tr><td>Preuve de vos consentements (date, version)</td><td>Démontrer votre accord</td><td>Obligation légale (art. 7.1 RGPD)</td><td>Durée du compte ; 6 mois pour le choix sur les cookies</td></tr>
@@ -88,10 +90,10 @@
       <table>
         <thead><tr><th scope="col">Données</th><th scope="col">Où</th><th scope="col">Pays</th><th scope="col">Statut</th></tr></thead>
         <tbody>
-          <tr><td>Compte, logement, objets, photos, relevés 3D, alertes, historique</td><td>Stockage local du navigateur de votre appareil (localStorage et IndexedDB)</td><td>Le pays où se trouve votre appareil. Fulmo n'en reçoit aucune copie.</td><td>Aujourd'hui</td></tr>
+          <tr><td>Démonstration (getfulmo.com/app) : compte, logement, objets, photos, relevés 3D, alertes, historique</td><td>Stockage local du navigateur de votre appareil (localStorage et IndexedDB)</td><td>Le pays où se trouve votre appareil. Fulmo n'en reçoit aucune copie.</td><td>Aujourd'hui</td></tr>
           <tr><td>Fichiers du site (pages, images, code) et journaux techniques de visite (adresse IP)</td><td>GitHub Pages, GitHub, Inc.</td><td>États-Unis, avec un réseau de diffusion mondial</td><td>Aujourd'hui</td></tr>
           <tr><td>Phrase de recherche IA, photo du Scan Éclair</td><td>Anthropic, fournisseur du modèle d'IA</td><td>États-Unis</td><td>Aujourd'hui, uniquement après votre accord</td></tr>
-          <tr><td>Compte en ligne (app.getfulmo.com) : nom, email, empreinte du mot de passe, formule ; plus tard l'inventaire synchronisé</td><td>Supabase (base PostgreSQL, authentification et envoi des emails de confirmation)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui, pour les comptes en ligne</td></tr>
+          <tr><td>Application (app.getfulmo.com) : nom, email, empreinte du mot de passe, formule, foyers, pièces, objets, membres et invitations</td><td>Supabase (base PostgreSQL, authentification et envoi des emails de confirmation)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui</td></tr>
           <tr><td>Application app.getfulmo.com : exécution du code serveur et journaux techniques (adresse IP)</td><td>Vercel Inc.</td><td>Union européenne, région Francfort, Allemagne (fra1), avec un réseau de diffusion mondial</td><td>Aujourd'hui</td></tr>
           <tr><td>Compteurs anti-abus (empreinte de l'adresse IP)</td><td>Upstash (Redis)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui</td></tr>
           <tr><td>Paiement de l'abonnement Éclair</td><td>Stripe Payments Europe, Ltd.</td><td>Irlande (Union européenne), avec transferts possibles vers les États-Unis</td><td>À l'ouverture des paiements</td></tr>
@@ -101,7 +103,7 @@
     <p>Lorsque l'un des services marqués « à l'ouverture » sera mis en service, cette page sera mise à jour et vous en serez informé avant tout transfert de vos données.</p>
 
     <h2 id="destinataires">4. Destinataires et sous-traitants</h2>
-    <p>Vos données ne sont accessibles qu'à vous et, une fois le foyer partagé disponible, aux membres que vous invitez. Fulmo fait appel aux sous-traitants suivants (article 28 du RGPD), liés par un contrat de traitement des données :</p>
+    <p>Vos données ne sont accessibles qu'à vous et aux membres que vous invitez dans votre foyer, selon le rôle que vous leur donnez (Admin, Membre, ou Invité en consultation seule). Un administrateur du foyer peut retirer un accès à tout moment. Fulmo fait appel aux sous-traitants suivants (article 28 du RGPD), liés par un contrat de traitement des données :</p>
     <ul>
       <li><strong>GitHub, Inc.</strong> (États-Unis) : hébergement des fichiers du site. <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">Déclaration de confidentialité de GitHub</a>.</li>
       <li><strong>Anthropic</strong> (États-Unis) : traitement par IA des phrases de recherche et des photos du Scan Éclair. <a href="https://www.anthropic.com/legal/privacy">Politique de confidentialité d'Anthropic</a>.</li>
@@ -128,7 +130,9 @@
       <table>
         <thead><tr><th scope="col">Nom</th><th scope="col">Type</th><th scope="col">Rôle</th><th scope="col">Durée</th></tr></thead>
         <tbody>
-          <tr><td><code>fulmo.demo.v2</code>, <code>fulmo.accounts.v1</code></td><td>localStorage</td><td>Vos comptes et votre logement sur cet appareil</td><td>Jusqu'à suppression du compte</td></tr>
+          <tr><td><code>sb-…-auth-token</code></td><td>Cookie (HttpOnly, app.getfulmo.com)</td><td>Garder votre session ouverte dans l'application</td><td>Jusqu'à la déconnexion</td></tr>
+          <tr><td><code>fulmo_next</code></td><td>Cookie (HttpOnly, app.getfulmo.com)</td><td>Vous ramener sur l'invitation après la confirmation de votre email</td><td>24 heures au plus</td></tr>
+          <tr><td><code>fulmo.demo.v2</code>, <code>fulmo.accounts.v1</code></td><td>localStorage</td><td>Démonstration : vos comptes et votre logement sur cet appareil</td><td>Jusqu'à suppression du compte</td></tr>
           <tr><td><code>fulmo</code></td><td>IndexedDB</td><td>Vos relevés 3D et panoramiques</td><td>Jusqu'à leur suppression</td></tr>
           <tr><td><code>fulmo.theme</code></td><td>localStorage</td><td>Thème clair ou sombre</td><td>Jusqu'à effacement des données du site</td></tr>
           <tr><td><code>fulmo.consent.v1</code></td><td>localStorage</td><td>Vos choix sur les cookies</td><td>6 mois</td></tr>
@@ -139,7 +143,7 @@
     <p><button class="lg-btn lg-btn--volt" type="button" data-consent-open>Gérer les cookies</button></p>
 
     <h2 id="securite">8. Sécurité</h2>
-    <p>Le site est servi uniquement en HTTPS. Le mot de passe n'est jamais enregistré en clair : seule son empreinte SHA-256 salée est conservée. Le site ne charge aucun script ni police depuis un service tiers. Comme vos données vivent dans votre navigateur, la sécurité de votre appareil (verrouillage, sessions partagées) compte aussi : sur un appareil partagé, déconnectez-vous ou supprimez votre compte après usage.</p>
+    <p>Le site et l'application sont servis uniquement en HTTPS. Le mot de passe n'est jamais enregistré en clair : seule son empreinte salée est conservée. Dans l'application, chaque accès à la base est filtré par le foyer et par votre rôle : une personne qui n'est pas membre d'un foyer ne peut rien y lire, et un invité ne peut rien y modifier. Rejoindre un foyer exige d'avoir confirmé son adresse email. Le site ne charge aucun script ni police depuis un service tiers. Dans la démonstration, les données vivent dans votre navigateur : sur un appareil partagé, déconnectez-vous ou supprimez votre compte après usage.</p>
 
     <h2 id="droits">9. Vos droits</h2>
     <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition (articles 15 à 21 du RGPD), du droit de retirer votre consentement à tout moment, et du droit de définir des directives sur le sort de vos données après votre décès (article 85 de la loi Informatique et Libertés).</p>
