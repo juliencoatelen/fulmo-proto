@@ -46,6 +46,7 @@ métadonnées est `https://getfulmo.com/` (fichier `CNAME`). En cas de changemen
 
 ## Prototype
 
-Toutes les données vivent dans le navigateur (localStorage + IndexedDB pour les nuages de points).
+Toutes les données de la démo vivent dans le navigateur (localStorage + IndexedDB pour les nuages de points).
+Les vrais comptes, synchronisés entre appareils et partagés avec le foyer, sont sur `app.getfulmo.com` (repo privé `fulmo-app`).
 Liens utiles : `app#signup` (création de compte) et `app#demo` (logement de démonstration
 de 40 objets, formule Éclair activée).

@@ -215,6 +215,7 @@ p { margin: 0; }
 @media (min-width: 900px) { .demo-bar { position: sticky; top: 0; } }
 .demo-bar .demo-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-fill); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent-fill) 28%, transparent); flex-shrink: 0; }
 .demo-bar strong { color: var(--fg); font-weight: 650; }
+.demo-bar .demo-link { color: var(--fg); font-weight: 600; text-underline-offset: .2em; }
 .demo-bar .demo-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .demo-bar .demo-long { display: none; }
 @media (min-width: 560px) { .demo-bar .demo-long { display: inline; } .demo-bar .demo-short { display: none; } }

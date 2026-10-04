@@ -841,7 +841,7 @@
      par l'article 7.1 du RGPD) et se retire dans les Réglages. Changer
      LEGAL_VERSION réinterroge tout le monde. */
 
-  var LEGAL_VERSION = 1;
+  var LEGAL_VERSION = 2;  // 2 : CGU v2 du 4 octobre 2026 (foyer partagé, inventaire en ligne)
 
   function aiConsented() {
     var c = state.consents && state.consents.ai;
@@ -1697,7 +1697,7 @@
 
   /* ═══ Bandeau de démonstration ══════════════════════════════════════ */
 
-  /* Une ligne, discrète : la bêta et ce qu'elle offre. Que les données
+  /* Une ligne, discrète : c'est la démo, et le vrai compte est ailleurs. Que les données
      restent dans ce navigateur est dit là où cela compte (connexion,
      inscription, Réglages), et l'effacement complet vit dans les Réglages :
      un bouton « tout effacer » n'a pas sa place en haut de chaque écran. Sur
@@ -1708,9 +1708,11 @@
     return el("div", { class: "demo-bar" + (night ? " night" : "") }, [
       el("span", { class: "demo-dot", "aria-hidden": "true" }),
       el("span", { class: "demo-text" }, [
-        el("strong", { text: "Bêta" }),
-        el("span", { class: "demo-long", text: " · Éclair offert aux early adopters" }),
-        el("span", { class: "demo-short", text: " · Éclair offert" })
+        el("strong", { text: "Démo" }),
+        el("span", { class: "demo-long", text: " · données gardées dans ce navigateur · " }),
+        el("span", { class: "demo-short", text: " · " }),
+        // Le vrai compte : inventaire en ligne, sur tous les appareils et partagé avec le foyer.
+        el("a", { class: "demo-link", href: "https://app.getfulmo.com/inscription", text: "Compte synchronisé et partagé" })
       ])
     ]);
   }
