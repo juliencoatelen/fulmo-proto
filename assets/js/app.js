@@ -7815,15 +7815,16 @@
       var mailErr = obFieldError("email", mail);
       if (mailErr) { fail("email", mailErr); return; }
       var moved = mail !== accountKey(acct.email);
-      if (moved && accountFind(mail)) { fail("email", "Un autre compte de cet appareil utilise déjà cette adresse."); return; }
+      if (!cloud && moved && accountFind(mail)) { fail("email", "Un autre compte de cet appareil utilise déjà cette adresse."); return; }
       var changePw = !!draft.next;
       if (changePw) {
         var pwErr = obFieldError("password", draft.next);
         if (pwErr) { fail("next", pwErr); return; }
-        if (acct.secret && !draft.current) { fail("current", "Indiquez votre mot de passe actuel."); return; }
       }
+      if ((changePw || (cloud && moved)) && (acct.secret || cloud) && !draft.current) { fail("current", "Indiquez votre mot de passe actuel."); return; }
 
       busy = true;
+      if (cloud) { cloudCommit(name, mail, moved, changePw); return; }
       var checked = changePw ? obVerify(acct.secret, draft.current) : Promise.resolve(true);
       checked.then(function (ok) {
         if (!ok) { busy = false; fail("current", "Mot de passe actuel incorrect."); return null; }
@@ -7845,6 +7846,38 @@
       });
     }
 
+    /* En ligne, le serveur vérifie le mot de passe actuel et envoie un lien à la
+       nouvelle adresse : elle ne remplace l'ancienne qu'une fois ce lien ouvert. */
+    function cloudCommit(name, mail, moved, changePw) {
+      var input = { name: name, email: mail };
+      if (draft.current) input.current = draft.current;
+      if (changePw) input.password = draft.next;
+      cloud.updateAccount(input).then(function (res) {
+        busy = false;
+        if (!res.ok) {
+          var code = res.error;
+          if (code === "current") fail("current", "Mot de passe actuel incorrect.");
+          else if (code === "exists") fail("email", "Un autre compte utilise déjà cette adresse.");
+          else if (code === "email") fail("email", "Cette adresse email n'est pas valide : vérifiez le @ et le domaine.");
+          else if (code === "password") fail("next", "Ce mot de passe n'est pas accepté. Choisissez-en un autre, de 12 caractères au moins.");
+          else if (code === "name") fail("name", "Indiquez au moins un prénom.");
+          else if (code === "limite") toast("Trop d'essais d'affilée. Réessayez dans une minute.");
+          else toast("Le compte n'a pas pu être mis à jour. Réessayez dans un instant.");
+          return;
+        }
+        acct.name = name;
+        save();
+        closeSheet();
+        render();
+        toast(res.emailPending
+          ? "Compte mis à jour. Ouvrez le lien envoyé à " + mail + " pour confirmer la nouvelle adresse."
+          : changePw ? "Compte mis à jour, nouveau mot de passe enregistré." : "Compte mis à jour.");
+      }, function () {
+        busy = false;
+        toast("Le compte n'a pas pu être mis à jour. Vérifiez votre connexion.");
+      });
+    }
+
     var form = el("form", {
       class: "acct-form", novalidate: true,
       onsubmit: function (event) { event.preventDefault(); commit(); }
@@ -7852,7 +7885,8 @@
       input("name", "Prénom et nom", "text", "name"),
       input("email", "Adresse email", "email", "email", "Elle sert à vous connecter."),
       el("p", { class: "acct-sub", text: "Changer de mot de passe" }),
-      acct.secret ? input("current", "Mot de passe actuel", "password", "current-password") : null,
+      acct.secret || cloud ? input("current", "Mot de passe actuel", "password", "current-password",
+        cloud ? "Demandé seulement pour changer d'adresse email ou de mot de passe." : null) : null,
       input("next", "Nouveau mot de passe", "password", "new-password", "Laissez vide pour le garder. 12 caractères minimum, dont 5 différents."),
       // Entrée dans un champ envoie le formulaire.
       el("button", { type: "submit", hidden: true, tabindex: "-1", "aria-hidden": "true" })
@@ -8078,7 +8112,8 @@
               el("span", { text: state.account ? state.account.email : "" })
             ]),
             // La démonstration se remet à zéro à chaque ouverture : rien à y modifier.
-            state.account && !tourIsDemo() && !cloud ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Modifier mes informations", onclick: accountSheet }, [icon("pencil", 14), "Modifier"]) : null
+            // En ligne, seulement si l'application sait enregistrer ces changements.
+            state.account && !tourIsDemo() && (!cloud || typeof cloud.updateAccount === "function") ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Modifier mes informations", onclick: accountSheet }, [icon("pencil", 14), "Modifier"]) : null
           ]),
           el("div", { class: "set-actions" }, [
             el("button", { class: "btn btn-line", type: "button", onclick: obLogout }, [icon("logout", 15), "Se déconnecter"])
