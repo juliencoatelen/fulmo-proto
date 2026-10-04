@@ -22,6 +22,15 @@
   var sampleChecked = false; // les limites ont répondu (disponibles ou non)
   var downloadsApi = null;   // remise d'un fichier au visiteur, ou null
 
+  /* Application en ligne (app.getfulmo.com) : la même interface, mais le
+     compte, le foyer et l'inventaire vivent sur le serveur, en Europe. La page
+     hôte définit window.FulmoCloud avant de charger ce fichier. Sur
+     getfulmo.com il n'existe pas : la démonstration garde tout dans le
+     navigateur et rien, ici, ne parle au réseau. */
+  var cloud = window.FulmoCloud || null;
+  /* Les pages du site (conditions, confidentialité…) vivent sur getfulmo.com. */
+  function siteUrl(path) { return cloud ? cloud.site + path : path; }
+
   /* ─── Persistance ─────────────────────────────────────────────────── */
 
   function blank() {
@@ -52,6 +61,7 @@
   var state = load();
 
   function load() {
+    if (cloud) return cloud.initial(blank());
     try {
       var raw = localStorage.getItem(STORE_KEY);
       if (!raw) return blank();
@@ -76,6 +86,7 @@
   }
 
   function save() {
+    if (cloud) { cloud.persist(state); return; }
     try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
     stash();
   }
@@ -93,9 +104,11 @@
 
   function accountKey(email) { return String(email || "").trim().toLowerCase(); }
   function accountsRead() {
+    if (cloud) return {};   // en ligne : un compte, celui de la session
     try { return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)) || {}; } catch (e) { return {}; }
   }
   function accountsWrite(map) {
+    if (cloud) return;
     try { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(map)); } catch (e) {}
   }
   function accountFind(email) {
@@ -138,7 +151,12 @@
   if (state.account && !accountFind(state.account.email)) stash();
 
   var seq = 0;
-  function uid(prefix) { seq += 1; return prefix + "-" + Date.now().toString(36) + "-" + seq; }
+  function uid(prefix) {
+    // En ligne, pièces et objets portent l'identifiant de la base (UUID).
+    if (cloud && (prefix === "loc" || prefix === "it")) return cloud.uuid();
+    seq += 1;
+    return prefix + "-" + Date.now().toString(36) + "-" + seq;
+  }
 
   /* ─── Nuages de points : où ils vivent ────────────────────────────────
 
@@ -845,11 +863,15 @@
 
   function aiConsented() {
     var c = state.consents && state.consents.ai;
+    // En ligne, la version de la politique est vérifiée par le serveur.
+    if (cloud) return !!(c && c.granted);
     return !!(c && c.granted && c.version === LEGAL_VERSION);
   }
   function aiConsentSet(granted) {
     if (!state.consents) state.consents = {};
     state.consents.ai = { granted: granted, at: new Date().toISOString(), version: LEGAL_VERSION };
+    // En ligne, la preuve de l'accord est journalisée sur le serveur.
+    if (cloud) cloud.consent(granted);
     save();
   }
   /* Lance `run` tout de suite si l'accord est déjà donné, sinon après lui.
@@ -858,8 +880,8 @@
   function aiConsentThen(run) {
     if (aiConsented()) { run(); return; }
     var body = el("span", {}, [
-      "Pour vous répondre, Fulmo envoie à son fournisseur d'IA, Anthropic, établi aux États-Unis, uniquement la phrase que vous tapez ou la photo que vous prenez. Votre inventaire reste sur cet appareil. Évitez de photographier des personnes ou des documents. Vous pourrez retirer cet accord dans les Réglages. ",
-      el("a", { href: "confidentialite.html#ia", target: "_blank", rel: "noopener", text: "En savoir plus" })
+      "Pour vous répondre, Fulmo envoie à son fournisseur d'IA, Anthropic, établi aux États-Unis, uniquement la phrase que vous tapez ou la photo que vous prenez. Votre inventaire, lui, n'est pas transmis. Évitez de photographier des personnes ou des documents. Vous pourrez retirer cet accord dans les Réglages. ",
+      el("a", { href: siteUrl("confidentialite.html#ia"), target: "_blank", rel: "noopener", text: "En savoir plus" })
     ]);
     confirmSheet({
       title: "Utiliser l'IA ?",
@@ -873,6 +895,7 @@
   /* Droit à l'effacement : seul le compte ouvert disparaît, avec ses relevés
      3D. Les autres comptes de l'appareil ne sont pas touchés. */
   function deleteAccount() {
+    if (cloud) { cloudDeleteSheet(); return; }
     var who = state.account ? state.account.email : null;
     confirmSheet({
       title: "Supprimer votre compte ?",
@@ -898,6 +921,52 @@
         window.scrollTo(0, 0);
         toast("Compte supprimé. Ses données ont été effacées de cet appareil.");
       }
+    });
+  }
+
+  /* En ligne : l'effacement se fait sur le serveur, après le mot de passe
+     (ré-authentification avant une action sensible). */
+  function cloudDeleteSheet() {
+    var password = "";
+    var busy = false;
+    var box, err;
+    function fail(message) {
+      busy = false;
+      err.hidden = false;
+      err.textContent = message;
+      box.setAttribute("aria-invalid", "true");
+      box.focus();
+    }
+    function commit() {
+      if (busy) return;
+      if (!password) { fail("Indiquez votre mot de passe."); return; }
+      busy = true;
+      cloud.deleteAccount(password).then(function (res) {
+        if (res.ok) return;   // la page repart de l'inscription
+        fail(res.error === "password" ? "Mot de passe incorrect." : res.error === "limite" ? "Trop de tentatives. Réessayez dans une minute." : "La suppression a échoué. Réessayez dans un instant.");
+      });
+    }
+    sheet({
+      title: "Supprimer votre compte ?",
+      role: "alertdialog",
+      body: [
+        el("p", { class: "confirm-body", text: "Votre compte (" + (state.account ? state.account.email : "") + ") sera effacé de nos serveurs, définitivement. Un foyer que vous partagez passe à un autre membre ; un foyer dont vous êtes seul membre disparaît avec ses objets. Pensez à exporter vos données avant." }),
+        el("label", { class: "field" }, [
+          el("span", { text: "Votre mot de passe, pour confirmer" }),
+          box = el("input", {
+            class: "input", type: "password", autocomplete: "current-password", maxlength: 200,
+            "aria-describedby": "del-pw-err",
+            oninput: function (event) { password = event.target.value; err.hidden = true; box.removeAttribute("aria-invalid"); },
+            onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); commit(); } }
+          }),
+          err = el("span", { class: "err", id: "del-pw-err", role: "alert", hidden: true })
+        ])
+      ],
+      foot: [
+        el("button", { class: "btn btn-line", type: "button", onclick: function () { closeSheet(); } }, "Annuler"),
+        el("button", { class: "btn btn-danger", type: "button", onclick: commit }, [icon("trash", 15), "Supprimer mon compte"])
+      ],
+      initialFocus: box
     });
   }
 
@@ -1704,6 +1773,7 @@
      les écrans de nuit (inscription, onboarding), elle prend la nuit elle
      aussi. */
   function demoBar() {
+    if (cloud) return null;   // le vrai compte n'est pas une démonstration
     var night = !state.account || !state.household || !state.session;
     return el("div", { class: "demo-bar" + (night ? " night" : "") }, [
       el("span", { class: "demo-dot", "aria-hidden": "true" }),
@@ -2587,6 +2657,7 @@
         obAnnounce(signup.errors[firstBad]);
         return;
       }
+      if (cloud) { cloudSignup(); return; }
       // Une adresse = un compte : si elle est déjà prise ici, on propose de
       // s'y connecter plutôt que d'écraser le logement qui va avec.
       if (accountFind(signup.email)) {
@@ -2613,6 +2684,38 @@
       });
     }
 
+    /* En ligne : le serveur crée le compte et envoie l'email de confirmation.
+       On n'entre dans l'application qu'après avoir ouvert ce lien. */
+    function cloudSignup() {
+      signup.busy = true;
+      cta.classList.add("is-busy");
+      cta.setAttribute("aria-busy", "true");
+      ctaLabel.textContent = "Création du compte…";
+      obBurstFrom(cta, null, { count: 22, power: 5, up: true });
+      var mail = signup.email.trim().toLowerCase();
+      cloud.signup({ name: signup.fullName.trim(), email: mail, password: signup.password }).then(function (res) {
+        signup.busy = false;
+        if (res.ok) {
+          obCheckMail = { email: mail };
+          signup = obBlankSignup();
+          obTransition(function () {}, "fwd");
+          return;
+        }
+        cta.classList.remove("is-busy");
+        cta.removeAttribute("aria-busy");
+        ctaLabel.textContent = "Créer mon compte gratuit";
+        var key = res.error === "password" ? "password" : "email";
+        var message = res.error === "limite" ? "Trop de tentatives. Réessayez dans une minute."
+          : res.error === "password" ? "Ce mot de passe est trop facile à deviner : choisissez-en un autre."
+          : res.error === "exists" ? "Un compte existe déjà avec cette adresse. Connectez-vous."
+          : res.error === "email" ? "Cette adresse n'est pas acceptée. Vérifiez-la, ou essayez-en une autre."
+          : "La création du compte a échoué. Réessayez dans un instant.";
+        setStatus(key, message, false);
+        fields[key].input.focus();
+        obAnnounce(message);
+      });
+    }
+
     cta = obCta("Créer mon compte gratuit", { type: "submit" });
     ctaLabel = cta.querySelector(".ob-cta-label");
     if (signup.busy) signup.busy = false;
@@ -2622,17 +2725,21 @@
       field("email", "Adresse email", "email", "email"),
       field("password", "Mot de passe", "password", "new-password", [eye, meter]),
       cta,
-      el("p", { class: "ob-trust" }, [icon("shield", 14), el("span", { text: "Votre inventaire reste sur votre appareil. Aucun email n'est envoyé." })]),
+      el("p", { class: "ob-trust" }, [icon("shield", 14), el("span", { text: cloud
+        ? "Votre inventaire est enregistré en Europe et vous suit sur tous vos appareils."
+        : "Votre inventaire reste sur votre appareil. Aucun email n'est envoyé." })]),
       el("p", { class: "ob-legal" }, [
         "En créant votre compte, vous acceptez les ",
-        el("a", { href: "conditions.html", target: "_blank", rel: "noopener", text: "conditions d'utilisation" }),
+        el("a", { href: siteUrl("conditions.html"), target: "_blank", rel: "noopener", text: "conditions d'utilisation" }),
         ". Vos données sont traitées selon notre ",
-        el("a", { href: "confidentialite.html", target: "_blank", rel: "noopener", text: "politique de confidentialité" }),
+        el("a", { href: siteUrl("confidentialite.html"), target: "_blank", rel: "noopener", text: "politique de confidentialité" }),
         "."
       ]),
       // Prototype public : rien n'est transmis, mais on ne doit pas habituer les
       // visiteurs à confier un mot de passe qui leur sert ailleurs.
-      el("p", { class: "ob-fine", text: "Bêta : choisissez un mot de passe inventé, que vous n'utilisez nulle part ailleurs." })
+      el("p", { class: "ob-fine", text: cloud
+        ? "Un email de confirmation part à cette adresse : votre compte s'active quand vous ouvrez son lien."
+        : "Bêta : choisissez un mot de passe inventé, que vous n'utilisez nulle part ailleurs." })
     ]);
     paintMeter();
 
@@ -2678,7 +2785,7 @@
         class: "ob-demo", type: "button",
         onclick: function (event) {
           obBurstFrom(event.currentTarget, event, { count: 16 });
-          enter(DEMO_ACCOUNT, true);
+          openDemo();
         }
       }, [
         el("span", { class: "ob-demo-ic", "aria-hidden": "true" }, [icon("bolt", 18)]),
@@ -2756,10 +2863,53 @@
   var obWelcome = null;    // { name } : à saluer juste après l'inscription
   var obWelcomeToken = null;
   var obLogin = { email: "", password: "" };
+  var obCheckMail = null;  // { email } : en ligne, compte créé, adresse à confirmer
+
+  /* La démonstration vit sur getfulmo.com : en ligne, on y emmène. */
+  function openDemo() {
+    if (cloud) { window.location.assign(siteUrl("app#demo")); return; }
+    enter(DEMO_ACCOUNT, true);
+  }
+
+  function resendButton(mail) {
+    var sent = false;
+    return el("button", {
+      class: "ob-line-btn", type: "button",
+      onclick: function () {
+        if (sent) return;
+        sent = true;
+        cloud.resend(mail).then(function (res) {
+          toast(res.ok ? "Email renvoyé à " + mail + "." : res.error === "limite" ? "Patientez une minute avant un nouvel envoi." : "L'email n'a pas pu partir. Réessayez dans un instant.");
+          if (!res.ok) sent = false;
+        });
+      }
+    }, [icon("arrow-right", 15), "Renvoyer l'email"]);
+  }
+
+  /* En ligne, après l'inscription : on attend la confirmation de l'adresse. */
+  function obCheckMailScreen() {
+    obKeys = null;
+    var mail = obCheckMail.email;
+    var stage = [
+      el("div", { class: "ob-welcome-check", "aria-hidden": "true" }, [obCheck(44)]),
+      el("h1", { class: "ob-title ob-welcome-title", id: "ob-step-title", tabindex: "-1" }, [
+        el("span", { text: "Compte créé." }),
+        el("span", { class: "ob-welcome-name", text: "Confirmez votre adresse." })
+      ]),
+      el("p", { class: "ob-lede", text: "Nous venons d'envoyer un lien à " + mail + ". Ouvrez-le pour activer votre compte : vous arriverez directement à la configuration de votre logement." }),
+      el("div", { class: "ob-panel-actions" }, [
+        resendButton(mail),
+        el("button", { class: "ob-line-btn", type: "button", onclick: function () { obCheckMail = null; obLogin.email = mail; obGoAuth("login"); } }, [icon("arrow-right", 15), "J'ai confirmé, me connecter"])
+      ]),
+      el("p", { class: "ob-fine", text: "Rien reçu ? Regardez dans les courriers indésirables, ou renvoyez l'email." })
+    ];
+    return obShell("welcome", el("header", { class: "ob-head" }, [logo(22)]), stage, null);
+  }
 
   /* Sans session : l'écran demandé, sinon la connexion si un compte existe
      sur cet appareil, l'inscription sinon. */
   function obAuthScreen() {
+    if (obCheckMail) return obCheckMailScreen();
     var view = obAuthView || (state.account ? "login" : "signup");
     return view === "login" ? screenLogin() : screenSignup();
   }
@@ -2827,6 +2977,7 @@
   }
 
   function obLogout() {
+    if (cloud) { closeSheet(); cloud.logout(); return; }
     state.session = false;
     save();
     resetViews();
@@ -2907,7 +3058,7 @@
       // La démonstration est un compte à part : l'ouvrir ne touche à rien.
       return el("button", {
         class: "ob-line-btn", type: "button",
-        onclick: function () { enter(DEMO_ACCOUNT, true); }
+        onclick: openDemo
       }, [icon("bolt", 15), "Essayer la démo"]);
     }
 
@@ -2924,6 +3075,13 @@
     }
 
     function showForgot() {
+      if (cloud) {
+        panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
+          el("p", { class: "ob-panel-title", text: "Réinitialisation bientôt disponible." }),
+          el("p", { text: "La réinitialisation du mot de passe par email ouvre très prochainement. Votre compte et votre logement restent en sécurité en attendant." })
+        ]));
+        return;
+      }
       panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
         el("p", { class: "ob-panel-title", text: "Pas de réinitialisation pendant la bêta." }),
         el("p", { text: "Sans serveur, aucun email ne peut partir. Votre compte et votre logement restent dans ce navigateur ; si le mot de passe est perdu, créez un nouveau compte avec une autre adresse." }),
@@ -2956,6 +3114,7 @@
       else setErr("password", null);
       if (bad) { fields[bad].input.focus(); shake(bad); return; }
 
+      if (cloud) { cloudLogin(mail); return; }
       var target = accountFind(mail);
       if (!target) { showNoAccount(mail); return; }
       var acctIn = target.account;
@@ -2980,6 +3139,32 @@
             toast(state.household ? "Bon retour, " + (obFirstName(acctIn.name) || "bienvenue") + "." : "Connecté. Reprenons la configuration de votre logement.");
           });
         }, Math.max(0, (obCalm() ? 100 : 450) - (Date.now() - started)));
+      });
+    }
+
+    /* En ligne : le serveur vérifie le mot de passe et ouvre la session ; la
+       page se recharge alors sur le compte, son foyer et son inventaire. */
+    function cloudLogin(mail) {
+      setBusy(true);
+      cloud.login({ email: mail, password: obLogin.password }).then(function (res) {
+        if (res.ok) return;
+        setBusy(false);
+        if (res.error === "unconfirmed") {
+          panel.replaceChildren(el("div", { class: "ob-panel", role: "alert" }, [
+            el("p", { class: "ob-panel-title", text: "Adresse pas encore confirmée." }),
+            el("p", { text: "Ouvrez le lien reçu par email à l'inscription, puis reconnectez-vous." }),
+            el("div", { class: "ob-panel-actions" }, [resendButton(mail)])
+          ]));
+          obAnnounce("Adresse pas encore confirmée.");
+          return;
+        }
+        var message = res.error === "limite" ? "Trop de tentatives. Réessayez dans une minute."
+          : res.error === "invalid" ? "Email ou mot de passe incorrect."
+          : "La connexion a échoué. Réessayez dans un instant.";
+        setErr("password", message);
+        fields.password.input.focus();
+        shake("password");
+        obAnnounce(message);
       });
     }
 
@@ -3042,7 +3227,9 @@
       picker,
       form,
       panel,
-      el("p", { class: "ob-fine", text: "Bêta : votre compte vit dans ce navigateur. Le mot de passe n'y est jamais stocké en clair, seulement son empreinte." }),
+      el("p", { class: "ob-fine", text: cloud
+        ? "Votre compte et votre inventaire sont enregistrés en Europe : vous les retrouvez sur tous vos appareils."
+        : "Bêta : votre compte vit dans ce navigateur. Le mot de passe n'y est jamais stocké en clair, seulement son empreinte." }),
       el("p", { class: "ob-auth-switch" }, [
         "Pas encore de compte ? ",
         el("button", { class: "ob-linkbtn", type: "button", onclick: function () { toSignup(null); } }, "Créer un compte")
@@ -3334,7 +3521,7 @@
       var first = obFirstName(state.account ? state.account.name : "");
       wiz = {
         step: 0,
-        withPlan: !state.planSeen,
+        withPlan: !state.planSeen && !cloud,   // en ligne, la formule est celle du compte
         type: "apartment",
         name: first ? "Chez " + first : "La maison",
         floors: 1,
@@ -4123,7 +4310,12 @@
     if (hash !== "#demo" && hash !== "#signup" && hash !== "#login") return;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
     if (hash === "#demo") {
-      enter(DEMO_ACCOUNT, true);
+      openDemo();
+      return;
+    }
+    if (cloud) {
+      // En ligne, la session est celle du serveur : un lien ne la ferme pas.
+      if (!state.session) obAuthView = hash === "#signup" ? "signup" : "login";
       return;
     }
     if (hash === "#signup") {
@@ -4249,6 +4441,10 @@
             onclick: function () { goTab("settings"); }
           }, [sym(homeIcon, 20), el("span", { class: "cog", "aria-hidden": "true" }, [icon("cog", 11)])])
         ]),
+        cloud && cloud.role() === "guest" ? el("div", { class: "ai-note", role: "note", style: "margin:16px clamp(16px, 4vw, 40px) 0" }, [
+          icon("eye", 16),
+          el("span", { text: "Vous êtes invité dans ce foyer : vous consultez l'inventaire, sans le modifier." })
+        ]) : null,
         views[state.tab]()
       ]),
       tabbar
@@ -4621,7 +4817,8 @@
       "Réponds UNIQUEMENT par un objet JSON : " +
       '{"terms": ["..."], "tags": ["..."], "interpretation": "une phrase courte"}';
 
-    sampleApi.json(prompt, { modelTier: "quick", cache: true })
+    // En ligne, le serveur détient la consigne : on ne lui envoie que la phrase.
+    (cloud ? cloud.aiSearch(query) : sampleApi.json(prompt, { modelTier: "quick", cache: true }))
       .then(function (plan) {
         var terms = (plan && plan.terms ? plan.terms : []).concat(plan && plan.tags ? plan.tags : []);
         // Les termes sont exécutés LOCALEMENT par le moteur de recherche :
@@ -4654,6 +4851,7 @@
         var code = error && error.code;
         toast(code === "not_granted" ? "Accès à l'assistant refusé."
             : code === "rate_limited" ? "Trop de demandes, réessayez dans un instant."
+            : code === "not_premium" ? "La recherche IA fait partie de la formule Éclair."
             : "L'assistant n'a pas répondu.");
         render();
       });
@@ -4949,7 +5147,7 @@
               "Réponds UNIQUEMENT par un objet JSON :\n" +
               '{"items": [{"name": "...", "quantity": 1, "tags": ["..."], "confidence": "high|medium|low"}], "note": "remarque courte si la photo est difficile"}';
 
-            sampleApi.json(prompt, { images: blob, modelTier: "default" })
+            (cloud ? cloud.aiScan(blob) : sampleApi.json(prompt, { images: blob, modelTier: "default" }))
               .then(function (result) {
                 scanState.busy = false;
                 var items = (result && result.items ? result.items : [])
@@ -4989,6 +5187,8 @@
                 scanState.error =
                   code === "not_granted" ? "Accès à l'assistant refusé."
                   : code === "rate_limited" ? "Trop de demandes, réessayez dans un instant."
+                  : code === "not_premium" ? "Le Scan Éclair fait partie de la formule Éclair."
+                  : code === "read_only" ? "Votre rôle d'invité ne permet pas d'ajouter des objets."
                   : code === "image_rejected" ? "Cette image n'a pas pu être lue."
                   : "L'analyse a échoué.";
                 render();
@@ -7815,6 +8015,8 @@
       ]);
     }
     function exportData() {
+      // En ligne, l'export complet (compte, foyers, consentements) vient du serveur.
+      if (cloud) { window.location.assign(cloud.exportUrl); return; }
       var payload = {
         exported_at: new Date().toISOString(), format: "fulmo.export.v1",
         // Le compte sans l'empreinte du mot de passe : elle n'apprend rien à
@@ -7867,7 +8069,7 @@
               el("b", { text: household.name || "Mon logement" }),
               el("span", { text: plural(roomsCount, "pièce", "pièces") + " · " + plural(state.items.length, "objet", "objets") })
             ]),
-            state.household ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Renommer le logement", onclick: homeSheet }, [icon("pencil", 14), "Renommer"]) : null
+            state.household && (!cloud || cloud.role() === "admin") ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Renommer le logement", onclick: homeSheet }, [icon("pencil", 14), "Renommer"]) : null
           ]),
           el("div", { class: "set-row" }, [
             el("span", { class: "fig" }, [icon("shield", 19)]),
@@ -7876,13 +8078,15 @@
               el("span", { text: state.account ? state.account.email : "" })
             ]),
             // La démonstration se remet à zéro à chaque ouverture : rien à y modifier.
-            state.account && !tourIsDemo() ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Modifier mes informations", onclick: accountSheet }, [icon("pencil", 14), "Modifier"]) : null
+            state.account && !tourIsDemo() && !cloud ? el("button", { class: "btn btn-sm btn-line", type: "button", "aria-label": "Modifier mes informations", onclick: accountSheet }, [icon("pencil", 14), "Modifier"]) : null
           ]),
           el("div", { class: "set-actions" }, [
             el("button", { class: "btn btn-line", type: "button", onclick: obLogout }, [icon("logout", 15), "Se déconnecter"])
           ])
         ])
       ]),
+
+      cloud ? cloudHouseholdSection() : null,
 
       appInstalled() ? null : el("section", { class: "set-section" }, [
         el("h2", { text: "Application" }),
@@ -7908,7 +8112,7 @@
               el("span", { text: premium ? "Scan Éclair, plan du logement, espace 3D et recherche en langage naturel." : "Recherche, lieux et alertes. Passez à l'Éclair pour le scan, le plan et l'IA." })
             ])
           ]),
-          switchRow(
+          cloud ? null : switchRow(
             premium ? "Éclair activé" : "Activer l'Éclair",
             "Pendant la bêta, l'Éclair est offert aux early adopters, sans paiement. Ensuite 9 €/mois, uniquement avec votre accord : vous serez prévenu avant.",
             premium,
@@ -7962,8 +8166,10 @@
           el("div", { class: "set-row" }, [
             el("span", { class: "fig" }, [icon("shield", 19)]),
             el("span", { class: "txt" }, [
-              el("b", { text: "Stockées sur cet appareil" }),
-              el("span", { text: "Rien n'est envoyé à un serveur. Seules la phrase d'une recherche IA et la photo d'un Scan Éclair partent vers l'assistant, avec votre accord." })
+              el("b", { text: cloud ? "Enregistrées en Europe" : "Stockées sur cet appareil" }),
+              el("span", { text: cloud
+                ? "Votre foyer et vos objets sont enregistrés sur nos serveurs dans l'Union européenne, visibles des seuls membres du foyer. La phrase d'une recherche IA et la photo d'un Scan Éclair partent vers l'assistant, avec votre accord ; les relevés 3D restent sur l'appareil qui les a faits."
+                : "Rien n'est envoyé à un serveur. Seules la phrase d'une recherche IA et la photo d'un Scan Éclair partent vers l'assistant, avec votre accord." })
             ])
           ]),
           switchRow(
@@ -7980,7 +8186,7 @@
           el("div", { class: "set-actions" }, [
             el("button", { class: "btn btn-line", type: "button", onclick: exportData }, [icon("download", 15), "Exporter en JSON"]),
             el("button", { class: "btn btn-danger-line", type: "button", onclick: deleteAccount }, [icon("trash", 15), "Supprimer mon compte"]),
-            el("button", { class: "btn btn-danger-line", type: "button", onclick: confirmReset }, [icon("trash", 15), "Tout effacer"])
+            cloud ? null : el("button", { class: "btn btn-danger-line", type: "button", onclick: confirmReset }, [icon("trash", 15), "Tout effacer"])
           ])
         ])
       ]),
@@ -7992,13 +8198,13 @@
           ["Politique de confidentialité", "confidentialite.html"],
           ["Conditions générales d'utilisation et de vente", "conditions.html"]
         ].map(function (link) {
-          return el("li", {}, [icon("chev", 14), el("a", { href: link[1], target: "_blank", rel: "noopener", text: link[0] })]);
+          return el("li", {}, [icon("chev", 14), el("a", { href: siteUrl(link[1]), target: "_blank", rel: "noopener", text: link[0] })]);
         }).concat([
-          el("li", {}, [icon("chev", 14), el("a", { href: "confidentialite.html#cookies", "data-consent-open": "", text: "Gérer les cookies" })])
+          cloud ? null : el("li", {}, [icon("chev", 14), el("a", { href: "confidentialite.html#cookies", "data-consent-open": "", text: "Gérer les cookies" })])
         ]))
       ]),
 
-      el("section", { class: "set-section" }, [
+      cloud ? null : el("section", { class: "set-section" }, [
         el("h2", { text: "Ce qui diffère de la vraie application" }),
         el("ul", { class: "set-group set-list" }, [
           "L'inscription n'envoie pas d'email de confirmation et n'appelle pas Supabase Auth.",
@@ -8014,6 +8220,38 @@
     ]);
   }
 
+  /* En ligne : les membres du foyer (page de l'application) et, pour qui en a
+     plusieurs, le choix du foyer affiché. */
+  function cloudHouseholdSection() {
+    var role = cloud.role();
+    var roleText = role === "admin" ? "Administrateur : vous gérez les membres et leurs droits."
+      : role === "member" ? "Membre : vous ajoutez et modifiez les objets."
+      : "Invité : vous consultez le foyer sans le modifier.";
+    var others = cloud.households().filter(function (h) { return h.id !== cloud.householdId(); });
+    return el("section", { class: "set-section" }, [
+      el("h2", { text: "Foyer partagé" }),
+      el("div", { class: "set-group" }, [
+        el("div", { class: "set-row" }, [
+          el("span", { class: "fig" }, [icon("share", 19)]),
+          el("span", { class: "txt" }, [
+            el("b", { text: "Membres du foyer" }),
+            el("span", { text: roleText })
+          ]),
+          el("a", { class: "btn btn-sm btn-line", href: cloud.membersUrl() }, [icon("arrow-right", 14), role === "admin" ? "Gérer" : "Voir"])
+        ])
+      ].concat(others.map(function (h) {
+        return el("div", { class: "set-row" }, [
+          el("span", { class: "fig" }, [sym("h-appart", 22)]),
+          el("span", { class: "txt" }, [
+            el("b", { text: h.name }),
+            el("span", { text: "Un autre foyer dont vous êtes membre." })
+          ]),
+          el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { cloud.switchTo(h.id); } }, [icon("loop", 14), "Ouvrir"])
+        ]);
+      })))
+    ]);
+  }
+
   function paywall(title, body) {
     return el("div", { class: "page" }, [
       el("div", { class: "empty" }, [
@@ -8021,7 +8259,8 @@
         el("span", { class: "label badge", text: "Fonction Éclair" }),
         el("h1", { class: "display t-md", style: "margin-top:6px", text: title }),
         el("p", { class: "lede", style: "max-width:44ch", text: body }),
-        el("button", {
+        // En ligne, la formule est celle du compte : elle ne se bascule pas ici.
+        cloud ? null : el("button", {
           class: "btn btn-lg btn-volt", type: "button", style: "margin-top:10px",
           onclick: function () { state.plan = "premium"; save(); render(); toast("Éclair activé : offert pendant la bêta."); }
         }, [icon("bolt", 16), "Activer l'Éclair (offert pendant la bêta)"]),
@@ -8824,7 +9063,9 @@
       var main = screen.querySelector(".app-main");
       if (main) main.classList.add("view-enter");
     }
-    root.replaceChildren(demoBar(), screen);
+    var bar = demoBar();
+    if (bar) root.replaceChildren(bar, screen);
+    else root.replaceChildren(screen);
     // On garde la position de lecture dans une vue, on repart du haut quand
     // on en change (on arrivait sur « Alertes » au milieu de la page).
     if (inApp) window.scrollTo(0, entering ? 0 : previousScroll);
@@ -8887,7 +9128,24 @@
      fonctionner entièrement sans elle. Les deux fonctions qui s'en servent
      s'allument quand elle arrive. */
 
-  if (window.claude && typeof window.claude.use === "function") {
+  if (cloud) {
+    // En ligne, l'assistant passe par le serveur de l'application (accord IA,
+    // formule et limites y sont vérifiés). Les photos sont réduites ici avant l'envoi.
+    sampleApi = true;
+    sampleImages = { mediaTypes: ["image/jpeg", "image/png", "image/webp"] };
+    sampleChecked = true;
+    cloud.attach({
+      state: function () { return state; },
+      // Le serveur fait foi : on remplace foyer et inventaire, et on redessine
+      // seulement si personne n'est en train de saisir.
+      apply: function (fresh) {
+        Object.keys(fresh).forEach(function (key) { state[key] = fresh[key]; });
+        if (!openSheet && !cmdk && !tour) render();
+      },
+      idle: function () { return !openSheet && !cmdk && !tour; },
+      toast: toast
+    });
+  } else if (window.claude && typeof window.claude.use === "function") {
     window.claude.use("sample").then(function (api) {
       if (!api) return;
       sampleApi = api;
