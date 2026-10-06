@@ -20,3 +20,22 @@ jobs:
         run: bash tools/check-security.sh
       - name: Dépendances vulnérables
         run: npm audit --audit-level=high
+
+  non-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Navigateur de test
+        run: npx playwright install --with-deps chromium
+      - name: Le bundle de la page d'accueil correspond aux sources
+        run: npm run build && git diff --exit-code -- assets/js/landing.bundle.js assets/js/chunks
+      - name: Parcours principaux (accueil, démo, inscription), ordinateur et téléphone
+        run: npm test
+      - name: Rapport en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: rapport-playwright, path: playwright-report, retention-days: 14 }
