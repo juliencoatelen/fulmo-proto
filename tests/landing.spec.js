@@ -76,6 +76,28 @@ test.describe("Page d'accueil sur téléphone", () => {
   });
 });
 
+test.describe("Bloc « Trouvé » de la scène sur téléphone", () => {
+  test.skip(({ isMobile }) => !isMobile, "mobile uniquement");
+
+  // Bug du 2026-10-06 : la carte passait sous l'épingle et recouvrait le titre.
+  for (const q of ["décorations de Noël", "passeport", "chargeur ordi", "perseuse", "doudou"]) {
+    test(`« ${q} » : la carte reste dans la scène, sans recouvrir le titre`, async ({ page }) => {
+      await gotoHome(page);
+      await page.locator("#hero-q").fill(q);
+      await page.locator("#hero-q").press("Enter");
+      await expect(page.locator(".hero-pin")).toHaveClass(/is-on/);
+      await expect(page.locator(".hero-pin")).toHaveClass(/side/);
+      const card = await page.locator(".pin-card").boundingBox();
+      const title = await page.locator("h1").boundingBox();
+      const stage = await page.locator(".hero-stage").boundingBox();
+      expect(card.y + card.height).toBeLessThanOrEqual(title.y);
+      expect(card.y).toBeGreaterThanOrEqual(stage.y);
+      expect(card.x).toBeGreaterThanOrEqual(stage.x);
+      expect(card.x + card.width).toBeLessThanOrEqual(stage.x + stage.width);
+    });
+  }
+});
+
 test.describe("Pages annexes", () => {
   for (const path of ["/mentions-legales", "/confidentialite", "/conditions"]) {
     test(`${path} s'affiche avec un titre`, async ({ page }) => {
