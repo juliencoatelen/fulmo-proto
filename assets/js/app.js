@@ -780,18 +780,18 @@
   function pic(name) { return sym(name); }
 
   function logo(size) {
-    return el("span", { class: "logo", style: "font-size:" + (size || 22) + "px", "aria-label": "FULMO" }, [
-      el("span", { "aria-hidden": "true", text: "FULM" }),
+    return el("span", { class: "logo", style: "font-size:" + (size || 22) + "px", "aria-label": "Fulmo" }, [
       (function () {
         var wrap = document.createElement("span");
-        wrap.innerHTML = '<svg viewBox="0 0 48 48" fill="none" aria-hidden="true" style="display:block">' + // html-sûr : SVG constant
-          '<circle cx="24" cy="24" r="19.8" stroke="currentColor" stroke-width="4.2"/>' +
-          '<path d="M28.5 4.5 L13.5 27 h8.4 L19 43.5 L34.5 20 h-8.5 Z" fill="#d9ff3d" stroke="#050506" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+        wrap.innerHTML = '<svg viewBox="5 6 92 92" aria-hidden="true" style="display:block">' + // html-sûr : SVG constant
+          '<path d="M20 10H82L77 28H41V58H20Z" fill="currentColor"/>' +
+          '<path d="M41 41H74L34 94L40.5 58H41Z" fill="#d9ff3d" stroke="#07070a" stroke-width="3" stroke-linejoin="round" paint-order="stroke"/></svg>';
         wrap.style.display = "inline-flex";
         wrap.style.width = "0.92em";
         wrap.style.height = "0.92em";
         return wrap;
       })(),
+      el("span", { "aria-hidden": "true", text: "Fulmo" }),
       el("span", { class: "beta-badge", title: "Version bêta", text: "Bêta" })
     ]);
   }
@@ -4459,9 +4459,9 @@
     wrap.setAttribute("aria-hidden", "true");
     wrap.className = "logo-mark";
     wrap.style.flexShrink = "0";
-    wrap.innerHTML = '<svg viewBox="0 0 48 48" fill="none" style="display:block;width:100%;height:100%">' + // html-sûr : SVG constant
-      '<circle cx="24" cy="24" r="19.8" stroke="currentColor" stroke-width="4.2"/>' +
-      '<path d="M28.5 4.5 L13.5 27 h8.4 L19 43.5 L34.5 20 h-8.5 Z" fill="#d9ff3d" stroke="var(--bg)" stroke-width="1.7" stroke-linejoin="round"/></svg>';
+    wrap.innerHTML = '<svg viewBox="5 6 92 92" style="display:block;width:100%;height:100%">' + // html-sûr : SVG constant
+      '<path d="M20 10H82L77 28H41V58H20Z" fill="currentColor"/>' +
+      '<path d="M41 41H74L34 94L40.5 58H41Z" fill="#d9ff3d" stroke="#07070a" stroke-width="3" stroke-linejoin="round" paint-order="stroke"/></svg>';
     return wrap;
   }
 
