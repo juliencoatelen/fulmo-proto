@@ -101,7 +101,7 @@ p { margin: 0; }
 .lede { font-size: .9375rem; line-height: 1.6; color: var(--fg-muted); max-width: 60ch; text-wrap: pretty; }
 .err { font-size: var(--fs-small); font-weight: 500; color: var(--danger-fg); }
 
-.logo { display: inline-flex; align-items: center; gap: .12em; font-family: var(--font-display); font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+.logo { display: inline-flex; align-items: center; gap: .3em; font-family: var(--font-display); font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
 .logo svg { width: .92em; height: .92em; }
 
 /* ─── Boutons ─────────────────────────────────────────────────────────── */

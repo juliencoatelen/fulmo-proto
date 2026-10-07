@@ -68,6 +68,7 @@ function initHeroSearch() {
   const pinName = $(".pin-name", pin), pinPath = $(".pin-path", pin);
   let typing = 0, debounce = 0, idle = 0;
   const user = { active: false, item: null, name: "" };
+  const sideWidth = { key: "", w: 0 };   // largeur naturelle de la carte, par objet
 
   const pathText = (item) => item.place.join(" / ");
   function setPin(item) { pinName.textContent = item.name; pinPath.textContent = pathText(item); }
@@ -172,6 +173,11 @@ function initHeroSearch() {
       if (!visible) return;
       const px = (x / 100) * stage.w, py = (y / 100) * stage.h;
       pin.style.transform = `translate3d(${px}px, ${py}px, 0)`;
+      // Téléphone : la scène est un bandeau au-dessus du titre. Une carte au-dessus
+      // ou en dessous de l'épingle déborderait sur le titre : elle se place à côté.
+      if (stage.w < 760) { placeSide(px, py); return; }
+      pin.classList.remove("side", "side-right");
+      pinCard.style.top = pinCard.style.maxWidth = "";
       // près du haut (sous la barre de navigation), la carte passe sous l'épingle
       pin.classList.toggle("below", py < 190);
       const cw = pinCard.offsetWidth || 240;
@@ -179,6 +185,27 @@ function initHeroSearch() {
     },
     still() { setPin(AUTO[0].item); render("found", AUTO[0].item); }
   };
+
+  // Carte à gauche de l'épingle (à droite si la place manque), centrée sur elle,
+  // sans jamais sortir de la bande visible de la scène (le titre la recouvre en bas).
+  function placeSide(px, py) {
+    const GAP = 22, EDGE = 10, BOTTOM = 52;
+    pin.classList.remove("below");
+    pin.classList.add("side");
+    const room = { left: px - GAP - EDGE, right: stage.w - px - GAP - EDGE };
+    // Largeur naturelle mesurée une fois par objet (pin() est appelé à chaque image).
+    const key = pinName.textContent;
+    if (sideWidth.key !== key) { pinCard.style.maxWidth = ""; sideWidth.key = key; sideWidth.w = pinCard.offsetWidth || 240; }
+    const natural = sideWidth.w;
+    const right = room.left < natural && room.right > room.left;
+    pin.classList.toggle("side-right", right);
+    const cw = Math.min(natural, Math.max(room.left, room.right));
+    pinCard.style.maxWidth = `${cw}px`;
+    const w = pinCard.offsetWidth || cw, h = pinCard.offsetHeight || 80;
+    pinCard.style.left = right ? `${GAP}px` : `${-GAP - w}px`;
+    const top = Math.min(Math.max(-h / 2, EDGE - py), stage.h - BOTTOM - h - py);
+    pinCard.style.top = `${top}px`;
+  }
 }
 
 /* ─── Scène 3D du hero ─────────────────────────────────────────────────── */

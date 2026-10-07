@@ -1,6 +1,6 @@
 # Fulmo
 
-> « Vous ne perdez jamais rien. Vous oubliez où. » FULMO est une application web, en français, qui référence chaque objet d'un logement et dit exactement où il se trouve : pièce, meuble, tiroir ou bac. « Fulmo » signifie « éclair » en espéranto.
+> « Le premier moteur de recherche de la maison. » FULMO est une application web, en français, qui référence chaque objet d'un logement et dit exactement où il se trouve : pièce, meuble, tiroir ou bac. « Fulmo » signifie « éclair » en espéranto.
 
 ## Le problème
 Un logement contient plusieurs milliers d'objets ; la mémoire en suit quelques dizaines. Selon une étude Pixie (2017), on passe 2,5 jours par an à chercher ses affaires.
