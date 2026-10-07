@@ -6,7 +6,10 @@ test.describe("Page d'accueil", () => {
   test("référencement : un seul H1, titre, description, canonique, données structurées", async ({ page }) => {
     await expect(page.locator("h1")).toHaveCount(1);
     await expect(page.locator("h1")).toBeVisible();
-    await expect(page).toHaveTitle(/Fulmo/);
+    // Mots-clés visés par le référencement : ils doivent rester dans le H1 et le titre.
+    await expect(page.locator("h1")).toContainText("moteur de recherche");
+    await expect(page.locator("h1")).toContainText("maison");
+    await expect(page).toHaveTitle(/Fulmo.*moteur de recherche/);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute("content", /.{50,}/);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", "https://getfulmo.com/");
     const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
