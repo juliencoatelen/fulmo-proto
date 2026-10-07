@@ -783,9 +783,9 @@
     return el("span", { class: "logo", style: "font-size:" + (size || 22) + "px", "aria-label": "Fulmo" }, [
       (function () {
         var wrap = document.createElement("span");
-        wrap.innerHTML = '<svg viewBox="5 6 92 92" aria-hidden="true" style="display:block">' + // html-sûr : SVG constant
-          '<path d="M20 10H82L77 28H41V58H20Z" fill="currentColor"/>' +
-          '<path d="M41 41H74L34 94L40.5 58H41Z" fill="#d9ff3d" stroke="#07070a" stroke-width="3" stroke-linejoin="round" paint-order="stroke"/></svg>';
+        wrap.innerHTML = '<svg viewBox="0 0 100 100" aria-hidden="true" style="display:block">' + // html-sûr : SVG constant
+          '<rect x="8" y="8" width="84" height="84" rx="26" fill="none" stroke="currentColor" stroke-width="8"/>' +
+          '<rect x="30" y="30" width="48" height="48" rx="14" fill="none" stroke="currentColor" stroke-width="8"/><rect x="49" y="49" width="19" height="19" rx="5" fill="#d9ff3d"/></svg>';
         wrap.style.display = "inline-flex";
         wrap.style.width = "0.92em";
         wrap.style.height = "0.92em";
@@ -4459,9 +4459,9 @@
     wrap.setAttribute("aria-hidden", "true");
     wrap.className = "logo-mark";
     wrap.style.flexShrink = "0";
-    wrap.innerHTML = '<svg viewBox="5 6 92 92" style="display:block;width:100%;height:100%">' + // html-sûr : SVG constant
-      '<path d="M20 10H82L77 28H41V58H20Z" fill="currentColor"/>' +
-      '<path d="M41 41H74L34 94L40.5 58H41Z" fill="#d9ff3d" stroke="#07070a" stroke-width="3" stroke-linejoin="round" paint-order="stroke"/></svg>';
+    wrap.innerHTML = '<svg viewBox="0 0 100 100" style="display:block;width:100%;height:100%">' + // html-sûr : SVG constant
+      '<rect x="8" y="8" width="84" height="84" rx="26" fill="none" stroke="currentColor" stroke-width="8"/>' +
+      '<rect x="30" y="30" width="48" height="48" rx="14" fill="none" stroke="currentColor" stroke-width="8"/><rect x="49" y="49" width="19" height="19" rx="5" fill="#d9ff3d"/></svg>';
     return wrap;
   }
 
