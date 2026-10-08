@@ -37,5 +37,5 @@ jobs:
         run: npm test
       - name: Rapport en cas d'échec
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with: { name: rapport-playwright, path: playwright-report, retention-days: 14 }
