@@ -12,7 +12,7 @@
     "test:ui": "playwright test --ui"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
+    "@playwright/test": "^1.63.0",
     "esbuild": "^0.25.0",
     "three": "0.186.1"
   }
