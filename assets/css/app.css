@@ -1458,3 +1458,15 @@ p.label[style*="text-transform:none"] { font-weight: 400; line-height: 1.6 !impo
 .quick-add { display: flex; align-items: center; gap: 10px; width: 100%; margin: 0 0 10px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--r-md); background: transparent; color: var(--fg); font: inherit; font-size: .9375rem; text-align: left; cursor: pointer; }
 .quick-add:hover { border-color: var(--accent); background: var(--accent-soft); }
 .quick-add .icon { color: var(--accent); flex-shrink: 0; }
+
+/* ─── Nouveautés ─────────────────────────────────────────────────────── */
+.news-list { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 14px; }
+.news-item { display: flex; gap: 12px; align-items: flex-start; }
+.news-fig {
+  flex: none; width: 36px; height: 36px; border-radius: var(--r-sm);
+  display: grid; place-items: center;
+  background: var(--accent-fill); color: var(--on-accent);
+}
+.news-txt { display: grid; gap: 2px; min-width: 0; }
+.news-txt b { font-size: .9375rem; }
+.news-txt span { font-size: .875rem; line-height: 1.5; color: var(--fg-muted); }

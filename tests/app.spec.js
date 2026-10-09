@@ -103,6 +103,43 @@ test.describe("Application : outils pratiques", () => {
   });
 });
 
+test.describe("Application : nouveautés", () => {
+  test("un habitué voit les nouveautés une fois, puis leur visite pas à pas", async ({ page }) => {
+    await page.goto("/app#demo");
+    await expect(page.getByRole("heading", { level: 1, name: "Que cherchez-vous ?" })).toBeVisible();
+    // Un visiteur neuf n'est pas dérangé : la visite guidée lui présente déjà tout.
+    await page.waitForTimeout(1500);
+    await expect(page.getByRole("dialog", { name: "Nouveau dans Fulmo" })).toHaveCount(0);
+
+    // Un habitué (visite déjà vue) arrive après la mise à jour.
+    await page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("fulmo.demo.v2"));
+      s.tourSeen = true;
+      localStorage.setItem("fulmo.demo.v2", JSON.stringify(s));
+      localStorage.removeItem("fulmo.news");
+    });
+    await page.reload();
+    const news = page.getByRole("dialog", { name: "Nouveau dans Fulmo" });
+    await expect(news).toBeVisible();
+    await news.getByRole("button", { name: "Découvrir en 1 minute" }).click();
+
+    const visit = page.locator(".tour-bubble");
+    await expect(visit.getByRole("heading", { name: "Une minute pour les nouveautés" })).toBeVisible();
+    for (let i = 0; i < 10; i++) {
+      const done = visit.getByRole("button", { name: "Terminer" });
+      if (await done.isVisible()) { await done.click(); break; }
+      await visit.locator(".tour-next").click();
+      await page.waitForTimeout(150);
+    }
+    await expect(page.locator(".tour")).toHaveCount(0);
+
+    await page.reload();
+    await expect(page.locator("[data-tab]:visible").first()).toBeVisible();
+    await page.waitForTimeout(1500);
+    await expect(page.getByRole("dialog", { name: "Nouveau dans Fulmo" })).toHaveCount(0);
+  });
+});
+
 test.describe("Application : création de compte", () => {
   test("inscription, assistant du logement, puis inventaire vide prêt à remplir", async ({ page }) => {
     await page.goto("/app#signup");

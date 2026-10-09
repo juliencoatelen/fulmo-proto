@@ -1491,6 +1491,8 @@
       keys: "idees idee suggestion vote feedback avis probleme bug", run: function () { goTab("ideas"); } },
     { label: "Réglages", hint: "Foyer, membres, thème, abonnement", ic: "cog",
       keys: "reglages parametres foyer membres abonnement export", run: function () { goTab("settings"); } },
+    { label: "Nouveautés", hint: "Ce qui a changé dans la dernière mise à jour", ic: "bolt",
+      keys: "nouveautes nouveau quoi de neuf mise a jour version changements", run: function () { closePalette(); newsSheet(); } },
     { label: "Visite guidée", hint: "Les menus pas à pas, puis un premier objet", ic: "spark",
       keys: "visite guidee didacticiel tutoriel aide decouvrir prise en main", run: function () { tourStart(); } },
     { label: "Basculer le thème clair / sombre", hint: "Le clair pour le plein jour, le sombre pour le soir", ic: "moon",
@@ -8239,7 +8241,7 @@
         ])
       ]),
 
-      el("section", { class: "set-section" }, [
+      el("section", { class: "set-section set-inventory" }, [
         el("h2", { text: "Inventaire" }),
         el("div", { class: "set-group" }, [
           el("div", { class: "set-row" }, [
@@ -8323,6 +8325,14 @@
               el("span", { text: "Les menus un par un, puis un objet rangé et retrouvé. Deux minutes." })
             ]),
             el("button", { class: "btn btn-sm btn-line tour-replay", type: "button", onclick: tourStart }, "Revoir la visite guidée")
+          ]),
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig volt" }, [icon("bolt", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Nouveautés" }),
+              el("span", { text: "Ce qui a changé dans la dernière mise à jour, et une minute pour le découvrir." })
+            ]),
+            el("button", { class: "btn btn-sm btn-line", type: "button", onclick: newsSheet }, [icon("arrow-right", 14), "Voir"])
           ]),
           ideasApi ? el("div", { class: "set-row" }, [
             el("span", { class: "fig" }, [icon("sparkle", 19)]),
@@ -10403,8 +10413,11 @@
 
   /* Démarre la visite. Rien ne s'impose une seconde fois : l'état « vue »
      est enregistré dès la fin ou l'abandon. */
-  function tourStart() {
+  function tourStart(custom) {
     if (tour || !state.household) return;
+    // Appelée depuis un bouton, elle reçoit l'événement du clic : seule une
+    // visite des nouveautés passe ses propres étapes.
+    custom = custom && custom.steps ? custom : null;
     clearTimeout(tourPending);
     tourPending = null;
     closePalette();
@@ -10424,7 +10437,7 @@
 
     tour = {
       overlay: overlay, veil: veil, spot: spot, bubble: bubble, arrow: arrow, live: live,
-      steps: tourSteps(), index: -1, rect: null, drawn: "", side: null,
+      steps: custom ? custom.steps : tourSteps(), news: !!custom, index: -1, rect: null, drawn: "", side: null,
       previous: document.activeElement, closingSheet: false
     };
     document.addEventListener("keydown", tourKey, true);
@@ -10442,8 +10455,18 @@
     document.removeEventListener("keydown", tourKey, true);
     window.removeEventListener("resize", tourOnResize);
     root.inert = false;
-    state.tourSeen = true;
-    save();
+    if (closing.news) {
+      if (message) toast(message);
+      else if (completed) toast("Bonne découverte ! Les nouveautés restent dans Réglages › Aide.");
+      else toast("Les nouveautés restent dans Réglages › Aide.");
+      message = null;
+      completed = true;
+    } else {
+      state.tourSeen = true;
+      // Un compte qui vient de tout découvrir n'a pas besoin des nouveautés.
+      newsMark();
+      save();
+    }
     closing.overlay.classList.remove("is-on");
     closing.overlay.classList.add("is-leaving");
     setTimeout(function () { closing.overlay.remove(); }, reduceMotion() ? 0 : 320);
@@ -10866,6 +10889,121 @@
     }, 900);
   }
 
+  /* ─── Nouveautés ──────────────────────────────────────────────────────
+
+     À chaque mise à jour qui change les habitudes, une fenêtre « Nouveau
+     dans Fulmo » accueille ceux qui utilisaient déjà Fulmo : ce que cela
+     change pour eux, en une phrase par nouveauté, puis une minute de visite
+     qui montre chaque nouveauté à sa place. Elle ne s'impose qu'une fois par
+     appareil ; elle reste dans Réglages › Aide.
+
+     Pour la prochaine mise à jour : ajouter une entrée EN TÊTE de RELEASES
+     (un nouvel `id`), avec ses nouveautés et les étapes de sa visite. Un
+     compte neuf ne la voit pas : la visite guidée lui présente déjà tout. */
+
+  var NEWS_KEY = "fulmo.news";
+  var RELEASES = [
+    {
+      id: "2026-10-outils",
+      title: "Nouveau dans Fulmo",
+      lede: "Fulmo ne sert plus seulement à retrouver : il vous aide aussi le jour où il faut une facture, un rappel ou un carton.",
+      highlights: [
+        { ic: "upload", title: "Facture et garantie dans la fiche", text: "Le jour où le lave-linge tombe en panne, sa facture est à deux touches." },
+        { ic: "grid", title: "Étiquettes QR pour vos bacs", text: "Scannez la boîte du garage : son contenu s'affiche sans l'ouvrir." },
+        { ic: "clock", title: "Rappels d'entretien", text: "Filtre, détartrage, révision : Fulmo vous prévient, jusque dans votre agenda." },
+        { ic: "shield", title: "Rapport pour l'assurance", text: "Vos biens et leur valeur en PDF, prêt à envoyer après un sinistre." },
+        { ic: "download", title: "Import Excel", text: "Reprenez un inventaire existant en un fichier, Sortly compris." },
+        { ic: "spark", title: "Boîte à idées", text: "Proposez ce qui vous manque, votez pour les idées des autres." }
+      ],
+      steps: function () {
+        var wide = tourWide();
+        var editor = isEditor();
+        function tab(id) { return wide ? '.rail-btn[data-tab="' + id + '"]' : '.tabbar .tab[data-tab="' + id + '"]'; }
+        var steps = [
+          { id: "news", tab: "search", hero: true,
+            title: "Une minute pour les nouveautés",
+            text: "Six nouveautés pensées pour l'après-rangement, chacune là où vous en aurez besoin. Suivez le projecteur.",
+            next: "C'est parti", prevLabel: "Plus tard" },
+          editor ? { id: "quick", tab: "search", target: ".search-box",
+            title: "Ranger en une phrase",
+            text: "Tapez « perceuse garage établi » : si l'objet n'existe pas encore, Fulmo propose de le ranger là, sans formulaire." +
+              (codeReaderSupported() ? " Le bouton code-barres lit une étiquette Fulmo ou l'emballage d'un produit." : "") } : null,
+          state.items.length ? { id: "sheet", tab: "search", target: ".result",
+            title: "La fiche d'un objet s'enrichit",
+            text: "Ouvrez un objet : photo, facture, garantie et notice sont rangées avec lui. Prix, date d'achat et entretien se notent dans « Achat, garantie, entretien »." } : null,
+          editor && state.locations.length ? { id: "labels", tab: "places", tabTarget: tab("places"), target: ".places-tools",
+            title: "Des étiquettes QR pour vos bacs",
+            text: "Imprimez une planche, collez une étiquette sur chaque boîte : l'appareil photo du téléphone montre son contenu sans l'ouvrir. Pour un déménagement, le mode Déménagement numérote vos cartons." } : null,
+          { id: "care", tab: "alerts", tabTarget: tab("alerts"), target: ".alert-group, .all-clear",
+            title: "Entretien et agenda",
+            text: "Notez « tous les 6 mois » dans la fiche de la hotte ou de la chaudière : le rappel arrive ici à temps. Les échéances peuvent aussi rejoindre l'agenda de votre téléphone (Éclair)." },
+          { id: "inventory", tab: "settings", tabTarget: wide ? ".rail-home" : ".app-head .head-avatar", target: ".set-inventory",
+            title: "Assurance, tableur, proche aidé",
+            text: "Un rapport PDF de vos biens pour l'assureur, l'import d'un inventaire Excel, et pour un parent âgé un affichage simplifié qui ne garde que la recherche." },
+          ideasApi ? { id: "ideas", tab: "ideas", tabTarget: tab("ideas"), target: ".page h1",
+            title: "La boîte à idées",
+            text: "Il vous manque quelque chose ? Proposez-le ici, soutenez les idées des autres : les plus votées guident les prochaines versions." } : null
+        ].filter(Boolean);
+        var last = steps[steps.length - 1];
+        last.ending = true;
+        last.next = "Terminer";
+        return steps;
+      }
+    }
+  ];
+
+  var newsPending = null;
+  var newsChecked = false;   // une seule proposition par chargement
+
+  function newsLatest() { return RELEASES[0]; }
+  function newsSeen() {
+    try { return localStorage.getItem(NEWS_KEY) === newsLatest().id; } catch (e) { return true; }
+  }
+  function newsMark() {
+    try { localStorage.setItem(NEWS_KEY, newsLatest().id); } catch (e) {}
+  }
+
+  /* La fenêtre « Nouveau dans Fulmo ». Ouverte une fois d'office, puis à la
+     demande depuis les Réglages ou la palette. */
+  function newsSheet() {
+    var release = newsLatest();
+    newsMark();
+    sheet({
+      title: release.title,
+      body: [
+        el("p", { class: "lede", text: release.lede }),
+        el("ul", { class: "news-list" }, release.highlights.map(function (h) {
+          return el("li", { class: "news-item" }, [
+            el("span", { class: "news-fig", "aria-hidden": "true" }, [icon(h.ic, 18)]),
+            el("span", { class: "news-txt" }, [el("b", { text: h.title }), el("span", { text: h.text })])
+          ]);
+        }))
+      ],
+      foot: [
+        el("button", { class: "btn btn-lg btn-line", type: "button", onclick: function () { closeSheet(); } }, "Plus tard"),
+        el("button", {
+          class: "btn btn-lg btn-volt", type: "button",
+          onclick: function () { closeSheet(); tourStart({ steps: release.steps(), news: true }); }
+        }, [icon("arrow-right", 16), "Découvrir en 1 minute"])
+      ]
+    });
+  }
+
+  /* Appelé après chaque rendu, comme la visite guidée : la fenêtre attend
+     que l'écran soit libre (pas de fiche ouverte, pas de visite en cours). */
+  function newsAfterRender() {
+    if (newsChecked || newsPending || tour || tourPending) return;
+    if (!state.session || !state.account || !state.household || !state.tourSeen || simpleMode) return;
+    if (newsSeen()) { newsChecked = true; return; }
+    newsPending = setTimeout(function () {
+      newsPending = null;
+      if (tour || newsChecked || !state.session || !state.household || simpleMode) return;
+      if (document.querySelector(".ob-celebrate, .cmdk-backdrop, .print-root") || openSheet) { newsAfterRender(); return; }
+      newsChecked = true;
+      newsSheet();
+    }, 1200);
+  }
+
   /* ─── Thème ───────────────────────────────────────────────────────── */
 
   /* Le blanc est le défaut du produit, pas une conséquence du système : on
@@ -10923,6 +11061,7 @@
       try { auto.focus({ preventScroll: true }); } catch (e) { auto.focus(); }
     }
     tourAfterRender();
+    newsAfterRender();
   }
 
   function render() {
