@@ -48,6 +48,7 @@
       tab: "search",
       theme: "light",
       consents: {},     // { ai: { granted, at, version } } : preuve des accords (art. 7.1 RGPD)
+      ideas: null,      // boîte à idées de la démonstration (exemples et votes locaux)
       tourSeen: false   // visite guidée vue ou terminée : elle ne s'impose qu'une fois
     };
   }
@@ -357,7 +358,8 @@
       (item.tags || []).join(" "),
       item.spot || "",
       pathOf(item.locationId).join(" "),
-      item.lentTo || ""
+      item.lentTo || "",
+      item.barcode || ""
     ].join(" "));
   }
 
@@ -443,6 +445,10 @@
         var days = Math.round((Date.now() - item.lentAt) / 86400000);
         if (days >= 21) out.push({ item: item, kind: "lent", days: days });
       }
+
+      // Entretien régulier : prévenu deux semaines avant l'échéance.
+      var care = daysUntil(careDue(item));
+      if (care !== null && care <= 14) out.push({ item: item, kind: "care", days: care });
     });
     out.sort(function (a, b) { return a.days - b.days; });
     return out;
@@ -709,6 +715,13 @@
     setItemField("Perceuse sans fil", { warrantyUntil: iso(41) });
     setItemField("Clé à molette 30 mm", { lentTo: "Marc", lentAt: now - 41 * day });
     setItemField("Robot pâtissier", { warrantyUntil: iso(18) });
+
+    // Ce que l'assureur demandera : prix et date d'achat des objets de valeur.
+    setItemField("Perceuse sans fil", { value: 129.9, purchasedAt: iso(-689), barcode: "3165140912345" });
+    setItemField("Robot pâtissier", { value: 349, purchasedAt: iso(-712) });
+    setItemField("Taille-haie", { value: 89, purchasedAt: iso(-400), careLabel: "Affûter et graisser la lame", careEvery: 12, careLast: iso(-358) });
+    setItemField("Tente 4 places", { value: 159, purchasedAt: iso(-900) });
+    setItemField("Trousse de secours", { careLabel: "Vérifier le contenu", careEvery: 6, careLast: iso(-170) });
   }
 
   function setItemField(name, patch) {
@@ -859,7 +872,7 @@
      par l'article 7.1 du RGPD) et se retire dans les Réglages. Changer
      LEGAL_VERSION réinterroge tout le monde. */
 
-  var LEGAL_VERSION = 2;  // 2 : CGU v2 du 4 octobre 2026 (foyer partagé, inventaire en ligne)
+  var LEGAL_VERSION = 3;  // 3 : CGU v3 du 9 octobre 2026 (boîte à idées publique, photos et justificatifs)
 
   function aiConsented() {
     var c = state.consents && state.consents.ai;
@@ -1464,10 +1477,22 @@
       keys: "scan photo camera ia", run: function () { goTab("scan"); } },
     { label: "Plan du logement", hint: "Vue d'ensemble", ic: "map", premium: true,
       keys: "plan carte map etage", run: function () { goTab("map"); } },
-    { label: "Alertes", hint: "Péremptions, garanties, prêts", ic: "bell",
-      keys: "alertes peremption garantie prete", run: function () { goTab("alerts"); } },
+    { label: "Alertes", hint: "Péremptions, garanties, entretiens, prêts", ic: "bell",
+      keys: "alertes peremption garantie prete entretien rappel", run: function () { goTab("alerts"); } },
+    { label: "Étiquettes QR", hint: "Pour les bacs, meubles et cartons", ic: "grid",
+      keys: "etiquettes qr code imprimer bac carton", run: function () { labelsSheet(); } },
+    { label: "Déménagement", hint: "Cartons numérotés et leur pièce d'arrivée", ic: "box", premium: true,
+      keys: "demenagement cartons demenager", run: function () { movingSheet(); } },
+    { label: "Rapport pour l'assurance", hint: "Vos biens et leur valeur, en PDF", ic: "shield", premium: true,
+      keys: "assurance sinistre rapport valeur pdf cambriolage", run: function () { reportSheet(); } },
+    { label: "Importer un tableur", hint: "Excel, CSV, export Sortly", ic: "upload",
+      keys: "importer import csv excel tableur sortly", run: function () { importSheet(); } },
+    { label: "Boîte à idées", hint: "Proposer, voter, signaler un problème", ic: "spark",
+      keys: "idees idee suggestion vote feedback avis probleme bug", run: function () { goTab("ideas"); } },
     { label: "Réglages", hint: "Foyer, membres, thème, abonnement", ic: "cog",
       keys: "reglages parametres foyer membres abonnement export", run: function () { goTab("settings"); } },
+    { label: "Nouveautés", hint: "Ce qui a changé dans la dernière mise à jour", ic: "bolt",
+      keys: "nouveautes nouveau quoi de neuf mise a jour version changements", run: function () { closePalette(); newsSheet(); } },
     { label: "Visite guidée", hint: "Les menus pas à pas, puis un premier objet", ic: "spark",
       keys: "visite guidee didacticiel tutoriel aide decouvrir prise en main", run: function () { tourStart(); } },
     { label: "Basculer le thème clair / sombre", hint: "Le clair pour le plein jour, le sombre pour le soir", ic: "moon",
@@ -3279,16 +3304,17 @@
 
   var FREE_FEATURES = [
     "Objets illimités", "Pièces, zones et meubles illimités",
-    "Recherche instantanée tolérante aux fautes", "Mots-clés et métadonnées",
-    "Photo par objet", "Foyer partagé jusqu'à 5 membres",
-    "Installation sur l'écran d'accueil", "Export de vos données à tout moment"
+    "Recherche instantanée tolérante aux fautes", "Photo et facture par objet",
+    "Alertes péremption, garantie, entretien et prêts", "Étiquettes QR pour vos bacs (une planche A4)",
+    "Import et export tableur (Excel, CSV)", "Foyer partagé jusqu'à 5 membres",
+    "Boîte à idées : proposez et votez", "Export de vos données à tout moment"
   ];
   var PAID_FEATURES = [
     "Tout le plan Libre, sans limite", "Scan Éclair : référencement par la caméra",
     "Plan 2D/3D interactif du logement", "Recherche en langage naturel",
-    "Alertes péremption, garantie et prêts", "Accès délégué proche aidant",
-    "Historique et journal des déplacements", "Membres du foyer illimités",
-    "Export PDF assurance et sinistre", "Support prioritaire"
+    "Échéances dans l'agenda du téléphone", "Rapport PDF pour l'assurance",
+    "Mode déménagement et étiquettes illimitées", "Affichage simplifié pour un proche aidé",
+    "Historique des déplacements", "Membres du foyer illimités", "Support prioritaire"
   ];
   var OB_PLANS = [
     { id: "free", name: "Libre", price: "0 €", suffix: "pour toujours", pitch: "Tout ce qu'il faut pour ne plus jamais chercher.", features: FREE_FEATURES },
@@ -4306,6 +4332,7 @@
      plus, on ne remplace personne.
      app#login : l'écran de connexion ; connecté, on reste dans l'app. */
   function obRoute() {
+    placeRoute();   // app#lieu=… : l'étiquette QR d'un bac ou d'un carton
     var hash = String(location.hash || "").toLowerCase();
     if (hash !== "#demo" && hash !== "#signup" && hash !== "#login") return;
     try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
@@ -4336,15 +4363,21 @@
     { id: "scan",     icon: "scan",   label: "Scan Éclair", short: "Scan", premium: true },
     { id: "map",      icon: "map",    label: "Plan",  premium: true },
     { id: "alerts",   icon: "bell",   label: "Alertes" },
+    // Après les cinq premiers : sur téléphone, on y entre par les réglages.
+    { id: "ideas",    icon: "spark",  label: "Boîte à idées" },
     { id: "settings", icon: "cog",    label: "Réglages" }
   ];
 
   function screenApp() {
+    if (simpleMode) return screenSimple();
     var premium = state.plan === "premium";
     var views = {
       search: viewSearch, places: viewPlaces, scan: viewScan,
-      map: viewMap, alerts: viewAlerts, settings: viewSettings
+      map: viewMap, alerts: viewAlerts, ideas: viewIdeas, settings: viewSettings
     };
+    // En ligne, la boîte à idées n'apparaît que si l'application la sert.
+    var tabs = TABS.filter(function (tab) { return tab.id !== "ideas" || !!ideasApi; });
+    if (!ideasApi) delete views.ideas;
     // Un onglet inconnu (état enregistré par une autre version) ne doit pas
     // planter le rendu.
     if (!views[state.tab]) state.tab = "search";
@@ -4376,7 +4409,7 @@
         ]),
         icon("chev", 14)
       ]),
-      el("div", { class: "rail-nav" }, TABS.map(function (tab) {
+      el("div", { class: "rail-nav" }, tabs.map(function (tab) {
         var on = state.tab === tab.id;
         return el("button", {
           class: "rail-btn", type: "button", "data-tab": tab.id,
@@ -4597,6 +4630,16 @@
           el("span", { class: "count", "aria-live": "polite", text: plural(shown.length, "objet", "objets") })
         ]),
 
+        // « lampe torche cabanon servante » : on propose de la ranger là, d'un geste.
+        (function () {
+          var quick = hasQuery && !aiActive && isEditor() ? quickParse(query) : null;
+          if (!quick || results.some(function (r) { return norm(r.item.name) === norm(quick.name); })) return null;
+          return el("button", {
+            class: "quick-add", type: "button",
+            onclick: function () { itemSheet(null, query); }
+          }, [icon("plus", 15), el("span", {}, ["Ranger « ", el("b", { text: quick.name }), " » dans " + placeName(quick.locationId)])]);
+        })(),
+
         el("ul", { class: "results" + (stagger ? " stagger" : "") }, results.slice(0, 60).map(function (row, index) {
           var item = row.item;
           var li = el("li", {
@@ -4680,7 +4723,14 @@
             icon(searchState.aiBusy ? "loop" : "spark", 17),
             searchState.aiBusy ? "Interprétation…" : "Avec mes mots",
             !premium ? el("span", { class: "rail-bolt" }, [icon("bolt", 13)]) : null
-          ])
+          ]),
+
+          // Code-barres d'un produit (« l'ai-je déjà ? ») ou étiquette QR d'un
+          // lieu : là où le téléphone sait les lire sans rien envoyer.
+          codeReaderSupported() ? el("button", {
+            class: "search-ai search-code", type: "button", title: "Scanner un code-barres ou une étiquette Fulmo",
+            onclick: scanFromSearch
+          }, [icon("scan", 17), "Scanner"]) : null
         ]),
 
         el("div", { class: "search-filters", role: "group", "aria-label": "Filtres par mot-clé" }, [
@@ -4743,7 +4793,24 @@
         }))
       ]) : null,
 
+      firstSteps(hasQuery),
+
       body
+    ]);
+  }
+
+  /* Les dix premiers objets : c'est à partir de là que Fulmo répond plus vite
+     que la mémoire. On le montre, sans bloquer quoi que ce soit. */
+  function firstSteps(hasQuery) {
+    var n = state.items.length;
+    if (n === 0 || n >= 10 || hasQuery || searchState.filter || tourIsDemo() || !isEditor()) return null;
+    return el("div", { class: "first-steps" }, [
+      el("div", { class: "fs-top" }, [
+        el("b", { text: "Premiers pas : " + n + " objet" + (n > 1 ? "s" : "") + " sur 10" }),
+        el("button", { class: "btn btn-sm btn-volt", type: "button", onclick: function () { itemSheet(null); } }, [icon("plus", 14), "Ajouter"])
+      ]),
+      el("div", { class: "progress", "aria-hidden": "true" }, [el("i", { style: "width:" + n * 10 + "%" })]),
+      el("p", { class: "muted", text: "Commencez par ce que vous cherchez le plus souvent : clés de secours, passeport, chargeurs, pharmacie. Astuce : « perceuse garage armoire » range l'objet directement." })
     ]);
   }
 
@@ -4957,6 +5024,7 @@
         count > 0 ? el("span", { class: "count", "aria-label": plural(count, "objet", "objets"), text: String(count) }) : null,
 
         el("div", { class: "acts" }, [
+          el("button", { class: "mini", type: "button", "aria-label": "Contenu et étiquette de " + node.name, title: "Contenu et étiquette QR", onclick: function () { placeSheet(node); } }, [icon("eye", 15)]),
           el("button", { class: "mini", type: "button", "aria-label": "Ajouter dans " + node.name, title: "Ajouter dedans", onclick: startAdd }, [icon("plus", 15)]),
           el("button", { class: "mini", type: "button", "aria-label": "Renommer " + node.name, title: "Renommer", onclick: startRename }, [icon("pencil", 14)]),
           el("button", { class: "mini warn", type: "button", "aria-label": "Supprimer " + node.name, title: "Supprimer", onclick: remove }, [icon("trash", 14)])
@@ -4972,6 +5040,8 @@
             sheet({
               title: node.name,
               body: [el("div", { class: "action-list" }, [
+                act("Voir le contenu", "eye", function () { placeSheet(node); }),
+                act("Étiquette QR", "grid", function () { labelsSheet([node.id]); }),
                 act("Ajouter dedans", "plus", startAdd),
                 act("Renommer", "pencil", startRename),
                 act("Changer l'icône", "grid", changeIcon),
@@ -5042,6 +5112,14 @@
     return el("div", { class: "page" }, [
       el("h1", { class: "display t-lg", text: "Mes lieux" }),
       el("p", { class: "lede", style: "margin-top:8px", text: "Pièce, meuble, contenant : l'architecture de votre logement. Ajoutez, renommez, réorganisez à tout moment." }),
+
+      state.locations.length ? el("div", { class: "inline places-tools" }, [
+        el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { labelsSheet(); } }, [icon("grid", 14), "Étiquettes QR"]),
+        isEditor() ? el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { movingSheet(); } }, [
+          icon("box", 14), cartons().length ? "Déménagement · " + plural(cartons().length, "carton", "cartons") : "Déménagement",
+          !isPremium() ? el("span", { class: "rail-bolt" }, [icon("bolt", 12)]) : null
+        ]) : null
+      ]) : null,
 
       el("div", { class: "tree", style: "margin-top:22px" }, treeRows.length ? treeRows : [
         el("p", { class: "tree-empty", text: "Aucun lieu pour l'instant. Ajoutez une pièce pour commencer." })
@@ -7713,14 +7791,17 @@
 
     function alertRow(row) {
       var late = row.kind === "expiry" && row.days < 0;
+      if (row.kind === "care" && row.days < 0) late = true;
       var text = row.kind === "expiry"
         ? (late ? "Périmé depuis " + plural(Math.abs(row.days), "jour", "jours") : "Périme " + days(row.days))
         : row.kind === "warranty"
           ? "Garantie : fin " + days(row.days)
-          : "Chez " + row.item.lentTo + " depuis " + row.days + " j";
+          : row.kind === "care"
+            ? row.item.careLabel + (row.days < 0 ? " : en retard de " + plural(-row.days, "jour", "jours") : " " + days(row.days))
+            : "Chez " + row.item.lentTo + " depuis " + row.days + " j";
 
       return el("li", { class: "alert-row" + (late ? " is-late" : "") + (row.kind === "lent" ? " is-lent" : "") }, [
-        el("span", { class: "state", "aria-hidden": "true" }, [icon(row.kind === "expiry" ? "warn" : row.kind === "warranty" ? "shield" : "loop", 19)]),
+        el("span", { class: "state", "aria-hidden": "true" }, [icon(row.kind === "expiry" ? "warn" : row.kind === "warranty" ? "shield" : row.kind === "care" ? "cog" : "loop", 19)]),
         el("button", { class: "body", type: "button", onclick: function () { itemSheet(row.item); } }, [
           el("span", { class: "name", text: row.item.name }),
           crumbs(row.item.locationId, row.item.spot)
@@ -7733,35 +7814,52 @@
             row.item.lentTo = null; row.item.lentAt = null; row.item.lastSeenAt = Date.now();
             save(); render(); toast("« " + row.item.name + " » est de retour.");
           }
-        }, [icon("check", 14), "Rendu"]) : null
+        }, [icon("check", 14), "Rendu"]) : null,
+        // L'entretien fait se note d'un geste : la prochaine échéance repart d'aujourd'hui.
+        row.kind === "care" && isEditor() ? el("button", {
+          class: "btn btn-sm btn-line", type: "button", "aria-label": "Entretien fait pour « " + row.item.name + " »",
+          onclick: function () {
+            row.item.careLast = todayIso();
+            save(); render(); toast("Noté. Prochain rappel " + frDate(careDue(row.item)) + ".");
+          }
+        }, [icon("check", 14), "Fait"]) : null
       ]);
     }
 
     var groups = [
       { title: "À traiter", rows: rows.filter(function (r) { return r.kind === "expiry" && r.days < 0; }) },
       { title: "Échéances proches", rows: rows.filter(function (r) { return (r.kind === "expiry" && r.days >= 0) || r.kind === "warranty"; }) },
+      { title: "Entretien", rows: rows.filter(function (r) { return r.kind === "care"; }) },
       { title: "Objets prêtés", rows: rows.filter(function (r) { return r.kind === "lent"; }) }
     ];
+    var dated = state.items.some(function (i) { return i.expiresAt || i.warrantyUntil || careDue(i); });
 
     return el("div", { class: "page" }, [
       el("h1", { class: "display t-lg", text: "Alertes" }),
       el("p", { class: "lede", style: "margin-top:8px", text: rows.length
-        ? plural(rows.length, "chose demande", "choses demandent") + " votre attention : péremptions, garanties, prêts."
-        : "Péremptions, fins de garantie, objets prêtés : tout ce qui a une date apparaît ici." }),
+        ? plural(rows.length, "chose demande", "choses demandent") + " votre attention : péremptions, garanties, entretiens, prêts."
+        : "Péremptions, fins de garantie, entretiens, objets prêtés : tout ce qui a une date apparaît ici." }),
 
-      // Les alertes sont calculées pour tout le monde ; seule leur remontée par
-      // email est réservée à l'Éclair. On ne cache pas derrière un paiement une
-      // information qui concerne la santé ou les garanties.
-      state.plan !== "premium" && rows.length > 0 ? el("div", { class: "ai-note" }, [
-        icon("bolt", 15),
-        el("span", { class: "muted", text: "Avec l'Éclair, ces alertes vous parviennent par email avant que la date ne passe." })
+      // Les alertes sont calculées pour tout le monde ; seul leur report dans
+      // l'agenda du téléphone est réservé à l'Éclair. On ne cache pas derrière
+      // un paiement une information qui concerne la santé ou les garanties.
+      dated ? el("div", { class: "ai-note agenda-note" }, [
+        icon("clock", 15),
+        el("span", { class: "muted", text: "Ajoutez ces échéances à l'agenda de votre téléphone : il vous prévient la veille, même sans ouvrir Fulmo." }),
+        el("button", {
+          class: "btn btn-sm " + (isPremium() ? "btn-volt" : "btn-line"), type: "button",
+          onclick: function () {
+            if (isPremium()) exportCalendar();
+            else eclairSheet("Échéances dans votre agenda", "Péremptions, fins de garantie et entretiens réguliers rejoignent l'agenda de votre téléphone (iPhone, Android, Outlook), qui vous prévient la veille. L'entretien revient tout seul.");
+          }
+        }, [isPremium() ? icon("download", 14) : icon("bolt", 14), "Ajouter à mon agenda"])
       ]) : null,
 
       rows.length === 0
         ? el("div", { class: "all-clear" }, [
             el("span", { class: "blob", "aria-hidden": "true" }, [icon("check", 26)]),
             el("h2", { class: "display t-md", text: "Rien à signaler" }),
-            el("p", { class: "lede", text: "Ajoutez une date de péremption ou un prêt dans la fiche d'un objet : l'alerte viendra toute seule." })
+            el("p", { class: "lede", text: "Ajoutez une date de péremption, une garantie, un entretien ou un prêt dans la fiche d'un objet : l'alerte viendra toute seule." })
           ])
         : el("div", {}, groups.filter(function (g) { return g.rows.length > 0; }).map(function (group) {
             return el("section", { class: "alert-group" }, [
@@ -8065,28 +8163,11 @@
         history: state.history, scans: state.scans
       };
       var filename = "fulmo-export-" + new Date().toISOString().slice(0, 10) + ".json";
-      var data = JSON.stringify(payload, null, 2);
-      if (downloadsApi) {
-        downloadsApi.save({ filename: filename, data: data })
-          .then(function () { toast("Export enregistré."); })
-          // Le visiteur peut refuser : ce n'est pas une erreur.
-          .catch(function () { toast("Export annulé."); });
-        return;
-      }
-      // Navigateur nu : un simple téléchargement. Le bouton n'existait pas
-      // hors de la passerelle, et l'export était introuvable.
-      try {
-        var url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
-        var link = el("a", { href: url, download: filename, style: "display:none" });
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-        toast("Export téléchargé : " + filename);
-      } catch (e) {
-        toast("L'export n'a pas pu être créé dans ce navigateur.");
-      }
+      saveFile(filename, JSON.stringify(payload, null, 2), "application/json", "Export téléchargé : " + filename);
     }
+
+    var total = state.items.reduce(function (sum, i) { return sum + itemValue(i); }, 0);
+    var valued = state.items.filter(function (i) { return typeof i.value === "number"; }).length;
 
     var household = state.household || {};
     var roomsCount = state.locations.filter(function (l) { return !l.parentId; }).length;
@@ -8160,6 +8241,49 @@
         ])
       ]),
 
+      el("section", { class: "set-section set-inventory" }, [
+        el("h2", { text: "Inventaire" }),
+        el("div", { class: "set-group" }, [
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" + (premium ? " volt" : "") }, [icon("shield", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: premium && valued ? "Valeur déclarée : " + euros(total) : "Rapport pour l'assurance" }),
+              el("span", { text: premium
+                ? (valued ? valued + " objets estimés sur " + state.items.length + ". " : "") + "La liste de vos biens, pièce par pièce, prête à envoyer à votre assureur."
+                : "Avec l'Éclair : valeur totale et liste des biens, pièce par pièce, en PDF pour votre assureur." })
+            ]),
+            el("button", { class: "btn btn-sm " + (premium ? "btn-volt" : "btn-line"), type: "button", onclick: reportSheet }, [icon(premium ? "download" : "bolt", 14), "Rapport"])
+          ]),
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("grid", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Étiquettes QR" }),
+              el("span", { text: "Sur vos bacs et cartons : un coup d'appareil photo et Fulmo affiche ce qu'il y a dedans." })
+            ]),
+            el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { labelsSheet(); } }, [icon("arrow-right", 14), "Imprimer"])
+          ]),
+          isEditor() ? el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("upload", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Importer un tableur" }),
+              el("span", { text: "Une liste Excel ou CSV, ou l'export d'une autre application (Sortly…) : pièces et meubles sont créés au passage." })
+            ]),
+            el("div", { class: "inline" }, [
+              el("button", { class: "btn btn-sm btn-quiet", type: "button", onclick: csvTemplate }, "Modèle"),
+              el("button", { class: "btn btn-sm btn-line", type: "button", onclick: importSheet }, [icon("upload", 14), "Importer"])
+            ])
+          ]) : null,
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("download", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Exporter en tableur" }),
+              el("span", { text: "Votre inventaire dans Excel, une ligne par objet." })
+            ]),
+            el("button", { class: "btn btn-sm btn-line", type: "button", onclick: exportCsv }, [icon("download", 14), "CSV"])
+          ])
+        ])
+      ]),
+
       el("section", { class: "set-section" }, [
         el("h2", { text: "Apparence" }),
         el("div", { class: "set-group" }, [
@@ -8177,7 +8301,17 @@
                 onclick: function () { if (!on) { state.theme = option[0]; applyTheme(); save(); render(); } }
               }, [icon(option[2], 15), option[1]]);
             }))
-          ])
+          ]),
+          switchRow(
+            "Affichage simplifié",
+            "Pour un parent ou une personne aidée : une seule question, « Que cherchez-vous ? », en grand. Le proche aidant range depuis son propre compte, membre du foyer. Réglage de cet appareil.",
+            simpleMode,
+            function () {
+              if (!premium) { eclairSheet("Affichage simplifié", "Pour un parent âgé ou une personne aidée : Fulmo n'affiche plus qu'une question, en grand, « Que cherchez-vous ? ». Le proche aidant range depuis son propre compte ; la personne aidée n'a qu'à chercher."); return; }
+              setSimple(!simpleMode);
+              toast("Affichage simplifié activé sur cet appareil.");
+            }
+          )
         ])
       ]),
 
@@ -8191,7 +8325,23 @@
               el("span", { text: "Les menus un par un, puis un objet rangé et retrouvé. Deux minutes." })
             ]),
             el("button", { class: "btn btn-sm btn-line tour-replay", type: "button", onclick: tourStart }, "Revoir la visite guidée")
-          ])
+          ]),
+          el("div", { class: "set-row" }, [
+            el("span", { class: "fig volt" }, [icon("bolt", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Nouveautés" }),
+              el("span", { text: "Ce qui a changé dans la dernière mise à jour, et une minute pour le découvrir." })
+            ]),
+            el("button", { class: "btn btn-sm btn-line", type: "button", onclick: newsSheet }, [icon("arrow-right", 14), "Voir"])
+          ]),
+          ideasApi ? el("div", { class: "set-row" }, [
+            el("span", { class: "fig" }, [icon("sparkle", 19)]),
+            el("span", { class: "txt" }, [
+              el("b", { text: "Boîte à idées" }),
+              el("span", { text: "Proposez ce qui vous manque, votez pour les idées des autres, signalez un problème." })
+            ]),
+            el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { goTab("ideas"); } }, [icon("arrow-right", 14), "Ouvrir"])
+          ]) : null
         ])
       ]),
 
@@ -8259,7 +8409,7 @@
      plusieurs, le choix du foyer affiché. */
   function cloudHouseholdSection() {
     var role = cloud.role();
-    var roleText = role === "admin" ? "Administrateur : vous gérez les membres et leurs droits."
+    var roleText = role === "admin" ? "Administrateur : vous gérez les membres et leurs droits. Proche aidant : invitez-le comme Membre, il range pour la personne aidée."
       : role === "member" ? "Membre : vous ajoutez et modifiez les objets."
       : "Invité : vous consultez le foyer sans le modifier.";
     var others = cloud.households().filter(function (h) { return h.id !== cloud.householdId(); });
@@ -8310,17 +8460,26 @@
      s'en sert pour suivre la fiche sans la réécrire. */
   function itemSheet(item, defaultName, hooks) {
     hooks = hooks || {};
+    // « Référencer « perceuse garage armoire » » depuis la recherche : le lieu
+    // est déjà dans la phrase.
+    var quick = !item && defaultName && !hooks.locationId ? quickParse(defaultName) : null;
     var draft = item
       ? {
           name: item.name, locationId: item.locationId, spot: item.spot || "",
           tags: (item.tags || []).join(", "), description: item.description || "",
           quantity: item.quantity || 1, expiresAt: item.expiresAt || "",
-          lentTo: item.lentTo || ""
+          lentTo: item.lentTo || "", warrantyUntil: item.warrantyUntil || "",
+          value: typeof item.value === "number" ? String(item.value).replace(".", ",") : "",
+          purchasedAt: item.purchasedAt || "", barcode: item.barcode || "",
+          careLabel: item.careLabel || "", careEvery: item.careEvery ? String(item.careEvery) : "", careLast: item.careLast || ""
         }
       : {
-          name: defaultName || "", locationId: null, spot: "", tags: "",
-          description: "", quantity: 1, expiresAt: "", lentTo: ""
+          name: quick ? quick.name : defaultName || "", locationId: quick ? quick.locationId : hooks.locationId || null,
+          spot: "", tags: "", description: "", quantity: 1, expiresAt: "", lentTo: "", warrantyUntil: "",
+          value: "", purchasedAt: "", barcode: hooks.barcode || "", careLabel: "", careEvery: "", careLast: ""
         };
+    if (hooks.draft) { draft = hooks.draft; quick = null; }
+    var pending = { photo: null };
 
     var nameInput, nameError;
 
@@ -8338,6 +8497,15 @@
       var tags = draft.tags.split(/[,;\n]/).map(function (t) { return t.trim(); })
         .filter(function (t) { return t.length > 0 && t.length <= 40; }).slice(0, 25);
 
+      // Ajout express : « perceuse garage armoire », sans lieu choisi à la main.
+      var guessed = !item && !draft.locationId ? quickParse(name) : null;
+      if (guessed) { name = guessed.name; draft.locationId = guessed.locationId; }
+
+      var careEvery = parseInt(draft.careEvery, 10);
+      var careLabel = draft.careLabel.trim().slice(0, 80);
+      careEvery = careLabel && careEvery >= 1 && careEvery <= 120 ? careEvery : null;
+      var value = csvNumber(draft.value);
+
       var payload = {
         name: name.slice(0, 120),
         locationId: draft.locationId || null,
@@ -8346,16 +8514,25 @@
         description: draft.description.trim() || null,
         quantity: Math.max(0, Math.min(100000, parseInt(draft.quantity, 10) || 1)),
         expiresAt: draft.expiresAt || null,
+        warrantyUntil: draft.warrantyUntil || null,
         lentTo: draft.lentTo.trim() || null,
+        value: draft.value.trim() ? value : null,
+        purchasedAt: draft.purchasedAt || null,
+        barcode: cleanBarcode(draft.barcode),
+        careLabel: careEvery ? careLabel : null,
+        careEvery: careEvery,
+        // Un entretien tout juste décrit part d'aujourd'hui.
+        careLast: careEvery ? draft.careLast || todayIso() : null,
         lastSeenAt: Date.now()
       };
       if (payload.lentTo && (!item || !item.lentTo)) payload.lentAt = Date.now();
       if (!payload.lentTo) payload.lentAt = null;
 
-      if (item) Object.keys(payload).forEach(function (key) { item[key] = payload[key]; });
-      else {
+      if (item) {
+        moveItem(item, payload.locationId);
+        Object.keys(payload).forEach(function (key) { item[key] = payload[key]; });
+      } else {
         payload.id = uid("it");
-        payload.warrantyUntil = null;
         payload.createdAt = Date.now();
         if (payload.lentAt === undefined) payload.lentAt = null;
         state.items.push(payload);
@@ -8364,8 +8541,20 @@
       save();
       closeSheet();
       render();
+      if (!item && pending.photo) uploadPhoto(payload, pending.photo, 0);
       if (hooks.onSaved) hooks.onSaved(item || payload);
+      else if (guessed) toast("Rangé dans « " + placeName(payload.locationId) + " ».");
       else toast(item ? "Objet enregistré." : "Objet référencé.");
+    }
+
+    /* En ligne, l'objet tout neuf part au serveur avec un léger délai : la
+       photo attend qu'il y soit. */
+    function uploadPhoto(target, blob, tries) {
+      media.add(target, "photo", blob, null).then(function (res) {
+        if (res && res.ok) return;
+        if (res && res.error === "not_found" && tries < 5) { setTimeout(function () { uploadPhoto(target, blob, tries + 1); }, 1500); return; }
+        toast(MEDIA_ERRORS[res && res.error] || "La photo n'a pas pu être enregistrée.");
+      });
     }
 
     function textField(label, key, placeholder, hint, type) {
@@ -8441,6 +8630,51 @@
 
         textField("Prêté à", "lentTo", "Prénom, si l'objet est sorti"),
 
+        /* Photo et papiers : ce qu'on cherche le jour où l'objet tombe en
+           panne, ou après un sinistre. */
+        media.available() ? el("div", { class: "field" }, [el("span", { text: "Photo et justificatifs" }), mediaBlock(item, pending)]) : null,
+
+        /* Tout ce qui sert « plus tard » se replie : la fiche reste courte
+           pour qui veut juste ranger. Ouverte d'office si elle a du contenu. */
+        el("details", { class: "more-fields", open: draft.value || draft.purchasedAt || draft.warrantyUntil || draft.barcode || draft.careLabel ? true : null }, [
+          el("summary", { text: "Achat, garantie, entretien" }),
+          el("div", { class: "grid-2" }, [
+            textField("Prix d'achat (€)", "value", "129,90"),
+            textField("Date d'achat", "purchasedAt", "", null, "date")
+          ]),
+          el("div", { class: "grid-2" }, [
+            textField("Garantie jusqu'au", "warrantyUntil", "", null, "date"),
+            el("div", { class: "field" }, [
+              el("span", { text: "Code-barres" }),
+              el("div", { class: "inline input-with" }, [
+                el("input", {
+                  class: "input", value: draft.barcode, maxlength: 32, inputmode: "numeric", placeholder: "3165140912345",
+                  "aria-label": "Code-barres", oninput: function (event) { draft.barcode = event.target.value; }
+                }),
+                codeReaderSupported() ? el("button", {
+                  class: "mini", type: "button", "aria-label": "Scanner le code-barres", title: "Scanner",
+                  // Le lecteur prend la place de la fiche : on la rouvre ensuite
+                  // telle qu'elle était, code en plus.
+                  onclick: function () {
+                    readCode("Scanner le code-barres", function (raw) {
+                      draft.barcode = cleanBarcode(raw) || "";
+                      itemSheet(item, null, Object.assign({}, hooks, { draft: draft }));
+                    });
+                  }
+                }, [icon("scan", 16)]) : null
+              ])
+            ])
+          ]),
+          textField("Entretien régulier", "careLabel", "Détartrer, changer le filtre, vérifier la pression…"),
+          el("div", { class: "grid-2" }, [
+            textField("Tous les (mois)", "careEvery", "6", null, "number"),
+            textField("Dernier entretien", "careLast", "", null, "date")
+          ]),
+          el("p", { class: "field-hint", text: "Une garantie, une péremption ou un entretien : Fulmo vous prévient dans Alertes, et peut les ajouter à l'agenda de votre téléphone." })
+        ]),
+
+        item && isPremium() ? movesBlock(item) : null,
+
         item ? el("button", {
           class: "btn btn-danger-line", type: "button", style: "align-self:flex-start",
           onclick: function () {
@@ -8466,6 +8700,1593 @@
 
     return card;
   }
+
+  /* ═══ Outils pratiques ═════════════════════════════════════════════════
+     Ce qui sert APRÈS le rangement : coller une étiquette sur un carton,
+     retrouver une facture le jour où l'appareil tombe en panne, prévenir
+     l'assureur, déménager. Chaque outil part d'un geste concret et se
+     propose là où l'on en a besoin (la fiche d'un objet, un meuble, une
+     alerte), pas dans un menu à part. */
+
+  // replaceChildren écrirait « null » pour un enfant absent.
+  function fill(node, children) {
+    node.replaceChildren.apply(node, children.filter(function (c) { return c != null && c !== false; }));
+  }
+  function isEditor() { return !cloud || cloud.role() !== "guest"; }
+  function isPremium() { return state.plan === "premium"; }
+  function todayIso() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function frDate(iso) {
+    if (!iso) return "";
+    var d = new Date(String(iso).length === 10 ? iso + "T00:00:00" : iso);
+    return isNaN(d) ? "" : d.toLocaleDateString("fr-FR");
+  }
+  function euros(value) {
+    return (Math.round(value * 100) / 100).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
+  }
+  function itemValue(item) { return typeof item.value === "number" ? item.value * Math.max(1, item.quantity || 1) : 0; }
+
+  /* Un fichier remis au visiteur : par la passerelle quand elle existe, sinon
+     un simple téléchargement. */
+  function saveFile(filename, data, mime, message) {
+    if (downloadsApi && typeof data === "string") {
+      downloadsApi.save({ filename: filename, data: data })
+        .then(function () { toast(message || "Fichier enregistré."); })
+        .catch(function () { toast("Enregistrement annulé."); });
+      return;
+    }
+    try {
+      var url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data], { type: mime }));
+      var link = el("a", { href: url, download: filename, style: "display:none" });
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+      toast(message || "Fichier téléchargé : " + filename);
+    } catch (e) {
+      toast("Le fichier n'a pas pu être créé dans ce navigateur.");
+    }
+  }
+
+  /* Imprimer un fragment, et lui seul : le reste de la page est masqué le
+     temps de l'impression (feuille de style « print »). « Enregistrer en
+     PDF » est proposé par tous les navigateurs dans la même fenêtre. */
+  function printNode(node) {
+    closeSheet();
+    var host = el("div", { class: "print-root" }, [node]);
+    document.body.appendChild(host);
+    document.body.classList.add("is-printing");
+    function done() {
+      window.removeEventListener("afterprint", done);
+      document.body.classList.remove("is-printing");
+      host.remove();
+    }
+    window.addEventListener("afterprint", done);
+    setTimeout(function () {
+      try { window.print(); } catch (e) { done(); }
+    }, 80);
+  }
+
+  /* Une fonction de la formule Éclair, demandée depuis la formule Libre : on
+     dit ce qu'elle fait plutôt que de griser un bouton. */
+  function eclairSheet(title, body) {
+    sheet({
+      title: title,
+      body: [
+        el("span", { class: "label badge" }, [icon("bolt", 13), "Fonction Éclair"]),
+        el("p", { class: "lede", text: body }),
+        el("p", { class: "muted", style: "font-size:.8125rem", text: "Offerte pendant la bêta, sans carte bancaire. Ensuite 9 €/mois, uniquement avec votre accord." })
+      ],
+      foot: cloud ? null : [
+        el("button", {
+          class: "btn btn-lg btn-volt", type: "button", style: "width:100%",
+          onclick: function () { state.plan = "premium"; save(); closeSheet(); render(); toast("Éclair activé : offert pendant la bêta."); }
+        }, [icon("bolt", 16), "Activer l'Éclair offert"])
+      ]
+    });
+  }
+
+  /* ─── Code QR ─────────────────────────────────────────────────────────
+
+     Un encodeur QR complet tient en peu de lignes : on l'écrit ici plutôt
+     que de charger une bibliothèque (rien de tiers sur le site). Mode
+     octets (UTF-8), correction d'erreur M (15 %), versions 1 à 10 : jusqu'à
+     213 octets, bien plus qu'une adresse de lieu. Algorithme de la norme
+     ISO/IEC 18004, dans l'ordre où elle le décrit. */
+  var QR = (function () {
+    // Correction M, versions 1 à 10 : octets de correction par bloc, nombre de blocs.
+    var ECC_PER_BLOCK = [0, 10, 16, 26, 18, 24, 16, 18, 22, 22, 26];
+    var BLOCKS = [0, 1, 1, 1, 2, 2, 4, 4, 4, 5, 5];
+
+    function rawModules(ver) {
+      var n = (16 * ver + 128) * ver + 64;
+      if (ver >= 2) {
+        var align = Math.floor(ver / 7) + 2;
+        n -= (25 * align - 10) * align - 55;
+        if (ver >= 7) n -= 36;
+      }
+      return n;
+    }
+    function dataCodewords(ver) { return Math.floor(rawModules(ver) / 8) - ECC_PER_BLOCK[ver] * BLOCKS[ver]; }
+
+    function gfMul(x, y) {
+      var z = 0;
+      for (var i = 7; i >= 0; i--) {
+        z = (z << 1) ^ ((z >>> 7) * 0x11d);
+        z ^= ((y >>> i) & 1) * x;
+      }
+      return z & 0xff;
+    }
+    function rsDivisor(degree) {
+      var out = [];
+      for (var i = 0; i < degree - 1; i++) out.push(0);
+      out.push(1);
+      var root = 1;
+      for (i = 0; i < degree; i++) {
+        for (var j = 0; j < out.length; j++) {
+          out[j] = gfMul(out[j], root);
+          if (j + 1 < out.length) out[j] ^= out[j + 1];
+        }
+        root = gfMul(root, 0x02);
+      }
+      return out;
+    }
+    function rsRemainder(data, divisor) {
+      var out = divisor.map(function () { return 0; });
+      data.forEach(function (b) {
+        var factor = b ^ out.shift();
+        out.push(0);
+        for (var i = 0; i < out.length; i++) out[i] ^= gfMul(divisor[i], factor);
+      });
+      return out;
+    }
+
+    function utf8(text) {
+      var bytes = [];
+      var s = unescape(encodeURIComponent(text));
+      for (var i = 0; i < s.length; i++) bytes.push(s.charCodeAt(i));
+      return bytes;
+    }
+
+    function encode(text) {
+      var bytes = utf8(text);
+      var ver = 1;
+      while (ver <= 10 && 4 + (ver < 10 ? 8 : 16) + bytes.length * 8 > dataCodewords(ver) * 8) ver++;
+      if (ver > 10) return null;
+
+      // Flux de bits : mode octets, longueur, données, terminaison, remplissage.
+      var bits = [];
+      function put(value, len) { for (var i = len - 1; i >= 0; i--) bits.push((value >>> i) & 1); }
+      put(4, 4);
+      put(bytes.length, ver < 10 ? 8 : 16);
+      bytes.forEach(function (b) { put(b, 8); });
+      var capacity = dataCodewords(ver) * 8;
+      put(0, Math.min(4, capacity - bits.length));
+      put(0, (8 - bits.length % 8) % 8);
+      for (var pad = 0xec; bits.length < capacity; pad ^= 0xec ^ 0x11) put(pad, 8);
+      var data = [];
+      for (var i = 0; i < bits.length; i += 8) {
+        var byte = 0;
+        for (var j = 0; j < 8; j++) byte = (byte << 1) | bits[i + j];
+        data.push(byte);
+      }
+
+      // Blocs, correction Reed-Solomon, entrelacement.
+      var numBlocks = BLOCKS[ver], eccLen = ECC_PER_BLOCK[ver];
+      var raw = Math.floor(rawModules(ver) / 8);
+      var shortBlocks = numBlocks - raw % numBlocks, shortLen = Math.floor(raw / numBlocks);
+      var divisor = rsDivisor(eccLen), blocks = [], k = 0;
+      for (i = 0; i < numBlocks; i++) {
+        var dat = data.slice(k, k + shortLen - eccLen + (i < shortBlocks ? 0 : 1));
+        k += dat.length;
+        var ecc = rsRemainder(dat, divisor);
+        if (i < shortBlocks) dat.push(0);
+        blocks.push(dat.concat(ecc));
+      }
+      var codewords = [];
+      for (i = 0; i < blocks[0].length; i++) {
+        for (j = 0; j < blocks.length; j++) {
+          if (i !== shortLen - eccLen || j >= shortBlocks) codewords.push(blocks[j][i]);
+        }
+      }
+
+      // Motifs fixes : repérage, synchronisation, alignement, format, version.
+      var size = ver * 4 + 17;
+      var grid = [], fixed = [];
+      for (i = 0; i < size; i++) { grid.push(new Array(size).fill(false)); fixed.push(new Array(size).fill(false)); }
+      function set(x, y, dark) { grid[y][x] = dark; fixed[y][x] = true; }
+      for (i = 0; i < size; i++) { set(6, i, i % 2 === 0); set(i, 6, i % 2 === 0); }
+      [[3, 3], [size - 4, 3], [3, size - 4]].forEach(function (c) {
+        for (var dy = -4; dy <= 4; dy++) for (var dx = -4; dx <= 4; dx++) {
+          var d = Math.max(Math.abs(dx), Math.abs(dy)), x = c[0] + dx, y = c[1] + dy;
+          if (x >= 0 && x < size && y >= 0 && y < size) set(x, y, d !== 2 && d !== 4);
+        }
+      });
+      var pos = [];
+      if (ver > 1) {
+        var count = Math.floor(ver / 7) + 2;
+        var step = Math.ceil((ver * 4 + 4) / (count * 2 - 2)) * 2;
+        pos = [6];
+        for (var p = size - 7; pos.length < count; p -= step) pos.splice(1, 0, p);
+      }
+      pos.forEach(function (ay, a) {
+        pos.forEach(function (ax, b) {
+          if ((a === 0 && b === 0) || (a === 0 && b === pos.length - 1) || (a === pos.length - 1 && b === 0)) return;
+          for (var dy = -2; dy <= 2; dy++) for (var dx = -2; dx <= 2; dx++) set(ax + dx, ay + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+        });
+      });
+      function formatBits(mask) {
+        var value = mask;   // correction M : 00
+        var rem = value;
+        for (var n = 0; n < 10; n++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+        return ((value << 10) | rem) ^ 0x5412;
+      }
+      function drawFormat(mask) {
+        var f = formatBits(mask);
+        function bit(n) { return ((f >>> n) & 1) !== 0; }
+        for (var n = 0; n <= 5; n++) set(8, n, bit(n));
+        set(8, 7, bit(6)); set(8, 8, bit(7)); set(7, 8, bit(8));
+        for (n = 9; n < 15; n++) set(14 - n, 8, bit(n));
+        for (n = 0; n < 8; n++) set(size - 1 - n, 8, bit(n));
+        for (n = 8; n < 15; n++) set(8, size - 15 + n, bit(n));
+        set(8, size - 8, true);
+      }
+      drawFormat(0);
+      if (ver >= 7) {
+        var rem = ver;
+        for (i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1f25);
+        var vbits = (ver << 12) | rem;
+        for (i = 0; i < 18; i++) {
+          var on = ((vbits >>> i) & 1) !== 0, a = size - 11 + i % 3, b = Math.floor(i / 3);
+          set(a, b, on); set(b, a, on);
+        }
+      }
+
+      // Données, en zigzag de droite à gauche, deux colonnes à la fois.
+      var n = 0;
+      for (var right = size - 1; right >= 1; right -= 2) {
+        if (right === 6) right = 5;
+        for (var vert = 0; vert < size; vert++) {
+          for (j = 0; j < 2; j++) {
+            var x = right - j, up = ((right + 1) & 2) === 0, y = up ? size - 1 - vert : vert;
+            if (!fixed[y][x] && n < codewords.length * 8) {
+              grid[y][x] = ((codewords[n >>> 3] >>> (7 - (n & 7))) & 1) !== 0;
+              n++;
+            }
+          }
+        }
+      }
+
+      // Masque : on essaie les huit, on garde le plus lisible (pénalités de la norme).
+      function maskAt(m, x, y) {
+        switch (m) {
+          case 0: return (x + y) % 2 === 0;
+          case 1: return y % 2 === 0;
+          case 2: return x % 3 === 0;
+          case 3: return (x + y) % 3 === 0;
+          case 4: return (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0;
+          case 5: return x * y % 2 + x * y % 3 === 0;
+          case 6: return (x * y % 2 + x * y % 3) % 2 === 0;
+          default: return ((x + y) % 2 + x * y % 3) % 2 === 0;
+        }
+      }
+      function applyMask(m) {
+        for (var y = 0; y < size; y++) for (var x = 0; x < size; x++) {
+          if (!fixed[y][x] && maskAt(m, x, y)) grid[y][x] = !grid[y][x];
+        }
+      }
+      function penalty() {
+        var score = 0, dark = 0, x, y;
+        function lines(get) {
+          for (var a = 0; a < size; a++) {
+            var run = 0, prev = null, seq = [];
+            for (var b = 0; b < size; b++) {
+              var v = get(a, b);
+              if (v === prev) run++;
+              else { if (run >= 5) score += run - 2; run = 1; prev = v; }
+              seq.push(v ? 1 : 0);
+            }
+            if (run >= 5) score += run - 2;
+            var s = seq.join("");
+            var hits = s.split("1011101").length - 1;
+            if (hits) {
+              // Motif de repérage parasite, bordé de quatre clairs d'un côté.
+              var re = /(?=(00001011101|10111010000))/g;
+              while (re.exec(s)) { score += 40; re.lastIndex++; }
+            }
+          }
+        }
+        lines(function (a, b) { return grid[a][b]; });
+        lines(function (a, b) { return grid[b][a]; });
+        for (y = 0; y < size - 1; y++) for (x = 0; x < size - 1; x++) {
+          var c = grid[y][x];
+          if (c === grid[y][x + 1] && c === grid[y + 1][x] && c === grid[y + 1][x + 1]) score += 3;
+        }
+        for (y = 0; y < size; y++) for (x = 0; x < size; x++) if (grid[y][x]) dark++;
+        var total = size * size;
+        score += (Math.ceil(Math.abs(dark * 20 - total * 10) / total) - 1) * 10;
+        return score;
+      }
+      var best = 0, bestScore = Infinity;
+      for (var m = 0; m < 8; m++) {
+        applyMask(m); drawFormat(m);
+        var sc = penalty();
+        if (sc < bestScore) { best = m; bestScore = sc; }
+        applyMask(m);
+      }
+      applyMask(best); drawFormat(best);
+      return grid;
+    }
+
+    return { encode: encode };
+  })();
+
+  function qrSvg(text, size) {
+    var NS = "http://www.w3.org/2000/svg";
+    var svg = document.createElementNS(NS, "svg");
+    var grid = QR.encode(text);
+    if (!grid) return svg;
+    var quiet = 4, n = grid.length + quiet * 2, d = "";
+    grid.forEach(function (row, y) {
+      for (var x = 0; x < row.length; x++) {
+        if (!row[x]) continue;
+        var run = 1;
+        while (x + run < row.length && row[x + run]) run++;
+        d += "M" + (x + quiet) + " " + (y + quiet) + "h" + run + "v1h-" + run + "z";
+        x += run - 1;
+      }
+    });
+    svg.setAttribute("viewBox", "0 0 " + n + " " + n);
+    svg.setAttribute("class", "qr");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", "Code QR");
+    svg.setAttribute("shape-rendering", "crispEdges");
+    if (size) { svg.setAttribute("width", size); svg.setAttribute("height", size); }
+    var bg = document.createElementNS(NS, "rect");
+    bg.setAttribute("width", n); bg.setAttribute("height", n); bg.setAttribute("fill", "#fff");
+    var path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d); path.setAttribute("fill", "#000");
+    svg.appendChild(bg); svg.appendChild(path);
+    return svg;
+  }
+
+  /* L'adresse d'un lieu : le code collé sur un bac ouvre Fulmo sur son
+     contenu. En ligne, celle de l'application ; dans la démonstration,
+     celle de cette page (le logement de démo vit dans ce navigateur). */
+  function placeUrl(id) {
+    var base = cloud ? location.origin + "/" : location.origin + location.pathname;
+    return base + "#lieu=" + encodeURIComponent(id);
+  }
+  function placeIdFrom(text) {
+    var m = /#lieu=([^&#\s]+)/.exec(String(text || ""));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  /* Un lien #lieu=… arrive avant la connexion, parfois : on le garde pour la
+     session, et on l'ouvre dès que le logement est affiché. */
+  var PLACE_KEY = "fulmo.lieu";
+  var pendingPlace = null;
+  try { pendingPlace = sessionStorage.getItem(PLACE_KEY); } catch (e) {}
+  function placeRoute() {
+    var id = placeIdFrom(location.hash);
+    if (!id) return;
+    pendingPlace = id;
+    try { sessionStorage.setItem(PLACE_KEY, id); } catch (e) {}
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  }
+  function placePending() {
+    if (!pendingPlace || !state.account || !state.session || !state.household) return;
+    var id = pendingPlace;
+    pendingPlace = null;
+    try { sessionStorage.removeItem(PLACE_KEY); } catch (e) {}
+    var loc = locById(id);
+    setTimeout(function () {
+      if (loc) placeSheet(loc);
+      else toast("Ce lieu n'existe pas dans ce foyer.");
+    }, 60);
+  }
+
+  /* Le contenu d'un lieu, tel qu'on le voit en scannant son étiquette. */
+  function placeSheet(loc) {
+    var ids = descendantIds(loc.id);
+    var depth = pathOf(loc.id).length;
+    var inside = state.items.filter(function (item) { return ids.indexOf(item.locationId) !== -1; })
+      .sort(function (a, b) { return a.name.localeCompare(b.name, "fr"); });
+    sheet({
+      title: loc.name,
+      body: [
+        crumbs(loc.id),
+        el("p", { class: "muted", style: "font-size:.875rem", text: inside.length
+          ? plural(inside.length, "objet rangé ici", "objets rangés ici") + "."
+          : "Rien n'est encore rangé ici." }),
+        inside.length ? el("ul", { class: "row-list place-items" }, inside.map(function (item) {
+          var sub = pathOf(item.locationId).slice(depth).concat(item.spot ? [item.spot] : []).join(" › ");
+          return el("li", {}, [
+            el("button", { class: "place-item", type: "button", onclick: function () { itemSheet(item); } }, [
+              el("span", { class: "nm", text: item.name }),
+              item.quantity > 1 ? el("span", { class: "qty", text: "×" + item.quantity }) : null,
+              sub ? el("span", { class: "up", text: sub }) : null
+            ])
+          ]);
+        })) : null
+      ],
+      foot: [
+        isEditor() ? el("button", {
+          class: "btn btn-volt", type: "button",
+          onclick: function () { itemSheet(null, "", { locationId: loc.id }); }
+        }, [icon("plus", 15), "Ajouter un objet ici"]) : null,
+        el("button", { class: "btn btn-line", type: "button", onclick: function () { labelsSheet([loc.id]); } }, [icon("grid", 15), "Étiquette QR"])
+      ]
+    });
+  }
+
+  /* ─── Étiquettes QR ──────────────────────────────────────────────────
+     Une planche A4 de douze étiquettes en formule Libre, sans limite en
+     Éclair. Le code s'ouvre avec l'appareil photo du téléphone : aucune
+     application à installer. */
+
+  var LABELS_FREE = 12;
+
+  function cartonNumber(loc) {
+    var m = loc && /^carton\s*(?:n°\s*)?(\d+)/i.exec(loc.name || "");
+    return m ? parseInt(m[1], 10) : null;
+  }
+  function isCarton(loc) { return !!loc && loc.icon === "f-carton" && cartonNumber(loc) !== null; }
+
+  function labelsSheet(preselect) {
+    var premium = isPremium();
+    var places = state.locations.filter(function (l) { return l.parentId; })
+      .sort(function (a, b) { return pathOf(a.id).join(" ").localeCompare(pathOf(b.id).join(" "), "fr"); });
+    if (preselect) {
+      preselect.forEach(function (id) {
+        if (!places.some(function (p) { return p.id === id; }) && locById(id)) places.unshift(locById(id));
+      });
+    }
+    var chosen = Object.create(null);
+    (preselect || places.filter(function (p) { return p.kind === "container"; }).map(function (p) { return p.id; }))
+      .slice(0, premium ? 400 : LABELS_FREE).forEach(function (id) { chosen[id] = true; });
+
+    var list = el("div", { class: "label-pick", role: "group", "aria-label": "Lieux à étiqueter" });
+    var note = el("p", { class: "muted", style: "font-size:.8125rem" });
+    var go = el("button", { class: "btn btn-lg btn-volt", type: "button", style: "width:100%" });
+
+    function selected() { return places.filter(function (p) { return chosen[p.id]; }).map(function (p) { return p.id; }); }
+    function paint() {
+      var n = selected().length;
+      list.replaceChildren.apply(list, places.map(function (p) {
+        var path = pathOf(p.id);
+        var box = el("input", {
+          type: "checkbox", checked: chosen[p.id] ? true : null,
+          onchange: function (event) {
+            if (event.target.checked && !premium && selected().length >= LABELS_FREE) {
+              event.target.checked = false;
+              toast("Douze étiquettes par planche avec la formule Libre.");
+              return;
+            }
+            chosen[p.id] = event.target.checked;
+            paint();
+          }
+        });
+        return el("label", { class: "label-opt" }, [
+          box,
+          sym(p.icon || ICON_BY_KIND[p.kind], 18),
+          el("span", { class: "txt" }, [el("b", { text: p.name }), el("span", { text: path.slice(0, -1).join(" › ") })])
+        ]);
+      }));
+      note.textContent = premium
+        ? plural(n, "étiquette", "étiquettes") + ", douze par page A4."
+        : plural(n, "étiquette", "étiquettes") + " sur " + LABELS_FREE + " (une planche A4 avec la formule Libre, sans limite avec l'Éclair).";
+      go.replaceChildren(icon("download", 16), n ? "Imprimer " + plural(n, "étiquette", "étiquettes") : "Choisissez au moins un lieu");
+      go.disabled = n === 0;
+    }
+    go.addEventListener("click", function () { printLabels(selected()); });
+    paint();
+
+    sheet({
+      title: "Étiquettes QR",
+      wide: true,
+      body: [
+        el("p", { class: "lede", style: "font-size:1rem", text: "Collez-les sur vos meubles, bacs et cartons. Visez le code avec l'appareil photo du téléphone : Fulmo affiche ce qu'il y a dedans, sans rien ouvrir." }),
+        places.length ? list : el("p", { class: "muted", text: "Ajoutez d'abord des meubles ou des contenants dans Mes lieux." }),
+        note
+      ],
+      foot: [go]
+    });
+  }
+
+  function printLabels(ids) {
+    var cards = ids.map(function (id) {
+      var loc = locById(id);
+      if (!loc) return null;
+      var path = pathOf(id);
+      var carton = isCarton(loc);
+      return el("div", { class: "print-label" + (carton ? " is-carton" : "") }, [
+        qrSvg(placeUrl(id)),
+        el("div", { class: "pl-txt" }, [
+          carton ? el("b", { class: "pl-num", text: "N° " + cartonNumber(loc) }) : el("b", { text: loc.name }),
+          el("span", { text: carton ? "Pièce : " + (path[0] || "") : path.slice(0, -1).join(" › ") }),
+          el("small", { text: "Scannez pour voir le contenu · Fulmo" })
+        ])
+      ]);
+    });
+    printNode(el("div", { class: "print-labels" }, cards));
+  }
+
+  /* ─── Déménagement ───────────────────────────────────────────────────
+     Un carton est un contenant comme un autre, numéroté, créé directement
+     dans sa pièce d'ARRIVÉE : son étiquette dit où le poser, la recherche
+     dit « Carton 12 › Salon » avant même le déballage, et rien ne change
+     dans le modèle de données. */
+
+  function cartons() {
+    return state.locations.filter(isCarton).sort(function (a, b) { return cartonNumber(a) - cartonNumber(b); });
+  }
+
+  function movingSheet(target) {
+    if (!isPremium()) {
+      eclairSheet("Déménagement", "Numérotez vos cartons, choisissez la pièce d'arrivée de chacun et imprimez leurs étiquettes. Le jour J, chaque carton dit où il va ; après, Fulmo sait toujours ce qu'il contient.");
+      return;
+    }
+    var rooms = state.locations.filter(function (l) { return !l.parentId; });
+    if (!target && rooms[0]) target = rooms[0].id;
+    var all = cartons();
+    var next = all.reduce(function (max, c) { return Math.max(max, cartonNumber(c)); }, 0) + 1;
+
+    function create() {
+      var room = locById(target);
+      if (!room) return;
+      state.locations.push({
+        id: uid("loc"), parentId: room.id, kind: "container", name: "Carton " + next,
+        icon: "f-carton", floor: room.floor == null ? null : room.floor
+      });
+      save(); render();
+      toast("Carton n°" + next + " créé pour « " + room.name + " ».");
+      movingSheet(target);
+    }
+
+    function unpack(carton) {
+      var room = locById(carton.parentId);
+      var inside = state.items.filter(function (i) { return i.locationId === carton.id; });
+      confirmSheet({
+        title: "Déballer le carton n°" + cartonNumber(carton) + " ?",
+        body: (inside.length ? plural(inside.length, "objet passe", "objets passent") + " dans « " + (room ? room.name : "À ranger") + " » : vous les rangerez plus finement à votre rythme. " : "Le carton est vide. ") + "Le carton disparaît de vos lieux.",
+        confirmLabel: "Déballer",
+        onCancel: function () { movingSheet(target); },
+        onConfirm: function () {
+          inside.forEach(function (item) { moveItem(item, carton.parentId || null); });
+          state.locations = state.locations.filter(function (l) { return l.id !== carton.id; });
+          save(); render();
+          toast("Carton n°" + cartonNumber(carton) + " déballé.");
+          movingSheet(target);
+        }
+      });
+    }
+
+    var groups = rooms.map(function (room) {
+      return { room: room, list: all.filter(function (c) { return c.parentId === room.id; }) };
+    }).filter(function (g) { return g.list.length; });
+
+    sheet({
+      title: "Déménagement",
+      wide: true,
+      body: [
+        el("p", { class: "lede", style: "font-size:1rem", text: "Un carton = un numéro, une pièce d'arrivée, une étiquette. Ajoutez-y ses objets comme dans un meuble : le jour J, chacun sait où poser quoi." }),
+        el("div", { class: "field" }, [
+          el("span", { text: "Pièce d'arrivée du prochain carton" }),
+          el("div", { class: "chips" }, rooms.map(function (room) {
+            var on = room.id === target;
+            return el("button", {
+              class: "chip chip-sm" + (on ? " on" : ""), type: "button", "aria-pressed": on ? "true" : "false",
+              onclick: function () { movingSheet(room.id); }
+            }, room.name);
+          }))
+        ]),
+        el("button", { class: "btn btn-volt", type: "button", style: "align-self:flex-start", disabled: target ? null : true, onclick: create }, [icon("plus", 15), "Créer le carton n°" + next]),
+        groups.length ? el("div", { class: "moving-list" }, groups.map(function (g) {
+          return el("section", {}, [
+            el("h3", { class: "label", text: g.room.name + " · " + plural(g.list.length, "carton", "cartons") }),
+            el("ul", { class: "row-list" }, g.list.map(function (carton) {
+              var count = state.items.filter(function (i) { return i.locationId === carton.id; }).length;
+              return el("li", { class: "moving-row" }, [
+                el("button", { class: "body", type: "button", onclick: function () { placeSheet(carton); } }, [
+                  el("b", { text: "N° " + cartonNumber(carton) }),
+                  el("span", { class: "muted", text: count ? plural(count, "objet", "objets") : "vide" })
+                ]),
+                el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { itemSheet(null, "", { locationId: carton.id }); } }, [icon("plus", 13), "Objet"]),
+                el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { unpack(carton); } }, [icon("box", 13), "Déballer"])
+              ]);
+            }))
+          ]);
+        })) : el("p", { class: "muted", text: "Aucun carton pour l'instant." })
+      ],
+      foot: all.length ? [
+        el("button", { class: "btn btn-lg btn-line", type: "button", style: "width:100%", onclick: function () { printLabels(all.map(function (c) { return c.id; })); } }, [icon("download", 16), "Imprimer les étiquettes des " + plural(all.length, "carton", "cartons")])
+      ] : null
+    });
+  }
+
+  /* ─── Déplacements ───────────────────────────────────────────────────
+     Dans la démonstration, l'objet garde ses trente derniers déplacements.
+     En ligne, c'est la base qui les note, avec l'auteur. */
+  function moveItem(item, locationId) {
+    if (item.locationId === locationId) return;
+    if (!cloud) {
+      item.moves = [{ at: Date.now(), from: item.locationId || null, to: locationId || null }].concat(item.moves || []).slice(0, 30);
+    }
+    item.locationId = locationId;
+    item.lastSeenAt = Date.now();
+  }
+
+  function placeName(id) {
+    if (!id) return "À ranger";
+    var path = pathOf(id);
+    return path.length ? path.join(" › ") : "un lieu supprimé";
+  }
+
+  function movesBlock(item) {
+    var box = el("div", { class: "moves" }, [el("p", { class: "muted", text: "Chargement…" })]);
+    function show(list) {
+      box.replaceChildren(list.length
+        ? el("ol", { class: "moves-list" }, list.map(function (m) {
+            return el("li", {}, [
+              el("span", { class: "when tnum", text: new Date(m.at).toLocaleDateString("fr-FR") }),
+              el("span", { text: placeName(m.from) + " → " + placeName(m.to) + (m.by ? " · " + m.by : "") })
+            ]);
+          }))
+        : el("p", { class: "muted", text: "Aucun déplacement enregistré depuis sa création." }));
+    }
+    if (cloud && typeof cloud.moves === "function") {
+      cloud.moves(item.id).then(show).catch(function () { box.replaceChildren(el("p", { class: "muted", text: "Historique indisponible pour le moment." })); });
+    } else show(item.moves || []);
+    return el("details", { class: "more-fields" }, [el("summary", { text: "Historique des déplacements" }), box]);
+  }
+
+  /* ─── Photos et justificatifs ────────────────────────────────────────
+     Une photo par objet, et ses papiers : facture, garantie, notice. En
+     ligne, ils vont dans l'espace privé du foyer (URLs signées) ; dans la
+     démonstration, dans ce navigateur (IndexedDB). */
+
+  var MEDIA_MAX = 10 * 1024 * 1024;
+  var DOC_LABELS = ["Facture", "Garantie", "Notice", "Autre"];
+
+  var blobStore = (function () {
+    var opening = null;
+    function db() {
+      if (opening) return opening;
+      opening = new Promise(function (resolve, reject) {
+        if (!window.indexedDB) return reject(new Error("indexedDB absent"));
+        var request = indexedDB.open("fulmo-media", 1);
+        request.onupgradeneeded = function () { request.result.createObjectStore("files"); };
+        request.onsuccess = function () { resolve(request.result); };
+        request.onerror = function () { reject(request.error); };
+      });
+      return opening;
+    }
+    function tx(mode, run) {
+      return db().then(function (handle) {
+        return new Promise(function (resolve, reject) {
+          var request = run(handle.transaction("files", mode).objectStore("files"));
+          request.onsuccess = function () { resolve(request.result); };
+          request.onerror = function () { reject(request.error); };
+        });
+      });
+    }
+    return {
+      put: function (id, blob) { return tx("readwrite", function (s) { return s.put(blob, id); }); },
+      get: function (id) { return tx("readonly", function (s) { return s.get(id); }).catch(function () { return null; }); },
+      del: function (id) { return tx("readwrite", function (s) { return s["delete"](id); }).catch(function () {}); }
+    };
+  })();
+
+  var mediaUrls = [];
+  function forgetMediaUrls() { mediaUrls.forEach(function (u) { URL.revokeObjectURL(u); }); mediaUrls = []; }
+
+  var media = {
+    available: function () { return cloud ? !!cloud.media : !!window.indexedDB; },
+    list: function (item) {
+      if (cloud) return cloud.media.list(item.id);
+      forgetMediaUrls();   // celles de la fiche précédente
+      return Promise.all((item.media || []).map(function (m) {
+        return blobStore.get(m.id).then(function (blob) {
+          if (!blob) return null;
+          var url = URL.createObjectURL(blob);
+          mediaUrls.push(url);
+          return { id: m.id, kind: m.kind, label: m.label, mime: m.mime, size: m.size, url: url, createdAt: m.createdAt };
+        });
+      })).then(function (rows) { return rows.filter(Boolean); });
+    },
+    add: function (item, kind, blob, label) {
+      if (blob.size > MEDIA_MAX) return Promise.resolve({ ok: false, error: "too_large" });
+      if (cloud) return cloud.media.add(item.id, kind, blob, label);
+      var list = item.media || [];
+      var docs = list.filter(function (m) { return m.kind === "document"; }).length;
+      if (kind === "document" && docs >= (isPremium() ? 20 : 1)) return Promise.resolve({ ok: false, error: "limit" });
+      var id = uid("media");
+      return blobStore.put(id, blob).then(function () {
+        if (kind === "photo") {
+          list.filter(function (m) { return m.kind === "photo"; }).forEach(function (m) { blobStore.del(m.id); });
+          list = list.filter(function (m) { return m.kind !== "photo"; });
+        }
+        item.media = list.concat([{ id: id, kind: kind, label: label || null, mime: blob.type, size: blob.size, createdAt: Date.now() }]);
+        save();
+        return { ok: true, id: id };
+      }).catch(function () { return { ok: false, error: "stockage" }; });
+    },
+    remove: function (item, id) {
+      if (cloud) return cloud.media.remove(id);
+      item.media = (item.media || []).filter(function (m) { return m.id !== id; });
+      save();
+      return blobStore.del(id).then(function () { return { ok: true }; });
+    }
+  };
+
+  var MEDIA_ERRORS = {
+    too_large: "Fichier trop lourd : 10 Mo au maximum.",
+    bad_type: "Format non pris en charge : photo (JPEG, PNG, WebP) ou PDF.",
+    limit: "Un justificatif par objet avec la formule Libre, vingt avec l'Éclair.",
+    read_only: "Votre rôle d'invité ne permet pas d'ajouter de fichier.",
+    reseau: "Pas de connexion : réessayez dans un instant."
+  };
+
+  /* Une photo de téléphone pèse 3 à 8 Mo : réduite à 1600 px, elle reste
+     nette et tient en quelques centaines de kilooctets. */
+  function shrinkImage(file, max) {
+    if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type) || typeof createImageBitmap !== "function") return Promise.resolve(file);
+    return createImageBitmap(file).then(function (bitmap) {
+      var scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+      var canvas = document.createElement("canvas");
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      return new Promise(function (resolve) {
+        canvas.toBlob(function (blob) { resolve(blob || file); }, "image/jpeg", 0.85);
+      });
+    }).catch(function () { return file; });
+  }
+
+  function pickFile(accept, capture, onFile) {
+    var input = el("input", { type: "file", accept: accept, capture: capture || null, style: "display:none" });
+    input.addEventListener("change", function () {
+      var file = input.files && input.files[0];
+      input.remove();
+      if (file) onFile(file);
+    });
+    document.body.appendChild(input);
+    input.click();
+  }
+
+  /* Le bloc « Photo et justificatifs » d'une fiche. `pending` (nouvel objet)
+     garde la photo choisie jusqu'à l'enregistrement. */
+  function mediaBlock(item, pending) {
+    var box = el("div", { class: "media-box" });
+    var editable = isEditor();
+    var busy = false;
+
+    function photoButton(label) {
+      return el("button", {
+        class: "btn btn-sm btn-line", type: "button", disabled: busy ? true : null,
+        onclick: function () {
+          pickFile("image/*", "environment", function (file) {
+            shrinkImage(file, 1600).then(function (blob) {
+              if (!item) { pending.photo = blob; paintPending(); return; }
+              busy = true; load();
+              media.add(item, "photo", blob, null).then(done);
+            });
+          });
+        }
+      }, [icon("scan", 14), label]);
+    }
+
+    function docControls() {
+      var select = el("select", { class: "input input-sm", "aria-label": "Type de justificatif" }, DOC_LABELS.map(function (l) { return el("option", { value: l, text: l }); }));
+      return el("div", { class: "inline" }, [
+        select,
+        el("button", {
+          class: "btn btn-sm btn-line", type: "button", disabled: busy ? true : null,
+          onclick: function () {
+            pickFile("image/*,application/pdf", null, function (file) {
+              (file.type === "application/pdf" ? Promise.resolve(file) : shrinkImage(file, 2000)).then(function (blob) {
+                busy = true; load();
+                media.add(item, "document", blob, select.value).then(done);
+              });
+            });
+          }
+        }, [icon("upload", 14), "Joindre"])
+      ]);
+    }
+
+    function done(res) {
+      busy = false;
+      if (res && res.ok === false) toast(MEDIA_ERRORS[res.error] || "Le fichier n'a pas pu être enregistré.");
+      load();
+    }
+
+    function paintPending() {
+      fill(box, [
+        el("div", { class: "media-row" }, [
+          pending.photo ? el("span", { class: "media-ok" }, [icon("check", 14), "Photo prête, enregistrée avec l'objet"]) : null,
+          photoButton(pending.photo ? "Changer la photo" : "Ajouter une photo")
+        ]),
+        el("p", { class: "field-hint", text: "Factures et notices se joignent une fois l'objet enregistré." })
+      ]);
+    }
+
+    function paint(list) {
+      var photo = list.filter(function (m) { return m.kind === "photo"; })[0];
+      var docs = list.filter(function (m) { return m.kind === "document"; });
+      fill(box, [
+        el("div", { class: "media-row" }, [
+          photo ? el("a", { class: "media-photo", href: photo.url, target: "_blank", rel: "noopener", "aria-label": "Voir la photo en grand" }, [
+            el("img", { src: photo.url, alt: "Photo de " + item.name, loading: "lazy" })
+          ]) : null,
+          editable ? photoButton(photo ? "Changer la photo" : "Ajouter une photo") : null,
+          photo && editable ? el("button", {
+            class: "mini warn", type: "button", "aria-label": "Retirer la photo",
+            onclick: function () { busy = true; load(); media.remove(item, photo.id).then(done); }
+          }, [icon("trash", 14)]) : null
+        ]),
+        docs.length ? el("ul", { class: "media-docs" }, docs.map(function (d) {
+          return el("li", {}, [
+            icon(d.mime === "application/pdf" ? "download" : "eye", 15),
+            el("a", { href: d.url, target: "_blank", rel: "noopener", text: (d.label || "Document") + " · " + frDate(new Date(d.createdAt).toISOString()) }),
+            el("span", { class: "muted tnum", text: Math.max(1, Math.round(d.size / 1024)) + " Ko" }),
+            editable ? el("button", {
+              class: "mini warn", type: "button", "aria-label": "Retirer " + (d.label || "ce document"),
+              onclick: function () { busy = true; load(); media.remove(item, d.id).then(done); }
+            }, [icon("trash", 13)]) : null
+          ]);
+        })) : null,
+        editable ? docControls() : null,
+        !photo && !docs.length && !editable ? el("p", { class: "muted", text: "Aucune photo ni justificatif." }) : null
+      ]);
+    }
+
+    function load() {
+      if (busy) { box.replaceChildren(el("p", { class: "muted", text: "Enregistrement…" })); return; }
+      media.list(item).then(paint).catch(function () {
+        box.replaceChildren(el("p", { class: "muted", text: "Photos et justificatifs indisponibles pour le moment." }));
+      });
+    }
+
+    if (item) load(); else paintPending();
+    return box;
+  }
+
+  /* ─── Lecteur de codes (code-barres, QR) ─────────────────────────────
+     BarcodeDetector est intégré à Chrome sur Android : rien n'est envoyé,
+     l'image est lue sur le téléphone. Ailleurs, le code se tape, et les
+     étiquettes QR s'ouvrent avec l'appareil photo du téléphone. */
+
+  function codeReaderSupported() {
+    return typeof window.BarcodeDetector === "function" && !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  }
+
+  function readCode(title, onCode) {
+    var stream = null, timer = null, stopped = false;
+    var video = el("video", { class: "code-video", playsinline: true, muted: true, autoplay: true });
+    var status = el("p", { class: "muted", text: "Visez le code-barres ou l'étiquette QR." });
+    function stop() {
+      stopped = true;
+      clearTimeout(timer);
+      if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    }
+    sheet({ title: title, body: [el("div", { class: "code-frame" }, [video, el("i", { class: "code-aim", "aria-hidden": "true" })]), status], onClose: stop });
+    var detector;
+    try {
+      detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code"] });
+    } catch (e) {
+      detector = new window.BarcodeDetector();
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }).then(function (s) {
+      if (stopped) { s.getTracks().forEach(function (t) { t.stop(); }); return; }
+      stream = s;
+      video.srcObject = s;
+      (function tick() {
+        if (stopped) return;
+        detector.detect(video).then(function (codes) {
+          if (stopped) return;
+          if (codes && codes.length && codes[0].rawValue) {
+            stop();
+            closeSheet();
+            onCode(String(codes[0].rawValue));
+            return;
+          }
+          timer = setTimeout(tick, 220);
+        }).catch(function () { timer = setTimeout(tick, 400); });
+      })();
+    }).catch(function () {
+      status.textContent = "La caméra n'est pas accessible. Autorisez-la dans les réglages du navigateur, ou tapez le code.";
+    });
+  }
+
+  function cleanBarcode(value) {
+    var code = String(value || "").replace(/\s+/g, "");
+    return /^[0-9A-Za-z-]{4,32}$/.test(code) ? code : null;
+  }
+
+  /* Scanner depuis la recherche : une étiquette Fulmo ouvre son lieu ; un
+     code-barres répond à « est-ce que je l'ai déjà ? » — en magasin, avant
+     d'acheter un deuxième tournevis. */
+  function scanFromSearch() {
+    readCode("Scanner un code", function (raw) {
+      var place = placeIdFrom(raw);
+      if (place) {
+        var loc = locById(place);
+        if (loc) placeSheet(loc); else toast("Cette étiquette appartient à un autre foyer.");
+        return;
+      }
+      var code = cleanBarcode(raw);
+      var owned = code ? state.items.filter(function (i) { return i.barcode === code; }) : [];
+      if (owned.length) {
+        toast("Vous l'avez déjà : " + placeName(owned[0].locationId) + ".");
+        itemSheet(owned[0]);
+        return;
+      }
+      confirmSheet({
+        title: "Pas encore dans votre inventaire",
+        body: "Aucun objet ne porte le code " + (code || raw.slice(0, 40)) + ". Le référencer maintenant ?",
+        confirmLabel: "Référencer",
+        onConfirm: function () { itemSheet(null, "", { barcode: code }); }
+      });
+    });
+  }
+
+  /* ─── Rapport pour l'assurance ───────────────────────────────────────
+     Après un cambriolage ou un dégât des eaux, l'assureur demande la liste
+     des biens, leur valeur et les justificatifs. Le rapport se prépare en
+     un geste, s'imprime ou s'enregistre en PDF, et se garde HORS du logement. */
+
+  function reportSheet() {
+    if (!isPremium()) {
+      eclairSheet("Rapport pour l'assurance", "La liste de vos biens, pièce par pièce, avec leur valeur, leur date d'achat et leur garantie : prête à envoyer à votre assureur en cas de sinistre.");
+      return;
+    }
+    var valued = state.items.filter(function (i) { return typeof i.value === "number"; });
+    var total = state.items.reduce(function (sum, i) { return sum + itemValue(i); }, 0);
+    var rooms = state.locations.filter(function (l) { return !l.parentId; });
+    var groups = rooms.map(function (room) {
+      var ids = descendantIds(room.id);
+      return { name: room.name, items: state.items.filter(function (i) { return ids.indexOf(i.locationId) !== -1; }) };
+    });
+    var loose = state.items.filter(function (i) { return !i.locationId || !locById(i.locationId); });
+    if (loose.length) groups.push({ name: "À ranger", items: loose });
+    groups = groups.filter(function (g) { return g.items.length; });
+
+    function build() {
+      var who = state.account ? state.account.name : "";
+      return el("article", { class: "print-report" }, [
+        el("h1", { text: "Inventaire des biens · " + (state.household ? state.household.name : "Mon logement") }),
+        el("p", { text: "Établi le " + new Date().toLocaleDateString("fr-FR") + (who ? " par " + who : "") + " avec Fulmo. " +
+          plural(state.items.length, "objet", "objets") + ", dont " + valued.length + " avec une valeur déclarée. Valeur totale déclarée : " + euros(total) + "." }),
+        el("p", { class: "pr-note", text: "Valeurs déclarées par l'assuré (prix d'achat). Photos et factures sont conservées dans la fiche de chaque objet, dans Fulmo." })
+      ].concat(groups.map(function (g) {
+        var sub = g.items.reduce(function (s, i) { return s + itemValue(i); }, 0);
+        return el("section", {}, [
+          el("h2", { text: g.name + (sub ? " · " + euros(sub) : "") }),
+          el("table", {}, [
+            el("thead", {}, [el("tr", {}, ["Objet", "Qté", "Emplacement", "Achat", "Prix unitaire", "Garantie", "Code-barres"].map(function (h) { return el("th", { text: h }); }))]),
+            el("tbody", {}, g.items.slice().sort(function (a, b) { return itemValue(b) - itemValue(a) || a.name.localeCompare(b.name, "fr"); }).map(function (i) {
+              return el("tr", {}, [
+                el("td", { text: i.name }),
+                el("td", { class: "num", text: String(i.quantity || 1) }),
+                el("td", { text: pathOf(i.locationId).slice(1).concat(i.spot ? [i.spot] : []).join(" › ") }),
+                el("td", { text: frDate(i.purchasedAt) }),
+                el("td", { class: "num", text: typeof i.value === "number" ? euros(i.value) : "" }),
+                el("td", { text: frDate(i.warrantyUntil) }),
+                el("td", { text: i.barcode || "" })
+              ]);
+            }))
+          ])
+        ]);
+      })));
+    }
+
+    sheet({
+      title: "Rapport pour l'assurance",
+      body: [
+        el("div", { class: "report-total" }, [
+          el("span", { class: "label", text: "Valeur déclarée" }),
+          el("b", { class: "tnum", text: euros(total) }),
+          el("span", { class: "muted", text: valued.length + " objets estimés sur " + state.items.length })
+        ]),
+        el("p", { class: "lede", style: "font-size:1rem", text: "Pièce par pièce : objet, emplacement, date d'achat, prix, garantie. Enregistrez-le en PDF et gardez-en une copie hors du logement (email, cloud) : c'est celle qui servira après un sinistre." }),
+        valued.length < state.items.length ? el("p", { class: "muted", style: "font-size:.8125rem", text: "Astuce : renseignez le prix d'achat des objets de valeur (fiche › Achat, garantie, entretien). Les autres figurent dans la liste, sans montant." }) : null
+      ],
+      foot: [el("button", { class: "btn btn-lg btn-volt", type: "button", style: "width:100%", onclick: function () { printNode(build()); } }, [icon("download", 16), "Imprimer ou enregistrer en PDF"])]
+    });
+  }
+
+  /* ─── Tableur : export et import ─────────────────────────────────────
+     Point-virgule et BOM UTF-8 : Excel en français ouvre le fichier tel
+     quel, accents compris. Une cellule qui commence par = + - @ est
+     neutralisée : un tableur l'exécuterait comme une formule. */
+
+  var CSV_COLUMNS = [
+    ["name", "Nom"], ["quantity", "Quantité"], ["room", "Pièce"], ["furniture", "Meuble"], ["container", "Contenant"],
+    ["spot", "Endroit précis"], ["tags", "Mots-clés"], ["description", "Notes"], ["value", "Prix d'achat"],
+    ["purchasedAt", "Date d'achat"], ["warrantyUntil", "Garantie jusqu'au"], ["expiresAt", "Péremption"],
+    ["barcode", "Code-barres"], ["lentTo", "Prêté à"]
+  ];
+
+  function csvCell(value) {
+    var s = value == null ? "" : String(value);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[";\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+
+  function exportCsv() {
+    var rows = [CSV_COLUMNS.map(function (c) { return c[1]; })];
+    state.items.forEach(function (i) {
+      var path = pathOf(i.locationId);
+      var cells = {
+        name: i.name, quantity: i.quantity || 1, room: path[0] || "", furniture: path[1] || "", container: path.slice(2).join(" > "),
+        spot: i.spot || "", tags: (i.tags || []).join(", "), description: i.description || "",
+        value: typeof i.value === "number" ? String(i.value).replace(".", ",") : "", purchasedAt: i.purchasedAt || "",
+        warrantyUntil: i.warrantyUntil || "", expiresAt: i.expiresAt || "", barcode: i.barcode || "", lentTo: i.lentTo || ""
+      };
+      rows.push(CSV_COLUMNS.map(function (c) { return cells[c[0]]; }));
+    });
+    var text = "\ufeff" + rows.map(function (r) { return r.map(csvCell).join(";"); }).join("\r\n");
+    saveFile("fulmo-inventaire-" + todayIso() + ".csv", text, "text/csv;charset=utf-8", "Inventaire exporté pour Excel.");
+  }
+
+  function parseCsv(text) {
+    text = String(text).replace(/^\ufeff/, "");
+    var first = text.split(/\r?\n/)[0] || "";
+    var delim = [";", "\t", ","].map(function (d) { return [d, first.split(d).length]; })
+      .sort(function (a, b) { return b[1] - a[1]; })[0][0];
+    var rows = [], row = [], cell = "", quoted = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (quoted) {
+        if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (ch === '"') quoted = false;
+        else cell += ch;
+      } else if (ch === '"' && cell === "") quoted = true;
+      else if (ch === delim) { row.push(cell); cell = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell); cell = "";
+        if (row.some(function (c) { return c.trim(); })) rows.push(row);
+        row = [];
+      } else cell += ch;
+    }
+    row.push(cell);
+    if (row.some(function (c) { return c.trim(); })) rows.push(row);
+    return rows;
+  }
+
+  // En-têtes reconnus, en français et en anglais (export Sortly compris).
+  var CSV_HEADERS = {
+    name: ["nom", "objet", "name", "item", "item name", "article", "designation", "titre", "title"],
+    quantity: ["quantite", "qte", "qty", "quantity", "nombre"],
+    room: ["piece", "room", "zone"],
+    furniture: ["meuble", "rangement", "furniture", "sous-dossier", "subfolder"],
+    container: ["contenant", "boite", "bac", "container", "box", "carton"],
+    location: ["emplacement", "lieu", "location", "folder", "dossier", "chemin", "path"],
+    spot: ["endroit precis", "endroit", "spot", "position"],
+    tags: ["mots-cles", "mots cles", "tags", "etiquettes", "categorie", "category"],
+    description: ["notes", "note", "description", "commentaire", "remarques"],
+    value: ["prix d'achat", "prix", "valeur", "value", "price", "cout", "montant"],
+    purchasedAt: ["date d'achat", "achete le", "purchase date", "purchased", "achat"],
+    warrantyUntil: ["garantie jusqu'au", "garantie", "fin de garantie", "warranty", "warranty until"],
+    expiresAt: ["peremption", "date de peremption", "expiration", "expiry", "dlc"],
+    barcode: ["code-barres", "code barres", "code barre", "barcode", "ean", "upc", "gtin"],
+    lentTo: ["prete a", "pret", "lent to"]
+  };
+
+  function csvField(header) {
+    var h = norm(header).replace(/[*:]/g, "").trim();
+    var keys = Object.keys(CSV_HEADERS);
+    for (var k = 0; k < keys.length; k++) if (CSV_HEADERS[keys[k]].indexOf(h) !== -1) return keys[k];
+    return null;
+  }
+
+  function csvDate(value) {
+    var s = String(value || "").trim();
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return m[1] + "-" + m[2] + "-" + m[3];
+    m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(s);
+    if (!m) return null;
+    var year = m[3].length === 2 ? "20" + m[3] : m[3];
+    return year + "-" + m[2].padStart(2, "0") + "-" + m[1].padStart(2, "0");
+  }
+  function csvNumber(value) {
+    var s = String(value || "").replace(/[\s €$£]/g, "").replace(/\u00a0/g, "");
+    if (/,\d{1,2}$/.test(s)) s = s.replace(/\./g, "").replace(",", ".");
+    else s = s.replace(/,/g, "");
+    var n = parseFloat(s);
+    return isFinite(n) && n >= 0 ? Math.min(10000000, Math.round(n * 100) / 100) : null;
+  }
+
+  // Le lieu nommé par un chemin, créé au besoin (pièce › meuble › contenant).
+  function ensurePath(parts, created) {
+    var parent = null;
+    parts.forEach(function (part, depth) {
+      var name = String(part).trim().slice(0, 80);
+      if (!name) return;
+      var siblings = state.locations.filter(function (l) { return (l.parentId || null) === (parent ? parent.id : null); });
+      var found = siblings.filter(function (l) { return norm(l.name) === norm(name); })[0];
+      if (!found) {
+        found = {
+          id: uid("loc"), parentId: parent ? parent.id : null,
+          kind: depth === 0 ? "room" : depth === 1 ? "furniture" : "container",
+          name: name, icon: null, floor: parent ? (parent.floor == null ? null : parent.floor) : 0
+        };
+        state.locations.push(found);
+        created.count += 1;
+      }
+      parent = found;
+    });
+    return parent ? parent.id : null;
+  }
+
+  function importRows(rows) {
+    var head = rows[0].map(csvField);
+    if (head.indexOf("name") === -1) return { error: "Aucune colonne « Nom » (ou « Objet ») dans la première ligne." };
+    var items = rows.slice(1, 2001).map(function (cells) {
+      var get = function (key) { var at = head.indexOf(key); return at === -1 ? "" : String(cells[at] || "").trim(); };
+      var name = get("name").slice(0, 120);
+      if (!name) return null;
+      var path = get("location") ? get("location").split(/\s*(?:>|›|\/|\\)\s*/) : [get("room"), get("furniture")].concat(get("container").split(/\s*>\s*/));
+      return {
+        name: name, path: path.filter(function (p) { return p; }),
+        quantity: Math.max(0, Math.min(100000, parseInt(get("quantity"), 10) || 1)),
+        spot: get("spot").slice(0, 160) || null,
+        tags: get("tags").split(/[,;|]/).map(function (t) { return t.trim(); }).filter(function (t) { return t && t.length <= 40; }).slice(0, 25),
+        description: get("description").slice(0, 2000) || null,
+        value: csvNumber(get("value")), purchasedAt: csvDate(get("purchasedAt")),
+        warrantyUntil: csvDate(get("warrantyUntil")), expiresAt: csvDate(get("expiresAt")),
+        barcode: cleanBarcode(get("barcode")), lentTo: get("lentTo").slice(0, 120) || null
+      };
+    }).filter(Boolean);
+    return { items: items, columns: head.filter(Boolean).length };
+  }
+
+  function importSheet() {
+    pickFile(".csv,.tsv,.txt,text/csv,text/plain", null, function (file) {
+      if (file.size > 5 * 1024 * 1024) { toast("Fichier trop lourd : 5 Mo au maximum."); return; }
+      file.text().then(function (text) {
+        var rows = parseCsv(text);
+        var parsed = rows.length > 1 ? importRows(rows) : { error: "Le fichier ne contient aucune ligne d'objet." };
+        if (parsed.error) {
+          sheet({ title: "Import impossible", body: [el("p", { class: "lede", style: "font-size:1rem", text: parsed.error }), el("p", { class: "muted", text: "Enregistrez votre tableur au format CSV, avec une ligne d'en-têtes : Nom, Pièce, Meuble, Quantité… Le modèle à télécharger montre la forme attendue." })],
+            foot: [el("button", { class: "btn btn-line", type: "button", onclick: function () { closeSheet(); csvTemplate(); } }, [icon("download", 15), "Télécharger le modèle"])] });
+          return;
+        }
+        var places = Object.create(null);
+        parsed.items.forEach(function (i) { if (i.path.length) places[i.path.map(norm).join(">")] = true; });
+        sheet({
+          title: "Importer " + plural(parsed.items.length, "objet", "objets"),
+          body: [
+            el("p", { class: "lede", style: "font-size:1rem", text: plural(parsed.items.length, "objet trouvé", "objets trouvés") + " dans « " + file.name + " », " + plural(Object.keys(places).length, "emplacement", "emplacements") + ". Les pièces et meubles qui manquent seront créés." }),
+            el("ul", { class: "row-list import-preview" }, parsed.items.slice(0, 6).map(function (i) {
+              return el("li", {}, [el("b", { text: i.name }), el("span", { class: "muted", text: i.path.join(" › ") || "À ranger" })]);
+            })),
+            parsed.items.length > 6 ? el("p", { class: "muted", text: "… et " + (parsed.items.length - 6) + " autres." }) : null
+          ],
+          foot: [el("button", {
+            class: "btn btn-lg btn-volt", type: "button", style: "width:100%",
+            onclick: function () {
+              var created = { count: 0 }, now = Date.now();
+              parsed.items.forEach(function (i, n) {
+                state.items.push({
+                  id: uid("it"), name: i.name, locationId: ensurePath(i.path, created), spot: i.spot, tags: i.tags,
+                  description: i.description, quantity: i.quantity, expiresAt: i.expiresAt, warrantyUntil: i.warrantyUntil,
+                  lentTo: i.lentTo, lentAt: i.lentTo ? now : null, lastSeenAt: now - n, createdAt: now - n,
+                  value: i.value, purchasedAt: i.purchasedAt, barcode: i.barcode, careLabel: null, careEvery: null, careLast: null
+                });
+              });
+              save(); closeSheet(); render();
+              toast(plural(parsed.items.length, "objet importé", "objets importés") + (created.count ? ", " + plural(created.count, "lieu créé", "lieux créés") : "") + ".");
+            }
+          }, [icon("upload", 16), "Importer " + plural(parsed.items.length, "objet", "objets")])]
+        });
+      }).catch(function () { toast("Le fichier n'a pas pu être lu."); });
+    });
+  }
+
+  function csvTemplate() {
+    var head = CSV_COLUMNS.map(function (c) { return c[1]; });
+    var sample = ["Perceuse sans fil", "1", "Garage", "Servante", "", "Étagère du bas", "outillage, électrique", "Deux batteries", "129,90", "2025-03-14", "2027-03-14", "", "3165140912345", ""];
+    saveFile("fulmo-modele-import.csv", "\ufeff" + [head, sample].map(function (r) { return r.map(csvCell).join(";"); }).join("\r\n"), "text/csv;charset=utf-8", "Modèle téléchargé : remplissez-le dans Excel, puis importez-le.");
+  }
+
+  /* ─── Échéances dans l'agenda du téléphone ───────────────────────────
+     Un fichier .ics : l'agenda (iPhone, Android, Outlook) l'importe en un
+     geste et prévient la veille, sans que Fulmo ait besoin d'envoyer quoi
+     que ce soit. L'entretien revient tout seul, tous les N mois. */
+
+  function addMonths(iso, months) {
+    var d = new Date(iso + "T00:00:00");
+    if (isNaN(d)) return null;
+    var day = d.getDate();
+    d.setMonth(d.getMonth() + months);
+    if (d.getDate() < day) d.setDate(0);
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function careDue(item) {
+    if (!item.careLabel || !item.careEvery || !item.careLast) return null;
+    return addMonths(item.careLast, item.careEvery);
+  }
+
+  function icsText(value) { return String(value).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n"); }
+
+  function exportCalendar() {
+    var lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Fulmo//Echeances//FR", "CALSCALE:GREGORIAN", "X-WR-CALNAME:Fulmo"];
+    var stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    var today = todayIso(), count = 0;
+    function event(id, date, summary, where, rrule) {
+      if (!date || (!rrule && date < today)) return;
+      var start = date.replace(/-/g, "");
+      var end = new Date(date + "T00:00:00"); end.setDate(end.getDate() + 1);
+      lines.push("BEGIN:VEVENT", "UID:" + id + "@getfulmo.com", "DTSTAMP:" + stamp,
+        "DTSTART;VALUE=DATE:" + start,
+        "DTEND;VALUE=DATE:" + end.getFullYear() + String(end.getMonth() + 1).padStart(2, "0") + String(end.getDate()).padStart(2, "0"),
+        "SUMMARY:" + icsText(summary), "DESCRIPTION:" + icsText("Rangé : " + where));
+      if (rrule) lines.push(rrule);
+      lines.push("BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + icsText(summary), "TRIGGER:-PT15H", "END:VALARM", "END:VEVENT");
+      count += 1;
+    }
+    state.items.forEach(function (i) {
+      var where = placeName(i.locationId) + (i.spot ? " › " + i.spot : "");
+      event("exp-" + i.id, i.expiresAt, "Périme : " + i.name, where);
+      event("war-" + i.id, i.warrantyUntil, "Fin de garantie : " + i.name, where);
+      var due = careDue(i);
+      if (due) event("care-" + i.id, due < today ? today : due, i.careLabel + " : " + i.name, where, "RRULE:FREQ=MONTHLY;INTERVAL=" + i.careEvery);
+    });
+    lines.push("END:VCALENDAR");
+    if (!count) { toast("Aucune échéance à venir : ajoutez une date dans la fiche d'un objet."); return; }
+    saveFile("fulmo-echeances.ics", lines.join("\r\n"), "text/calendar;charset=utf-8", plural(count, "échéance ajoutée", "échéances ajoutées") + " au fichier : ouvrez-le pour l'importer dans votre agenda.");
+  }
+
+  /* ─── Ajout express ──────────────────────────────────────────────────
+     « perceuse garage armoire » : les derniers mots qui désignent un lieu
+     connu le choisissent, le reste fait le nom. On ne devine que si TOUS
+     ces mots se retrouvent dans le chemin d'un lieu, et l'on prend le
+     plus court : le meuble plutôt que l'un de ses tiroirs. */
+  function quickParse(text) {
+    var words = String(text || "").trim().split(/\s+/).filter(Boolean);
+    if (words.length < 2) return null;
+    function wordHit(token, hay) {
+      return hay.some(function (w) { return w === token || (token.length >= 4 && w.indexOf(token) === 0); });
+    }
+    for (var k = 1; k < words.length; k++) {
+      var rest = words.slice(k).map(norm).filter(function (w) { return w.length > 1 && ["dans", "le", "la", "les", "du", "de", "des", "au", "aux", "en", "sur", "sous"].indexOf(w) === -1; });
+      if (!rest.length) continue;
+      var best = null, bestLen = Infinity;
+      state.locations.forEach(function (loc) {
+        var hay = norm(pathOf(loc.id).join(" ")).split(" ");
+        if (!rest.every(function (t) { return wordHit(t, hay); })) return;
+        var len = pathOf(loc.id).length;
+        if (len < bestLen) { best = loc; bestLen = len; }
+      });
+      if (best) {
+        var name = words.slice(0, k).join(" ").replace(/\s+(dans|au|aux|en|sur|sous)$/i, "");
+        if (name) return { name: name, locationId: best.id };
+      }
+    }
+    return null;
+  }
+
+  /* ─── Affichage simplifié ────────────────────────────────────────────
+     Pour un parent âgé, un enfant, une personne aidée : une seule question,
+     en grand. Le proche aidant range depuis son propre compte (membre du
+     foyer) ; la personne aidée n'a qu'à chercher. Réglage de CET appareil. */
+  var SIMPLE_KEY = "fulmo.simple";
+  var simpleMode = false;
+  try { simpleMode = localStorage.getItem(SIMPLE_KEY) === "1"; } catch (e) {}
+  function setSimple(on) {
+    simpleMode = on;
+    try { if (on) localStorage.setItem(SIMPLE_KEY, "1"); else localStorage.removeItem(SIMPLE_KEY); } catch (e) {}
+    state.tab = "search";
+    render();
+  }
+
+  function screenSimple() {
+    var homeName = state.household ? state.household.name : "Mon logement";
+    return el("div", { class: "app app-simple" }, [
+      el("div", { class: "app-main" }, [
+        el("header", { class: "app-head" }, [
+          logoMarkOnly(30),
+          el("span", { class: "home-name" }, [el("b", { text: homeName })]),
+          el("button", {
+            class: "btn btn-sm btn-line", type: "button",
+            onclick: function () {
+              confirmSheet({
+                title: "Revenir à l'affichage complet ?",
+                body: "Les onglets, le plan et les réglages réapparaissent sur cet appareil.",
+                confirmLabel: "Affichage complet",
+                onConfirm: function () { setSimple(false); }
+              });
+            }
+          }, "Affichage complet")
+        ]),
+        viewSearch()
+      ])
+    ]);
+  }
+
+  /* ─── Boîte à idées ──────────────────────────────────────────────────
+     Proposer, voter, suivre : sans quitter Fulmo. Les idées les plus
+     soutenues montent en tête et guident les prochaines versions. En
+     ligne, elles sont partagées entre tous les comptes ; dans la
+     démonstration, un jeu d'exemples vit dans ce navigateur. */
+
+  var IDEA_CATEGORIES = [
+    ["recherche", "Recherche"], ["rangement", "Rangement"], ["scan", "Scan"], ["plan", "Plan"],
+    ["partage", "Partage"], ["autre", "Autre"], ["bug", "Un problème"]
+  ];
+  var IDEA_STATUS = {
+    "new": "Nouvelle", review: "À l'étude", planned: "Planifiée", progress: "En cours", done: "Livrée", declined: "Pas pour l'instant"
+  };
+  var IDEA_TABS = [["top", "Populaires"], ["recent", "Récentes"], ["planned", "Prévues"], ["done", "Livrées"], ["mine", "Les miennes"]];
+
+  function categoryLabel(key) {
+    for (var i = 0; i < IDEA_CATEGORIES.length; i++) if (IDEA_CATEGORIES[i][0] === key) return IDEA_CATEGORIES[i][1];
+    return "Autre";
+  }
+
+  var IDEAS_DEMO = [
+    ["Prévenir quand un objet prêté n'est pas revenu", "Un rappel au bout de trois semaines, avec le prénom de la personne.", "partage", "planned", 42, "Bonne idée : l'alerte existe déjà dans Alertes, le rappel par agenda arrive."],
+    ["Lister le contenu d'une valise de vacances", "Pour la refaire à l'identique l'année suivante.", "rangement", "review", 27, null],
+    ["Reconnaître plusieurs objets sur une même photo", "Une photo de l'étagère entière plutôt qu'objet par objet.", "scan", "done", 24, "C'est le Scan Éclair : une photo, tous les objets visibles proposés d'un coup."],
+    ["Partager une liste d'objets avec la baby-sitter", "Juste ce qu'il faut : médicaments, doudou, pyjamas.", "partage", "new", 12, null],
+    ["Retrouver un objet par sa couleur", "« le sac rouge », « la boîte verte ».", "recherche", "new", 9, null],
+    ["Voir la cave en 3D", null, "plan", "new", 6, null]
+  ];
+
+  function localIdeas() {
+    if (!Array.isArray(state.ideas)) {
+      var now = Date.now();
+      state.ideas = IDEAS_DEMO.map(function (d, n) {
+        return { id: "idea-demo-" + n, title: d[0], body: d[1], category: d[2], status: d[3], votes: d[4], voted: false, mine: false, author: "Exemple", response: d[5], createdAt: now - (n + 2) * 86400000 * 3 };
+      });
+    }
+    return state.ideas;
+  }
+
+  var ideasApi = cloud ? (cloud.ideas || null) : {
+    list: function () { return Promise.resolve({ admin: false, ideas: localIdeas().slice() }); },
+    submit: function (input) {
+      var idea = { id: uid("idea"), title: input.title, body: input.body || null, category: input.category, status: "new", votes: 1, voted: true, mine: true,
+        author: input.anonymous ? "Anonyme" : obFirstName(state.account ? state.account.name : "") || "Vous", response: null, createdAt: Date.now() };
+      localIdeas().unshift(idea);
+      save();
+      return Promise.resolve({ ok: true, id: idea.id });
+    },
+    vote: function (id, on) {
+      var idea = localIdeas().filter(function (i) { return i.id === id; })[0];
+      if (!idea) return Promise.resolve({ ok: false, error: "not_found" });
+      if (idea.voted !== on) { idea.voted = on; idea.votes += on ? 1 : -1; save(); }
+      return Promise.resolve({ ok: true, votes: idea.votes });
+    }
+  };
+
+  var ideasState = { data: null, loading: false, error: false, tab: "top" };
+
+  function loadIdeas(force) {
+    if (!ideasApi || ideasState.loading || (ideasState.data && !force)) return;
+    ideasState.loading = true;
+    ideasState.error = false;
+    ideasApi.list().then(function (data) {
+      ideasState.data = data;
+    }).catch(function () {
+      ideasState.error = true;
+    }).then(function () {
+      ideasState.loading = false;
+      if (state.tab === "ideas") render();
+    });
+  }
+
+  function ideaSheet(category) {
+    var draft = { title: "", body: "", category: category || "rangement", anonymous: false };
+    var ideas = ideasState.data ? ideasState.data.ideas : [];
+    var similar = el("div", { class: "idea-similar", "aria-live": "polite" });
+    var titleError = el("span", { class: "err", hidden: true, text: "Quelques mots pour le titre (4 caractères au moins)." });
+    var sendBtn;
+
+    function paintSimilar() {
+      var q = norm(draft.title);
+      var hits = q.length < 4 || draft.category === "bug" ? [] : ideas.filter(function (i) { return i.category !== "bug"; })
+        .map(function (i) { return { idea: i, s: similarity(norm(i.title), q) }; })
+        .filter(function (h) { return h.s > 0.3; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 3);
+      similar.replaceChildren.apply(similar, hits.length ? [el("p", { class: "label", text: "Déjà proposé ? Votez plutôt :" })].concat(hits.map(function (h) {
+        return el("div", { class: "idea-similar-row" }, [
+          el("span", { text: h.idea.title }),
+          el("button", {
+            class: "btn btn-sm btn-line", type: "button", disabled: h.idea.voted ? true : null,
+            onclick: function () { closeSheet(); voteIdea(h.idea, true); }
+          }, [icon("check", 13), h.idea.voted ? "Déjà voté" : "Voter (" + h.idea.votes + ")"])
+        ]);
+      })) : []);
+    }
+
+    function send() {
+      var title = draft.title.trim();
+      if (title.length < 4) { titleError.hidden = false; return; }
+      sendBtn.disabled = true;
+      ideasApi.submit({ title: title.slice(0, 80), body: draft.body.trim().slice(0, 1000), category: draft.category, anonymous: draft.anonymous })
+        .then(function (res) {
+          if (!res || !res.ok) {
+            sendBtn.disabled = false;
+            toast(res && res.error === "limite" ? "Cinq propositions par jour au maximum : revenez demain." : "L'envoi n'a pas abouti. Réessayez dans un instant.");
+            return;
+          }
+          closeSheet();
+          ideasState.tab = draft.category === "bug" ? "mine" : "recent";
+          loadIdeas(true);
+          toast(draft.category === "bug" ? "Merci : le problème est transmis à l'équipe." : "Merci ! Votre idée est publiée, avec votre premier vote.");
+        });
+    }
+
+    var catRow = el("div", { class: "chips", role: "radiogroup", "aria-label": "Catégorie" });
+    function paintCats() {
+      catRow.replaceChildren.apply(catRow, IDEA_CATEGORIES.map(function (c) {
+        var on = draft.category === c[0];
+        return el("button", {
+          class: "chip chip-sm" + (on ? " on" : ""), type: "button", role: "radio", "aria-checked": on ? "true" : "false",
+          onclick: function () { draft.category = c[0]; paintCats(); paintSimilar(); privacy.textContent = privacyText(); }
+        }, c[1]);
+      }));
+    }
+    function privacyText() {
+      return draft.category === "bug"
+        ? "Un problème n'est visible que de vous et de l'équipe Fulmo. Décrivez ce que vous faisiez et ce qui s'est passé."
+        : "Votre idée sera visible des autres utilisateurs de Fulmo, avec votre prénom. N'y mettez pas d'information personnelle.";
+    }
+    var privacy = el("p", { class: "field-hint", text: privacyText() });
+    paintCats();
+
+    sheet({
+      title: category === "bug" ? "Signaler un problème" : "Proposer une idée",
+      body: [
+        el("div", { class: "field" }, [el("span", { text: "Catégorie" }), catRow]),
+        el("label", { class: "field" }, [
+          el("span", { text: draft.category === "bug" ? "Ce qui ne va pas" : "Votre idée en une phrase" }),
+          el("input", {
+            class: "input", maxlength: 80, autofocus: true,
+            placeholder: "Ex. : retrouver un objet par sa couleur",
+            oninput: function (event) { draft.title = event.target.value; titleError.hidden = true; paintSimilar(); },
+            onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); send(); } }
+          }),
+          titleError
+        ]),
+        similar,
+        el("label", { class: "field" }, [
+          el("span", { text: "En quoi elle vous aiderait (facultatif)" }),
+          el("textarea", { class: "input", rows: 3, maxlength: 1000, placeholder: "La situation, ce que vous feriez avec…", oninput: function (event) { draft.body = event.target.value; } })
+        ]),
+        el("label", { class: "check-row" }, [
+          el("input", { type: "checkbox", onchange: function (event) { draft.anonymous = event.target.checked; } }),
+          el("span", { text: "Publier sans mon prénom" })
+        ]),
+        privacy
+      ],
+      foot: [sendBtn = el("button", { class: "btn btn-lg btn-volt", type: "button", style: "width:100%", onclick: send }, [icon("spark", 16), "Envoyer"])]
+    });
+  }
+
+  function voteIdea(idea, on) {
+    var before = { voted: idea.voted, votes: idea.votes };
+    idea.voted = on;
+    idea.votes = Math.max(0, idea.votes + (on ? 1 : -1));
+    render();
+    ideasApi.vote(idea.id, on).then(function (res) {
+      if (res && res.ok) { if (typeof res.votes === "number") idea.votes = res.votes; return; }
+      idea.voted = before.voted; idea.votes = before.votes;
+      toast("Le vote n'a pas pu être enregistré.");
+    }).catch(function () {
+      idea.voted = before.voted; idea.votes = before.votes;
+      toast("Le vote n'a pas pu être enregistré.");
+    }).then(function () { if (state.tab === "ideas") render(); });
+  }
+
+  function ideaStatusSheet(idea) {
+    var draft = { status: idea.status, response: idea.response || "" };
+    var row = el("div", { class: "chips" });
+    function paint() {
+      row.replaceChildren.apply(row, Object.keys(IDEA_STATUS).map(function (key) {
+        var on = draft.status === key;
+        return el("button", { class: "chip chip-sm" + (on ? " on" : ""), type: "button", "aria-pressed": on ? "true" : "false", onclick: function () { draft.status = key; paint(); } }, IDEA_STATUS[key]);
+      }));
+    }
+    paint();
+    sheet({
+      title: "Statut de l'idée",
+      body: [
+        el("p", { class: "muted", text: idea.title }),
+        row,
+        el("label", { class: "field" }, [
+          el("span", { text: "Réponse publique (facultatif)" }),
+          el("textarea", { class: "input", rows: 3, maxlength: 600, text: draft.response, oninput: function (event) { draft.response = event.target.value; } })
+        ])
+      ],
+      foot: [el("button", {
+        class: "btn btn-lg btn-volt", type: "button", style: "width:100%",
+        onclick: function () {
+          ideasApi.setStatus(idea.id, draft.status, draft.response.trim() || null).then(function (res) {
+            if (!res || !res.ok) { toast("Le statut n'a pas pu être enregistré."); return; }
+            closeSheet();
+            loadIdeas(true);
+            toast("Statut mis à jour.");
+          });
+        }
+      }, "Enregistrer")]
+    });
+  }
+
+  function viewIdeas() {
+    loadIdeas(false);
+    var data = ideasState.data;
+    var admin = !!(data && data.admin && ideasApi && typeof ideasApi.setStatus === "function");
+    var all = data ? data.ideas : [];
+    var tab = ideasState.tab;
+    var list = all.filter(function (i) {
+      if (tab === "mine") return i.mine;
+      if (i.category === "bug") return admin && tab === "recent";
+      if (tab === "planned") return i.status === "planned" || i.status === "progress";
+      if (tab === "done") return i.status === "done";
+      return i.status !== "declined" || tab === "recent";
+    }).sort(function (a, b) {
+      return tab === "recent" || tab === "mine" ? b.createdAt - a.createdAt : b.votes - a.votes || b.createdAt - a.createdAt;
+    });
+
+    function card(idea, rank) {
+      return el("li", { class: "idea" + (idea.status === "done" ? " is-done" : "") }, [
+        idea.category === "bug" ? el("span", { class: "idea-vote is-bug", "aria-hidden": "true" }, [icon("warn", 18)]) : el("button", {
+          class: "idea-vote" + (idea.voted ? " on" : ""), type: "button", "aria-pressed": idea.voted ? "true" : "false",
+          "aria-label": (idea.voted ? "Retirer mon vote pour « " : "Voter pour « ") + idea.title + " », " + plural(idea.votes, "vote", "votes"),
+          onclick: function () { voteIdea(idea, !idea.voted); }
+        }, [icon("chev", 16), el("b", { class: "tnum", text: String(idea.votes) })]),
+        el("div", { class: "idea-body" }, [
+          el("h3", {}, [tab === "top" && rank < 3 ? el("span", { class: "idea-rank tnum", text: "#" + (rank + 1) }) : null, idea.title]),
+          el("p", { class: "idea-meta" }, [
+            el("span", { class: "idea-status s-" + idea.status, text: IDEA_STATUS[idea.status] || "Nouvelle" }),
+            el("span", { text: categoryLabel(idea.category) + " · " + (idea.mine ? "vous" : idea.author) + " · " + new Date(idea.createdAt).toLocaleDateString("fr-FR") })
+          ]),
+          idea.body ? el("p", { class: "idea-text", text: idea.body }) : null,
+          idea.response ? el("p", { class: "idea-response" }, [el("b", { text: "L'équipe Fulmo : " }), idea.response]) : null,
+          admin ? el("button", { class: "btn btn-sm btn-quiet", type: "button", onclick: function () { ideaStatusSheet(idea); } }, [icon("pencil", 13), "Statut"]) : null
+        ])
+      ]);
+    }
+
+    var body;
+    if (!ideasApi) body = el("p", { class: "muted", text: "La boîte à idées arrive très bientôt dans l'application." });
+    else if (ideasState.error) body = el("div", { class: "empty" }, [
+      el("p", { class: "lede", text: "Les idées n'ont pas pu être chargées." }),
+      el("button", { class: "btn btn-line", type: "button", onclick: function () { loadIdeas(true); render(); } }, [icon("loop", 15), "Réessayer"])
+    ]);
+    else if (!data) body = el("p", { class: "muted", text: "Chargement des idées…" });
+    else if (!list.length) body = el("div", { class: "all-clear" }, [
+      el("span", { class: "blob", "aria-hidden": "true" }, [icon("spark", 26)]),
+      el("h2", { class: "display t-md", text: tab === "mine" ? "Vous n'avez encore rien proposé" : "Rien ici pour l'instant" }),
+      el("p", { class: "lede", text: "Une idée qui vous ferait gagner du temps ? Proposez-la : les autres utilisateurs pourront la soutenir." })
+    ]);
+    else body = el("ol", { class: "ideas" }, list.map(card));
+
+    return el("div", { class: "page" }, [
+      el("h1", { class: "display t-lg", text: "Boîte à idées" }),
+      el("p", { class: "lede", style: "margin-top:8px", text: "Proposez ce qui vous manque, votez pour les idées des autres : les plus soutenues passent en tête et guident les prochaines versions de Fulmo." }),
+      !cloud ? el("p", { class: "ai-note" }, [icon("eye", 15), el("span", { class: "muted", text: "Démonstration : ces idées sont des exemples, et vos votes restent dans ce navigateur. Dans l'application, ils sont partagés avec tous les utilisateurs." })]) : null,
+      ideasApi && isEditorAccount() ? el("div", { class: "inline", style: "margin-top:18px" }, [
+        el("button", { class: "btn btn-volt", type: "button", onclick: function () { ideaSheet(); } }, [icon("plus", 15), "Proposer une idée"]),
+        el("button", { class: "btn btn-line", type: "button", onclick: function () { ideaSheet("bug"); } }, [icon("warn", 15), "Signaler un problème"])
+      ]) : null,
+      ideasApi ? el("div", { class: "seg ideas-tabs", role: "tablist", "aria-label": "Trier les idées" }, IDEA_TABS.map(function (t) {
+        var on = tab === t[0];
+        return el("button", { type: "button", role: "tab", "aria-selected": on ? "true" : "false", onclick: function () { ideasState.tab = t[0]; render(); } }, t[1]);
+      })) : null,
+      body
+    ]);
+  }
+
+  // Tout compte connecté propose et vote, invités d'un foyer compris : la
+  // boîte à idées concerne Fulmo, pas le foyer.
+  function isEditorAccount() { return !!state.account; }
 
   /* ═══ Visite guidée ══════════════════════════════════════════════════
 
@@ -8592,8 +10413,11 @@
 
   /* Démarre la visite. Rien ne s'impose une seconde fois : l'état « vue »
      est enregistré dès la fin ou l'abandon. */
-  function tourStart() {
+  function tourStart(custom) {
     if (tour || !state.household) return;
+    // Appelée depuis un bouton, elle reçoit l'événement du clic : seule une
+    // visite des nouveautés passe ses propres étapes.
+    custom = custom && custom.steps ? custom : null;
     clearTimeout(tourPending);
     tourPending = null;
     closePalette();
@@ -8613,7 +10437,7 @@
 
     tour = {
       overlay: overlay, veil: veil, spot: spot, bubble: bubble, arrow: arrow, live: live,
-      steps: tourSteps(), index: -1, rect: null, drawn: "", side: null,
+      steps: custom ? custom.steps : tourSteps(), news: !!custom, index: -1, rect: null, drawn: "", side: null,
       previous: document.activeElement, closingSheet: false
     };
     document.addEventListener("keydown", tourKey, true);
@@ -8631,8 +10455,18 @@
     document.removeEventListener("keydown", tourKey, true);
     window.removeEventListener("resize", tourOnResize);
     root.inert = false;
-    state.tourSeen = true;
-    save();
+    if (closing.news) {
+      if (message) toast(message);
+      else if (completed) toast("Bonne découverte ! Les nouveautés restent dans Réglages › Aide.");
+      else toast("Les nouveautés restent dans Réglages › Aide.");
+      message = null;
+      completed = true;
+    } else {
+      state.tourSeen = true;
+      // Un compte qui vient de tout découvrir n'a pas besoin des nouveautés.
+      newsMark();
+      save();
+    }
     closing.overlay.classList.remove("is-on");
     closing.overlay.classList.add("is-leaving");
     setTimeout(function () { closing.overlay.remove(); }, reduceMotion() ? 0 : 320);
@@ -9055,6 +10889,121 @@
     }, 900);
   }
 
+  /* ─── Nouveautés ──────────────────────────────────────────────────────
+
+     À chaque mise à jour qui change les habitudes, une fenêtre « Nouveau
+     dans Fulmo » accueille ceux qui utilisaient déjà Fulmo : ce que cela
+     change pour eux, en une phrase par nouveauté, puis une minute de visite
+     qui montre chaque nouveauté à sa place. Elle ne s'impose qu'une fois par
+     appareil ; elle reste dans Réglages › Aide.
+
+     Pour la prochaine mise à jour : ajouter une entrée EN TÊTE de RELEASES
+     (un nouvel `id`), avec ses nouveautés et les étapes de sa visite. Un
+     compte neuf ne la voit pas : la visite guidée lui présente déjà tout. */
+
+  var NEWS_KEY = "fulmo.news";
+  var RELEASES = [
+    {
+      id: "2026-10-outils",
+      title: "Nouveau dans Fulmo",
+      lede: "Fulmo ne sert plus seulement à retrouver : il vous aide aussi le jour où il faut une facture, un rappel ou un carton.",
+      highlights: [
+        { ic: "upload", title: "Facture et garantie dans la fiche", text: "Le jour où le lave-linge tombe en panne, sa facture est à deux touches." },
+        { ic: "grid", title: "Étiquettes QR pour vos bacs", text: "Scannez la boîte du garage : son contenu s'affiche sans l'ouvrir." },
+        { ic: "clock", title: "Rappels d'entretien", text: "Filtre, détartrage, révision : Fulmo vous prévient, jusque dans votre agenda." },
+        { ic: "shield", title: "Rapport pour l'assurance", text: "Vos biens et leur valeur en PDF, prêt à envoyer après un sinistre." },
+        { ic: "download", title: "Import Excel", text: "Reprenez un inventaire existant en un fichier, Sortly compris." },
+        { ic: "spark", title: "Boîte à idées", text: "Proposez ce qui vous manque, votez pour les idées des autres." }
+      ],
+      steps: function () {
+        var wide = tourWide();
+        var editor = isEditor();
+        function tab(id) { return wide ? '.rail-btn[data-tab="' + id + '"]' : '.tabbar .tab[data-tab="' + id + '"]'; }
+        var steps = [
+          { id: "news", tab: "search", hero: true,
+            title: "Une minute pour les nouveautés",
+            text: "Six nouveautés pensées pour l'après-rangement, chacune là où vous en aurez besoin. Suivez le projecteur.",
+            next: "C'est parti", prevLabel: "Plus tard" },
+          editor ? { id: "quick", tab: "search", target: ".search-box",
+            title: "Ranger en une phrase",
+            text: "Tapez « perceuse garage établi » : si l'objet n'existe pas encore, Fulmo propose de le ranger là, sans formulaire." +
+              (codeReaderSupported() ? " Le bouton code-barres lit une étiquette Fulmo ou l'emballage d'un produit." : "") } : null,
+          state.items.length ? { id: "sheet", tab: "search", target: ".result",
+            title: "La fiche d'un objet s'enrichit",
+            text: "Ouvrez un objet : photo, facture, garantie et notice sont rangées avec lui. Prix, date d'achat et entretien se notent dans « Achat, garantie, entretien »." } : null,
+          editor && state.locations.length ? { id: "labels", tab: "places", tabTarget: tab("places"), target: ".places-tools",
+            title: "Des étiquettes QR pour vos bacs",
+            text: "Imprimez une planche, collez une étiquette sur chaque boîte : l'appareil photo du téléphone montre son contenu sans l'ouvrir. Pour un déménagement, le mode Déménagement numérote vos cartons." } : null,
+          { id: "care", tab: "alerts", tabTarget: tab("alerts"), target: ".alert-group, .all-clear",
+            title: "Entretien et agenda",
+            text: "Notez « tous les 6 mois » dans la fiche de la hotte ou de la chaudière : le rappel arrive ici à temps. Les échéances peuvent aussi rejoindre l'agenda de votre téléphone (Éclair)." },
+          { id: "inventory", tab: "settings", tabTarget: wide ? ".rail-home" : ".app-head .head-avatar", target: ".set-inventory",
+            title: "Assurance, tableur, proche aidé",
+            text: "Un rapport PDF de vos biens pour l'assureur, l'import d'un inventaire Excel, et pour un parent âgé un affichage simplifié qui ne garde que la recherche." },
+          ideasApi ? { id: "ideas", tab: "ideas", tabTarget: tab("ideas"), target: ".page h1",
+            title: "La boîte à idées",
+            text: "Il vous manque quelque chose ? Proposez-le ici, soutenez les idées des autres : les plus votées guident les prochaines versions." } : null
+        ].filter(Boolean);
+        var last = steps[steps.length - 1];
+        last.ending = true;
+        last.next = "Terminer";
+        return steps;
+      }
+    }
+  ];
+
+  var newsPending = null;
+  var newsChecked = false;   // une seule proposition par chargement
+
+  function newsLatest() { return RELEASES[0]; }
+  function newsSeen() {
+    try { return localStorage.getItem(NEWS_KEY) === newsLatest().id; } catch (e) { return true; }
+  }
+  function newsMark() {
+    try { localStorage.setItem(NEWS_KEY, newsLatest().id); } catch (e) {}
+  }
+
+  /* La fenêtre « Nouveau dans Fulmo ». Ouverte une fois d'office, puis à la
+     demande depuis les Réglages ou la palette. */
+  function newsSheet() {
+    var release = newsLatest();
+    newsMark();
+    sheet({
+      title: release.title,
+      body: [
+        el("p", { class: "lede", text: release.lede }),
+        el("ul", { class: "news-list" }, release.highlights.map(function (h) {
+          return el("li", { class: "news-item" }, [
+            el("span", { class: "news-fig", "aria-hidden": "true" }, [icon(h.ic, 18)]),
+            el("span", { class: "news-txt" }, [el("b", { text: h.title }), el("span", { text: h.text })])
+          ]);
+        }))
+      ],
+      foot: [
+        el("button", { class: "btn btn-lg btn-line", type: "button", onclick: function () { closeSheet(); } }, "Plus tard"),
+        el("button", {
+          class: "btn btn-lg btn-volt", type: "button",
+          onclick: function () { closeSheet(); tourStart({ steps: release.steps(), news: true }); }
+        }, [icon("arrow-right", 16), "Découvrir en 1 minute"])
+      ]
+    });
+  }
+
+  /* Appelé après chaque rendu, comme la visite guidée : la fenêtre attend
+     que l'écran soit libre (pas de fiche ouverte, pas de visite en cours). */
+  function newsAfterRender() {
+    if (newsChecked || newsPending || tour || tourPending) return;
+    if (!state.session || !state.account || !state.household || !state.tourSeen || simpleMode) return;
+    if (newsSeen()) { newsChecked = true; return; }
+    newsPending = setTimeout(function () {
+      newsPending = null;
+      if (tour || newsChecked || !state.session || !state.household || simpleMode) return;
+      if (document.querySelector(".ob-celebrate, .cmdk-backdrop, .print-root") || openSheet) { newsAfterRender(); return; }
+      newsChecked = true;
+      newsSheet();
+    }, 1200);
+  }
+
   /* ─── Thème ───────────────────────────────────────────────────────── */
 
   /* Le blanc est le défaut du produit, pas une conséquence du système : on
@@ -9112,6 +11061,7 @@
       try { auto.focus({ preventScroll: true }); } catch (e) { auto.focus(); }
     }
     tourAfterRender();
+    newsAfterRender();
   }
 
   function render() {
@@ -9129,6 +11079,7 @@
     else screen = screenApp();
 
     afterRender(screen, previousScroll, before);
+    placePending();
   }
 
   /* L'adresse propre est getfulmo.com/app : GitHub Pages sert app.html sous
@@ -9141,6 +11092,12 @@
   applyTheme();
   obRoute();   // app#demo / #signup / #login (section inscription)
   render();
+
+  /* Hors connexion : la démonstration se rouvre sans réseau (une cave, un
+     grenier). En ligne, l'application est servie par son propre domaine. */
+  if (!cloud && "serviceWorker" in navigator && location.protocol === "https:") {
+    navigator.serviceWorker.register("/sw.js", { scope: "/app" }).catch(function () {});
+  }
 
   /* Ce que l'appareil sait faire en matière de relevé 3D. Résolu une fois,
      après le premier rendu : la page ne doit jamais attendre ces réponses. */

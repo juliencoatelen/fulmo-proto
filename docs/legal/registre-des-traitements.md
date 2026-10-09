@@ -1,7 +1,7 @@
 # Registre des activités de traitement — Fulmo (article 30 du RGPD)
 
 Responsable : Julien Coatelen, entrepreneur individuel, nom commercial BASICX Marketing (service Fulmo), SIRET 751 919 101 00038, [adresse — à compléter]. Contact : [email vie privée — à compléter].
-Dernière mise à jour : 4 octobre 2026.
+Dernière mise à jour : 9 octobre 2026.
 
 | # | Traitement | Finalité | Base légale | Personnes | Données | Destinataires / sous-traitants | Transfert hors UE | Durée | Sécurité |
 |---|---|---|---|---|---|---|---|---|---|
@@ -14,5 +14,8 @@ Dernière mise à jour : 4 octobre 2026.
 | 7 | Hébergement de l'application | Servir app.getfulmo.com | Intérêt légitime | Utilisateurs de l'application | Adresse IP, journaux techniques | Vercel Inc. (US), région Francfort (fra1) | Possible (US) : DPF ou CCT | Selon Vercel | HTTPS, en-têtes de sécurité |
 | 9 | Foyer partagé et invitations | Inviter une personne dans un foyer, gérer les rôles et les accès | Contrat (membres) ; intérêt légitime de l'administrateur (personne invitée) | Membres, personnes invitées | Nom et rôle des membres ; email de la personne invitée, rôle proposé, empreinte du lien | Supabase (Francfort, eu-central-1) | Idem 1 | Invitation : lien valable 7 jours, ligne effacée 30 jours après expiration ; membres : jusqu'au retrait de l'accès | Lien à usage unique, seule son empreinte est stockée ; email confirmé exigé ; actions journalisées (audit 12 mois) |
 | 8 | Limitation des abus | Bloquer les tentatives répétées de connexion | Intérêt légitime | Utilisateurs de l'application | Empreinte salée (SHA-256) de l'adresse IP | Upstash, Inc. (US), région Francfort (eu-central-1) | Possible (US) : DPF ou CCT | De 1 minute à 24 heures | Adresse IP jamais stockée en clair |
+| 10 | Justificatifs et détails des objets | Retrouver factures, garanties et notices ; estimer la valeur des biens (rapport assurance) ; rappeler un entretien | Contrat | Utilisateurs, membres du foyer | Photos et fichiers (image ou PDF, 10 Mo max), prix, date d'achat, code-barres, rappel d'entretien | Application : Supabase Storage, compartiment privé (Francfort, eu-central-1), partagé avec le foyer. Démo : aucun (IndexedDB local) | Idem 1 | Jusqu'à suppression du fichier, de l'objet ou du compte (fichiers effacés avec l'objet) | Compartiment privé, liens signés de courte durée, type et taille vérifiés côté serveur, RLS par foyer |
+| 11 | Historique des déplacements | Savoir où était un objet et qui l'a déplacé | Contrat | Membres du foyer | Objet, ancien et nouvel emplacement, date, membre auteur | Supabase (Francfort, eu-central-1) | Idem 1 | 13 mois, purge automatique | RLS par foyer, lecture seule pour les membres |
+| 12 | Boîte à idées | Recueillir et classer par votes les suggestions des utilisateurs | Intérêt légitime (amélioration du service) | Utilisateurs connectés | Titre, texte, catégorie, votes, prénom de l'auteur (ou « Anonyme ») ; signalements de problème visibles de l'équipe seule | Supabase (Francfort, eu-central-1) | Idem 1 | Tant que l'idée est publiée ; idées et votes effacés avec le compte | Texte affiché sans HTML, 5 idées par jour, modération par l'équipe, RLS |
 
 Analyse d'impact (AIPD) : non requise à ce stade (pas de données sensibles à grande échelle, pas de profilage, pas de surveillance). À réévaluer si le Scan Éclair ou le foyer partagé changent d'échelle.
