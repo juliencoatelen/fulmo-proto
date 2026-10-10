@@ -20,7 +20,8 @@ et l'on retrouve n'importe quel objet en deux secondes, par la recherche, le pla
 - Plan du logement en coupe par niveaux, Espace 3D (nuage de points, splats gaussiens, relevé panoramique).
 - Alertes : péremption, garantie, prêts.
 - Réglages : foyer, formule, thème, export des données.
-- Confidentialité : l'inventaire reste sur l'appareil ; seule la phrase de recherche part vers l'IA.
+- Confidentialité : sur app.getfulmo.com, l'inventaire est hébergé dans l'UE (Francfort), visible du seul foyer ;
+  la démo getfulmo.com/app reste sur l'appareil. Les fonctions d'IA n'envoient que la phrase tapée ou la photo prise.
 
 ## Ton
 Direct, chaleureux, précis. Tutoiement exclu : vouvoiement. Phrases courtes. Pas de jargon technique côté marketing.
@@ -32,4 +33,4 @@ Les contrôles nomment leur action (« Créer mon compte », « Trouver mes clé
    « application pour retrouver ses objets », « inventaire maison », « où ai-je rangé ».
 
 ## Déploiement
-Statique (GitHub Pages) : `index.html` (landing), `app.html` (application). Bibliothèques via CDN jsDelivr.
+Statique (GitHub Pages) : `index.html` (landing), `app.html` (démo). Aucune ressource tierce : Three.js est bundlé dans `assets/js/` (voir CLAUDE.md, P2).

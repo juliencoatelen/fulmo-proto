@@ -1,35 +1,47 @@
 # Fulmo
 
-> « Le premier moteur de recherche de la maison. » FULMO est une application web, en français, qui référence chaque objet d'un logement et dit exactement où il se trouve : pièce, meuble, tiroir ou bac. « Fulmo » signifie « éclair » en espéranto.
+> Fulmo (aussi écrit FULMO) est le moteur de recherche de la maison : une application web gratuite, en français, qui retient où chaque objet est rangé chez vous (pièce, meuble, tiroir ou bac) et vous le dit en un éclair. Sans balise ni matériel. « Fulmo » signifie « éclair » en espéranto.
 
 ## Le problème
-Un logement contient plusieurs milliers d'objets ; la mémoire en suit quelques dizaines. Selon une étude Pixie (2017), on passe 2,5 jours par an à chercher ses affaires.
+Un logement contient plusieurs milliers d'objets ; la mémoire en suit quelques dizaines. Selon une étude Pixie (2017), on passe en moyenne 2,5 jours par an à chercher ses affaires.
 
 ## Comment ça marche
 1. Vous décrivez votre logement : maison ou appartement, étages, pièces, meubles. En cliquant, pas en tapant ; environ deux minutes, une seule fois, modifiable à vie.
 2. Vous référencez en rangeant : un objet, un endroit (nom, endroit précis, photo, mots-clés, quantité). Des mots-clés libres relient les objets entre eux (« Noël », « bébé », « camping », « papiers »).
 3. Vous cherchez : un champ, une réponse. Le chemin complet jusqu'à l'objet, insensible aux accents, à la casse et aux fautes de frappe (« noel » trouve « Décorations de Noël »).
 
-## Fonctions gratuites (formule Libre)
+## Formule Libre — 0 €, sans limite de durée, sans carte bancaire
+- Objets illimités ; pièces, zones et meubles illimités.
 - Recherche instantanée tolérante aux fautes, aux accents, aux majuscules et aux pluriels.
-- Mots-clés transverses : une requête comme « Noël » fait remonter ensemble tous les objets concernés, où qu'ils soient.
-- Foyer partagé : jusqu'à 5 membres voient le même logement, chacun avec un rôle (Admin, Membre ou Invité en lecture seule) ; l'invitation exige un email confirmé.
-- Inventaire enregistré dans l'Union européenne (Francfort) : le même sur tous les appareils du foyer.
-- Aucun matériel : pas de balise Bluetooth ni d'étiquette à acheter.
-- Fonctionne dans le navigateur (app.getfulmo.com), sur mobile et sur ordinateur ; ajout possible à l'écran d'accueil, sans store.
-- Objets, pièces, zones et meubles illimités ; photo par objet ; export des données à tout moment.
+- Mots-clés transverses : « Noël » fait remonter ensemble tous les objets concernés, où qu'ils soient.
+- Photo et facture par objet ; prix et date d'achat (utiles pour l'assurance).
+- Alertes de péremption, de garantie, d'entretien et de prêt.
+- Étiquettes QR pour vos bacs (une planche A4), facultatives.
+- Import et export Excel ; export de vos données à tout moment.
+- Foyer partagé jusqu'à 5 membres, chacun avec un rôle : Admin, Membre ou Invité (lecture seule).
+- Fonctionne dans le navigateur, sur téléphone et ordinateur ; ajout possible à l'écran d'accueil, sans App Store ni Play Store.
+
+## Formule Éclair — offerte pendant la bêta, puis 9 € par mois
+Offerte aux premiers utilisateurs sans carte bancaire ; prévenu avant toute facturation, résiliable en un clic.
+- Tout Libre, plus : Scan Éclair (on filme une étagère, l'IA détecte, nomme et pré-range les objets).
+- Plan 2D/3D interactif du logement, niveau par niveau.
+- Recherche en langage naturel (« le machin qui gonfle les matelas »).
+- Échéances dans l'agenda du téléphone ; rapport PDF pour l'assurance.
+- Mode déménagement et étiquettes QR illimitées.
+- Affichage simplifié et accès délégué pour un proche aidé ; historique des déplacements.
+- Membres du foyer illimités ; support prioritaire.
 
 ## Pour qui
 Familles (chacun range, tout le monde retrouve), aidants (savoir à distance où sont les médicaments, papiers et clés d'un parent), bricoleurs (visserie, outillage et consommables adressables), déménagements (savoir ce que contient chaque carton).
 
-## Formules et prix
-- Libre — 0 €, sans limite de durée : objets illimités, pièces, zones et meubles illimités, recherche instantanée tolérante aux fautes, mots-clés et métadonnées, photo par objet, foyer partagé jusqu'à 5 membres, installation sur l'écran d'accueil, export des données. Sans carte bancaire.
-- Éclair — 9 € par mois, résiliable en un clic depuis le compte : tout Libre, plus Scan Éclair (référencement par la caméra : l'IA détecte, nomme et pré-range les objets), plan 2D/3D interactif du logement, recherche en langage naturel, alertes péremption, garantie et prêts, accès délégué pour proche aidant, historique et journal des déplacements, membres illimités, export PDF assurance et sinistre, support prioritaire.
+## Fulmo et les balises (AirTag, SmartTag, Tile)
+Une balise Bluetooth localise un objet qui se déplace (clés, sac, valise) et coûte environ 35 € pièce. Fulmo ne demande aucun matériel et retient l'endroit de milliers d'objets rangés. Les deux sont complémentaires.
 
 ## Confidentialité
-- L'inventaire est enregistré sur l'appareil de l'utilisateur, pas dans une base centrale.
-- La recherche en langage naturel n'envoie à l'IA que la phrase tapée ; le Scan Éclair envoie les images prises pour analyse.
-- L'inventaire et la recherche classique fonctionnent sans connexion une fois l'application ouverte.
+- L'inventaire du compte (app.getfulmo.com) est hébergé dans l'Union européenne (Francfort) et n'est visible que des membres du foyer.
+- Les fonctions d'IA d'Éclair n'envoient que le nécessaire, quand vous les lancez : la phrase tapée pour la recherche en langage naturel, les images prises pour le Scan Éclair.
+- La démo (getfulmo.com/app) reste entièrement dans le navigateur du visiteur.
+- Une connexion internet est nécessaire pour utiliser le compte : l'inventaire est le même sur tous les appareils du foyer.
 
 ## Liens
 - Présentation : https://getfulmo.com/
@@ -37,3 +49,4 @@ Familles (chacun range, tout le monde retrouve), aidants (savoir à distance où
 - Se connecter : https://app.getfulmo.com/connexion
 - Démo (logement pré-rempli) : https://getfulmo.com/app#demo
 - Questions fréquentes : https://getfulmo.com/#questions
+- Confidentialité : https://getfulmo.com/confidentialite.html

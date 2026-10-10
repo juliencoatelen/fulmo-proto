@@ -1,5 +1,8 @@
+# Tous les robots, moteurs de recherche et assistants IA (GPTBot, OAI-SearchBot,
+# ClaudeBot, PerplexityBot, Google-Extended…) peuvent lire le site public.
+# La démo (app.html) porte une balise noindex : elle n'est pas bloquée ici pour
+# que les robots puissent lire cette consigne.
 User-agent: *
 Allow: /
-Disallow: /app
 
 Sitemap: https://getfulmo.com/sitemap.xml

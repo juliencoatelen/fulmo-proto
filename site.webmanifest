@@ -1,9 +1,9 @@
 {
   "id": "app",
-  "name": "Fulmo — la mémoire de votre maison",
+  "name": "Fulmo — le moteur de recherche de la maison",
   "short_name": "Fulmo",
-  "description": "Retrouvez n'importe quel objet de votre maison en deux secondes.",
-  "lang": "fr",
+  "description": "Fulmo retient où vous rangez chaque objet de la maison et vous le retrouve en deux secondes : pièce, meuble, tiroir.",
+  "lang": "fr-FR",
   "start_url": "app",
   "scope": "./",
   "display": "standalone",
@@ -27,5 +27,11 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "dir": "ltr",
+  "categories": [
+    "lifestyle",
+    "productivity",
+    "utilities"
   ]
 }
