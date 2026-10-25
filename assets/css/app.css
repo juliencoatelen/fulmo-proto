@@ -777,6 +777,142 @@ mark, .mark {
 }
 @keyframes trace { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
+/* ─── Résultats en vitrine : la photo, le nom, l'emplacement ───────────
+   Une seule structure pour la grille et la liste : la carte change de
+   disposition, pas de contenu. Le bouton du nom s'étend sous toute la carte ;
+   l'emplacement et « Je l'ai trouvé » passent au-dessus. */
+.results-head { flex-wrap: wrap; align-items: center; row-gap: 10px; }
+.rh-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex-wrap: wrap; }
+.rh-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.room-facet .icon { opacity: .7; }
+.room-facet.chip-group .chip { gap: 6px; }
+.view-seg { display: inline-flex; padding: 2px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--surface); }
+.view-seg button {
+  width: 38px; height: 32px; border: 0; border-radius: var(--r-pill); display: grid; place-items: center;
+  background: transparent; color: var(--fg-faint); cursor: pointer; transition: background-color var(--dur-1), color var(--dur-1);
+}
+.view-seg button[aria-pressed="true"] { background: var(--sunken); color: var(--fg); }
+.view-seg button:hover { color: var(--fg); }
+@media (pointer: coarse) { .view-seg button { width: 42px; height: 38px; } }
+
+.r-wrap { container-type: inline-size; }
+.r-cards.is-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@container (min-width: 560px) { .r-cards.is-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; } }
+@container (min-width: 800px) { .r-cards.is-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
+@container (min-width: 1080px) { .r-cards.is-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+.r-cards > .result { padding: 0; gap: 0; align-items: stretch; overflow: hidden; }
+.r-cards.is-grid > .result { flex-direction: column; }
+.r-cards .tags { display: none; }
+
+.r-photo {
+  position: relative; display: grid; place-items: center; aspect-ratio: 4 / 5; max-width: 100%;
+  background: var(--sunken); color: var(--fg-faint); overflow: hidden;
+}
+.result.tagmatch .r-photo:not(.has-img) { background: var(--accent-soft); color: var(--fg); }
+.r-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.r-addphoto { position: absolute; left: 6px; right: 6px; bottom: 10px; text-align: center; font-size: .6875rem; font-weight: 600; color: var(--accent); }
+.r-badge {
+  position: absolute; top: 8px; left: 8px; z-index: 1; max-width: calc(100% - 56px);
+  padding: 3px 8px; border-radius: var(--r-pill); background: var(--surface); color: var(--fg); box-shadow: var(--shadow-1);
+  font-size: .6875rem; font-weight: 650; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.r-badge.is-danger { background: var(--danger-soft); color: var(--danger-fg); }
+.r-badge.is-warn { background: var(--warn-soft); color: var(--warn-fg); }
+.r-badge.is-arc { background: var(--ai-soft); color: var(--ai); }
+.r-qty {
+  position: absolute; top: 8px; right: 8px; z-index: 1; padding: 3px 7px; border-radius: var(--r-pill);
+  background: color-mix(in oklab, var(--ink-0) 72%, transparent); color: var(--paper-0);
+  font-family: var(--font-mono); font-size: .6875rem; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+
+.r-name {
+  margin: 10px 11px 0; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left;
+  font: inherit; font-size: .9375rem; font-weight: 600; line-height: 1.25;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.5em;
+}
+.r-name::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.r-name:focus-visible { outline: none; }
+.result:has(.r-name:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+.r-where {
+  position: relative; z-index: 1; margin: 8px 8px 0; min-height: 44px; padding: 6px 8px;
+  display: flex; align-items: flex-start; gap: 6px; text-align: left;
+  border: 0; border-radius: var(--r-xs); background: var(--sunken); color: var(--fg); cursor: pointer;
+  font: inherit; font-size: .8125rem; line-height: 1.3;
+  transition: background-color var(--dur-1);
+}
+.r-where:hover { background: var(--accent-soft); }
+.r-where > .icon { color: var(--accent); flex-shrink: 0; margin-top: 1px; }
+.r-where-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.r-where b, .r-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-where b { font-weight: 650; }
+.r-path { font-family: var(--font-mono); font-size: .6875rem; color: var(--fg-muted); }
+.r-path .spot { color: var(--accent); }
+.r-where.is-unsorted b { color: var(--warn-fg); }
+
+.r-foot { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; padding: 2px 2px 2px 11px; pointer-events: none; }
+.r-foot .mini { pointer-events: auto; }
+.r-seen { font-size: .6875rem; color: var(--fg-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.result.found .r-photo:not(.has-img) { background: var(--accent-fill); color: var(--on-accent); transition: background-color var(--dur-3); }
+.result.found .r-where { background: var(--accent-soft); }
+.result.found .r-where-txt { animation: trace var(--dur-4) var(--ease-out) 120ms both; }
+
+/* La liste : la même carte, à plat. */
+.r-cards.is-list > .result {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; grid-template-areas: "ph name foot" "ph where foot";
+  align-items: center; column-gap: 12px; padding: 8px 4px 8px 8px;
+}
+.r-cards.is-list .r-photo { grid-area: ph; width: 56px; height: 56px; aspect-ratio: 1; border-radius: var(--r-sm); align-self: center; }
+.r-cards.is-list .r-photo .icon, .r-cards.is-list .r-photo .pic { font-size: 22px !important; width: 22px !important; height: 22px !important; }
+.r-cards.is-list .r-addphoto, .r-cards.is-list .r-badge, .r-cards.is-list .r-qty { display: none; }
+.r-cards.is-list .r-name { grid-area: name; margin: 0; min-height: 0; -webkit-line-clamp: 1; align-self: end; }
+.r-cards.is-list .r-where { grid-area: where; margin: 2px 0 0 -8px; min-height: 36px; padding: 4px 8px; background: transparent; align-self: start; }
+.r-cards.is-list .r-where:hover { background: var(--accent-soft); }
+.r-cards.is-list .r-where-txt { flex-direction: row; gap: 6px; align-items: baseline; }
+.r-cards.is-list .r-foot { grid-area: foot; padding: 0; }
+.r-cards.is-list .r-seen { display: none; }
+@container (min-width: 700px) {
+  .r-cards.is-list > .result { grid-template-columns: 56px minmax(0, 1fr) auto auto; grid-template-areas: "ph name tags foot" "ph where tags foot"; }
+  .r-cards.is-list .tags { grid-area: tags; display: flex; }
+  .r-cards.is-list .r-seen { display: block; }
+}
+
+.results-more { margin: 18px auto 0; display: flex; }
+
+/* La feuille Emplacement. */
+.where-top { display: flex; align-items: center; gap: 14px; }
+.where-top .r-photo { width: 88px; aspect-ratio: 1; border-radius: var(--r-md); flex-shrink: 0; }
+.where-top .r-addphoto { display: none; }
+.where-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; font-size: .875rem; }
+.where-meta .r-badge { position: static; max-width: 100%; box-shadow: none; }
+.where-path { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.where-path li { position: relative; display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: center; padding: 6px 0; }
+.where-path li:not(:last-child)::before { content: ""; position: absolute; left: 17px; top: 40px; bottom: -8px; width: 2px; border-radius: 2px; background: var(--line-strong); }
+.where-path .dot { position: relative; width: 36px; height: 36px; border-radius: var(--r-sm); display: grid; place-items: center; background: var(--sunken); color: var(--fg-muted); }
+.where-path .txt { display: flex; flex-direction: column; min-width: 0; }
+.where-path .txt b { font-weight: 600; font-size: 1rem; overflow-wrap: anywhere; }
+.where-path .txt small { font-size: .75rem; color: var(--fg-faint); }
+.where-path li.is-leaf .dot { background: var(--accent-fill); color: var(--on-accent); box-shadow: var(--glow); }
+.where-path li.is-leaf .txt b { font-size: 1.0625rem; }
+
+.room-pick { display: flex; flex-direction: column; gap: 4px; margin-inline: -6px; }
+.room-opt {
+  display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 12px; min-height: 48px; padding: 0 10px;
+  border: 0; border-radius: var(--r-sm); background: transparent; color: var(--fg); font: inherit; text-align: left; cursor: pointer;
+}
+.room-opt:hover { background: var(--sunken); }
+.room-opt.on { background: var(--accent-soft); }
+.room-opt b { font-family: var(--font-mono); font-size: .75rem; font-weight: 500; color: var(--fg-faint); font-variant-numeric: tabular-nums; }
+
+/* Affichage simple : une grande carte par objet, l'emplacement en phrase. */
+.app-simple .r-cards.is-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.app-simple .r-cards .r-photo { aspect-ratio: 16 / 10; }
+.app-simple .r-cards .r-name { font-size: 1.25rem; margin: 14px 16px 0; min-height: 0; }
+.app-simple .r-cards .r-where { margin: 10px 12px 14px; padding: 12px 14px; font-size: 1.0625rem; line-height: 1.4; }
+.app-simple .r-cards .r-foot, .app-simple .r-cards .r-qty { display: none; }
+
 /* ─── États vides ─────────────────────────────────────────────────────── */
 
 .empty { text-align: center; padding: 48px 0 24px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -1279,7 +1415,7 @@ p.label[style*="text-transform:none"] { font-weight: 400; line-height: 1.6 !impo
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-delay: 0s !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
   .scan-overlay::before { animation: none; top: 50%; }
-  .result.found .crumbs { animation: none; }
+  .result.found .crumbs, .result.found .r-where-txt { animation: none; }
 }
 
 /* ─── Informations légales (Réglages) ─────────────────────────────────── */

@@ -11,9 +11,9 @@ test.describe("Application : logement de démonstration", () => {
 
   test("la recherche tolère les fautes et donne l'emplacement", async ({ page }) => {
     await page.getByLabel("Chercher un objet").fill("pasport");
-    const first = page.locator("button", { hasText: "Passeport" }).first();
+    const first = page.locator(".result", { hasText: "Passeport" }).first();
     await expect(first).toBeVisible();
-    await expect(first).toContainText("Bureau");
+    await expect(first.locator(".r-where")).toContainText("Bureau");
     await expect(page.locator("button", { hasText: "Perceuse sans fil" })).toHaveCount(0);
   });
 
@@ -21,6 +21,58 @@ test.describe("Application : logement de démonstration", () => {
     await page.getByRole("button", { name: /^santé/ }).click();
     await expect(page.locator("button", { hasText: "Doliprane" }).first()).toBeVisible();
     await expect(page.locator("button", { hasText: "Perceuse sans fil" })).toHaveCount(0);
+  });
+
+  test("les résultats s'affichent en vitrine, avec les photos d'exemple", async ({ page }) => {
+    const grid = page.locator(".r-cards.is-grid");
+    await expect(grid).toBeVisible();
+    const drill = page.locator(".result", { hasText: "Perceuse sans fil" }).first();
+    await expect(drill.locator(".r-photo img")).toHaveAttribute("src", /\/assets\/img\/demo\/perceuse\.webp$/);
+    await expect.poll(() => drill.locator(".r-photo img").evaluate((img) => img.complete && img.naturalWidth)).toBeGreaterThan(0);
+    // Sans photo : l'icône de la pièce et l'invitation à en ajouter une.
+    await page.getByLabel("Chercher un objet").fill("tournevis");
+    const screwdriver = page.locator(".result", { hasText: "Tournevis cruciforme" }).first();
+    await expect(screwdriver.locator(".r-photo img")).toHaveCount(0);
+    await expect(screwdriver.locator(".r-addphoto")).toHaveText("Ajouter une photo");
+    // Badges d'état : périmé, prêté.
+    await page.getByLabel("Chercher un objet").fill("doliprane");
+    await expect(page.locator(".result", { hasText: "Doliprane" }).locator(".r-badge")).toHaveText("Périmé");
+  });
+
+  test("la bascule grille / liste est retenue", async ({ page }) => {
+    await page.getByRole("button", { name: "Afficher en liste" }).click();
+    await expect(page.locator(".r-cards.is-list")).toBeVisible();
+    await page.reload();
+    await expect(page.locator(".r-cards.is-list")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Afficher en liste" })).toHaveAttribute("aria-pressed", "true");
+    await page.getByRole("button", { name: "Afficher en grille" }).click();
+    await expect(page.locator(".r-cards.is-grid")).toBeVisible();
+  });
+
+  test("l'emplacement d'une carte ouvre son chemin complet", async ({ page }) => {
+    await page.getByLabel("Chercher un objet").fill("passeport");
+    await page.getByRole("button", { name: /^Où est Passeport/ }).click();
+    const where = page.getByRole("dialog", { name: "Passeport" });
+    await expect(where).toBeVisible();
+    const path = where.getByRole("list", { name: "Chemin jusqu'à l'objet" });
+    await expect(path.locator("li")).toHaveCount(3);
+    await expect(path.locator("li").first()).toContainText("Bureau");
+    await expect(path.locator("li.is-leaf")).toContainText("Tiroir du haut");
+    await where.getByRole("button", { name: "Voir dans Mes lieux" }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Mes lieux" })).toBeVisible();
+  });
+
+  test("le filtre par pièce se combine avec la recherche", async ({ page }) => {
+    await page.locator(".room-facet").click();
+    await page.getByRole("dialog", { name: "Filtrer par pièce" }).getByRole("button", { name: /^Cabanon/ }).click();
+    await expect(page.locator(".r-cards .result", { hasText: "Perceuse sans fil" })).toBeVisible();
+    await expect(page.locator(".r-cards .result", { hasText: "Passeport" })).toHaveCount(0);
+    await page.getByLabel("Chercher un objet").fill("pince");
+    await expect(page.locator(".r-cards .result", { hasText: "Pince coupante" })).toBeVisible();
+    await expect(page.locator(".r-cards .result", { hasText: "Perceuse sans fil" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Retirer le filtre Cabanon" }).click();
+    await page.getByLabel("Chercher un objet").fill("");
+    await expect(page.locator(".r-cards .result", { hasText: "Passeport" })).toBeVisible();
   });
 
   test("chaque onglet s'affiche", async ({ page }) => {
@@ -50,7 +102,7 @@ test.describe("Application : logement de démonstration", () => {
 
     await page.reload();
     await page.getByLabel("Chercher un objet").fill("lampe frontale");
-    const found = page.locator("button", { hasText: "Lampe frontale test" }).first();
+    const found = page.locator(".result", { hasText: "Lampe frontale test" }).first();
     await expect(found).toBeVisible();
     await expect(found).toContainText("Buffet");
   });
