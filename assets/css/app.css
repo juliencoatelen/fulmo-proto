@@ -418,10 +418,29 @@ p { margin: 0; }
 }
 .loc-opt:last-child { border-bottom: 0; }
 .loc-opt:hover { background: var(--hover); }
-.loc-opt.on { background: var(--accent-soft); }
+.loc-opt.on { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .loc-opt .lf { font-weight: 600; }
 .loc-opt .up { color: var(--fg-faint); font-family: var(--font-mono); font-size: .75rem; }
-.loc-opt .icon { margin-left: auto; align-self: center; color: var(--accent); }
+.loc-now {
+  margin-left: auto; align-self: center; display: inline-flex; align-items: center; gap: 4px;
+  font-size: .6875rem; font-weight: 600; letter-spacing: .02em; color: var(--accent);
+}
+.loc-now .icon { color: var(--accent); }
+/* L'emplacement choisi, en clair au-dessus de la recherche. */
+.loc-current {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+  padding: 11px 13px; border: 1px solid var(--accent); border-radius: var(--r-sm);
+  background: var(--accent-soft);
+}
+.loc-current.is-empty { border-style: dashed; border-color: var(--line-strong); background: transparent; }
+.loc-current-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--surface); color: var(--accent); }
+.loc-current.is-empty .loc-current-ic { color: var(--fg-faint); }
+.loc-current-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.loc-current-k { font-size: .6875rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint); }
+.loc-current-v { font-weight: 600; font-size: .9375rem; color: var(--fg); overflow-wrap: anywhere; }
+.loc-current.is-empty .loc-current-v { font-weight: 400; font-size: .875rem; color: var(--fg-faint); }
+.loc-current-up { font-family: var(--font-mono); font-size: .75rem; color: var(--fg-faint); overflow-wrap: anywhere; }
+.loc-current-was { font-size: .75rem; color: var(--fg-faint); overflow-wrap: anywhere; }
 .loc-empty { padding: 14px; font-size: .875rem; color: var(--fg-faint); text-align: center; }
 
 .pick-rows { display: grid; grid-template-columns: repeat(auto-fill, minmax(216px, 1fr)); gap: 0 26px; }

@@ -323,3 +323,139 @@ test.describe("Application : onglet et écran d'accueil", () => {
     expect(manifest.short_name).toBe("Fulmo");
   });
 });
+
+test.describe("Fiche objet et Scan Éclair", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/app#demo");
+    await expect(page.getByRole("heading", { level: 1, name: "Que cherchez-vous ?" })).toBeVisible();
+  });
+
+  test("la fiche d'un objet rangé affiche son emplacement actuel", async ({ page }) => {
+    await page.getByLabel("Chercher un objet").fill("passeport");
+    await page.locator(".result", { hasText: "Passeport" }).first().locator(".r-name").click();
+    const dialog = page.getByRole("dialog", { name: "Modifier l'objet" });
+    await expect(dialog).toBeVisible();
+    const current = dialog.locator(".loc-current");
+    await expect(current).toContainText("Rangé dans");
+    await expect(current).toContainText("Tiroir du haut");
+    // La sélection est en tête de liste, marquée « Actuel ».
+    const first = dialog.getByRole("option").first();
+    await expect(first).toHaveAttribute("aria-selected", "true");
+    await expect(first).toContainText("Actuel");
+    // Changer reste possible, et s'annule.
+    await dialog.getByRole("option", { name: /^Tiroir bas/ }).click();
+    await expect(current).toContainText("Nouvel emplacement");
+    await expect(current).toContainText("Avant :");
+    await current.getByRole("button", { name: "Annuler" }).click();
+    await expect(current).toContainText("Rangé dans");
+  });
+
+  test("une photo importée est allégée", async ({ page }) => {
+    await page.getByRole("button", { name: "Ajouter un objet" }).click();
+    const dialog = page.getByRole("dialog", { name: "Nouvel objet" });
+    await dialog.getByPlaceholder("Perceuse, passeport, guirlande…").fill("Photo lourde test");
+    // Une image de 3000 × 2000 pixels pleine de bruit : plusieurs mégaoctets en PNG.
+    const png = await page.evaluate(async () => {
+      const c = document.createElement("canvas");
+      c.width = 3000; c.height = 2000;
+      const g = c.getContext("2d");
+      const data = g.createImageData(3000, 2000);
+      for (let i = 0; i < data.data.length; i += 4) {
+        const v = (i / 4) % 3000 / 12 + Math.random() * 40;
+        data.data[i] = v; data.data[i + 1] = 255 - v; data.data[i + 2] = (v * 3) % 255; data.data[i + 3] = 255;
+      }
+      g.putImageData(data, 0, 0);
+      return c.toDataURL("image/png").split(",")[1];
+    }).then((b64) => Buffer.from(b64, "base64"));
+    expect(png.length).toBeGreaterThan(2_000_000);
+    const chooser = page.waitForEvent("filechooser");
+    await dialog.getByRole("button", { name: "Ajouter une photo" }).click();
+    await (await chooser).setFiles({ name: "photo.png", mimeType: "image/png", buffer: png });
+    await expect(dialog.getByText("Photo prête")).toBeVisible();
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog).toBeHidden();
+    await expect.poll(() => page.evaluate(() => {
+      const s = JSON.parse(localStorage.getItem("fulmo.demo.v2"));
+      const it = s.items.find((i) => i.name === "Photo lourde test");
+      return it && it.media && it.media[0] ? it.media[0] : null;
+    })).not.toBeNull();
+    const photo = await page.evaluate(() => JSON.parse(localStorage.getItem("fulmo.demo.v2")).items.find((i) => i.name === "Photo lourde test").media[0]);
+    expect(["image/webp", "image/jpeg"]).toContain(photo.mime);
+    expect(photo.size).toBeLessThan(700_000);
+    expect(photo.thumbId).toBeTruthy();
+  });
+
+  test("après un scan, les fiches s'ouvrent une à une puis on revient au scan", async ({ page }) => {
+    await tab(page, "Scan").click();
+    await expect(page.getByRole("heading", { level: 1, name: "Scan Éclair" })).toBeVisible();
+    await page.getByRole("button", { name: "Lancer une détection de démonstration" }).click();
+    const rows = page.locator(".row-list .check");
+    await expect(rows).toHaveCount(6);
+    // On n'en garde que deux.
+    for (let i = 2; i < 6; i++) await rows.nth(i).click();
+    await page.getByRole("button", { name: "Tout enregistrer (2)" }).click();
+
+    const first = page.getByRole("dialog", { name: "Compléter la fiche · 1/2" });
+    await expect(first).toBeVisible();
+    await expect(first.getByPlaceholder("Perceuse, passeport, guirlande…")).toHaveValue("Clé à molette 30 mm");
+    await first.getByPlaceholder("Tiroir du haut, bac 3, étagère B…").fill("Bac rouge");
+    await first.getByRole("button", { name: "Enregistrer" }).click();
+
+    const second = page.getByRole("dialog", { name: "Compléter la fiche · 2/2" });
+    await expect(second).toBeVisible();
+    await second.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(second).toBeHidden();
+
+    await expect(page.getByRole("heading", { level: 1, name: "Scan Éclair" })).toBeVisible();
+    await expect(page.locator(".scan-saved")).toContainText("2 objets enregistrés");
+    const spot = await page.evaluate(() => JSON.parse(localStorage.getItem("fulmo.demo.v2")).items.findLast((i) => i.name === "Clé à molette 30 mm").spot);
+    expect(spot).toBe("Bac rouge");
+    // Une fiche du dernier scan se rouvre depuis la liste.
+    await page.getByRole("button", { name: "Compléter la fiche de « Tournevis cruciforme »" }).click();
+    await expect(page.getByRole("dialog", { name: "Compléter la fiche" })).toBeVisible();
+  });
+});
+
+test("la photo d'un Scan Éclair devient, allégée, celle des objets enregistrés", async ({ page }) => {
+  // Un assistant factice, comme celui que l'hôte fournit : il renvoie deux objets.
+  await page.addInitScript(() => {
+    window.claude = {
+      use: (name) => Promise.resolve(name !== "sample" ? null : {
+        limits: () => Promise.resolve({ images: { mediaTypes: ["image/jpeg", "image/png", "image/webp"] } }),
+        json: () => Promise.resolve({ items: [
+          { name: "Lampe torche", quantity: 1, tags: ["bricolage"], confidence: "high" },
+          { name: "Rouleau d'adhésif", quantity: 2, tags: ["bricolage"], confidence: "high" }
+        ] })
+      })
+    };
+  });
+  await page.goto("/app#demo");
+  await tab(page, "Scan").click();
+  const png = await page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 2400; c.height = 1800;
+    const g = c.getContext("2d");
+    for (let i = 0; i < 400; i++) { g.fillStyle = `hsl(${i * 37 % 360} 70% 50%)`; g.fillRect((i * 97) % 2400, (i * 53) % 1800, 160, 120); }
+    return c.toDataURL("image/png").split(",")[1];
+  }).then((b64) => Buffer.from(b64, "base64"));
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Prendre ou importer une photo" }).click();
+  await page.getByRole("alertdialog", { name: "Utiliser l'IA ?" }).getByRole("button", { name: "J'accepte" }).click();
+  await (await chooser).setFiles({ name: "etagere.png", mimeType: "image/png", buffer: png });
+  await page.getByRole("button", { name: "Tout enregistrer (2)" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "Compléter la fiche · 1/2" });
+  await expect(sheet.locator(".media-photo img")).toBeVisible();
+  await sheet.getByRole("button", { name: "Fermer" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Scan Éclair" })).toBeVisible();
+
+  const photos = await page.evaluate(() => JSON.parse(localStorage.getItem("fulmo.demo.v2")).items
+    .filter((i) => i.name === "Lampe torche" || i.name === "Rouleau d'adhésif")
+    .map((i) => i.media && i.media[0]));
+  expect(photos).toHaveLength(2);
+  for (const p of photos) {
+    expect(p.kind).toBe("photo");
+    expect(["image/webp", "image/jpeg"]).toContain(p.mime);
+    expect(p.size).toBeLessThan(png.length);
+  }
+});

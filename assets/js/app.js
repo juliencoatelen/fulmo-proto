@@ -1440,10 +1440,14 @@
      même quand le filtre l'exclut. */
 
   function locationField(options) {
-    var current = options.value || null;
+    var initial = options.value || null;
+    var current = initial;
     var query = "";
     var list = el("div", { class: "loc-list", role: "listbox", "aria-label": options.label });
-    var summary = el("span", { style: "font-size:.75rem;color:var(--faint)" });
+    // L'emplacement choisi s'affiche en clair au-dessus du champ : un champ de
+    // recherche vide sur un objet déjà rangé faisait croire qu'il ne l'était pas.
+    var summary = el("div", { class: "loc-current", "aria-live": "polite" });
+    var search;
 
     // Les endroits les PLUS PRÉCIS d'abord : un tiroir est une meilleure
     // réponse qu'une pièce, et c'est ce qu'on veut encourager.
@@ -1462,7 +1466,37 @@
       }, [
         el("span", { class: "lf", text: id ? path[path.length - 1] : "À ranger" }),
         el("span", { class: "up", text: id ? parents : "sans emplacement" }),
-        on ? icon("check", 14) : null
+        on ? el("span", { class: "loc-now" }, [icon("check", 13), current === initial && initial ? "Actuel" : "Choisi"]) : null
+      ]);
+    }
+
+    function paintSummary() {
+      if (!current) {
+        summary.className = "loc-current is-empty";
+        fill(summary, [
+          el("span", { class: "loc-current-ic", "aria-hidden": "true" }, [icon("pin", 16)]),
+          el("span", { class: "loc-current-txt" }, [
+            el("span", { class: "loc-current-k", text: initial ? "Nouvel emplacement" : "Emplacement" }),
+            el("span", { class: "loc-current-v", text: "Aucun : l'objet restera dans « à ranger »" })
+          ])
+        ]);
+        return;
+      }
+      var path = pathOf(current);
+      var changed = initial && current !== initial;
+      summary.className = "loc-current";
+      fill(summary, [
+        el("span", { class: "loc-current-ic", "aria-hidden": "true" }, [icon("pin", 16)]),
+        el("span", { class: "loc-current-txt" }, [
+          el("span", { class: "loc-current-k", text: changed ? "Nouvel emplacement" : initial ? "Rangé dans" : "Choisi" }),
+          el("span", { class: "loc-current-v", text: path[path.length - 1] }),
+          path.length > 1 ? el("span", { class: "loc-current-up", text: path.slice(0, -1).join(" / ") }) : null,
+          changed && locById(initial) ? el("span", { class: "loc-current-was", text: "Avant : " + pathOf(initial).join(" / ") }) : null
+        ]),
+        changed ? el("button", {
+          class: "btn btn-sm btn-quiet", type: "button",
+          onclick: function () { current = initial; options.onChange(initial); paint(); }
+        }, "Annuler") : null
       ]);
     }
 
@@ -1475,38 +1509,34 @@
         return tokens.every(function (token) { return hay.indexOf(token) !== -1; });
       });
 
-      var rows = tokens.length === 0 ? [option(null)] : [];
-
-      // La sélection courante reste visible même filtrée : sinon on ne sait
-      // plus ce qui est choisi au moment où on tape.
-      if (current && !matches.some(function (place) { return place.id === current; }) && locById(current)) {
-        rows.push(option(current));
-      }
-      matches.slice(0, 80).forEach(function (place) { rows.push(option(place.id)); });
-      if (rows.length === 0) rows.push(el("p", { class: "loc-empty", text: "Aucun lieu ne correspond." }));
+      // La sélection courante passe en tête de liste, et y reste même quand
+      // le filtre l'exclut : on voit toujours ce qui est choisi.
+      var rows = [];
+      var pinned = current && locById(current);
+      if (pinned) rows.push(option(current));
+      if (tokens.length === 0) rows.push(option(null));
+      matches.slice(0, 80).forEach(function (place) { if (!pinned || place.id !== current) rows.push(option(place.id)); });
+      if (rows.length === (pinned ? 1 : 0) && tokens.length) rows.push(el("p", { class: "loc-empty", text: "Aucun lieu ne correspond." }));
 
       list.replaceChildren.apply(list, rows);
-      summary.textContent = current
-        ? "Choisi : " + pathOf(current).join(" / ")
-        : "Aucun emplacement : l'objet restera dans « à ranger ».";
-
-      if (tokens.length === 0 && current) {
-        var selected = list.querySelector(".loc-opt.on");
-        if (selected) list.scrollTop = Math.max(0, selected.offsetTop - list.clientHeight / 2 + selected.offsetHeight / 2);
-      }
+      list.scrollTop = 0;
+      paintSummary();
+      if (search) search.placeholder = current
+        ? "Changer d'emplacement : pièce, meuble…"
+        : options.placeholder || "Rechercher une pièce, un meuble…";
     }
 
+    search = el("input", {
+      class: "input", type: "search", "aria-label": options.label + " : rechercher un lieu",
+      oninput: function (event) { query = event.target.value; paint(); }
+    });
     paint();
 
-    return el("label", { class: "field" }, [
+    return el("div", { class: "field loc-field" }, [
       el("span", { text: options.label }),
-      el("input", {
-        class: "input", type: "search",
-        placeholder: options.placeholder || "Rechercher une pièce, un meuble…",
-        oninput: function (event) { query = event.target.value; paint(); }
-      }),
-      list,
-      summary
+      summary,
+      search,
+      list
     ]);
   }
 
@@ -5599,6 +5629,8 @@
     scanState.error = null;
     scanState.detected = null;
     scanState.image = null;
+    scanState.photo = null;
+    scanState.saved = null;
     scanState.demo = true;
     scanState.busy = true;
     render();
@@ -5617,12 +5649,39 @@
     }, 900);
   }
 
+  /* Après un scan, chaque objet enregistré ouvre sa fiche, l'un après
+     l'autre, pour y ajouter ce que la photo ne dit pas (endroit précis, notes,
+     garantie…). Fermer la fiche arrête la série ; on revient au scan, prêt
+     pour le rangement suivant. */
+  function completeScanned(ids, index) {
+    var queue = (ids || []).map(function (id) {
+      return state.items.filter(function (i) { return i.id === id; })[0];
+    }).filter(Boolean);
+    function back() {
+      if (state.tab !== "scan") goTab("scan"); else render();
+    }
+    if (index >= queue.length) { back(); return; }
+    itemSheet(queue[index], null, {
+      title: queue.length > 1 ? "Compléter la fiche · " + (index + 1) + "/" + queue.length : "Compléter la fiche",
+      onSaved: function () {
+        if (index + 1 < queue.length) completeScanned(ids, index + 1);
+        else { back(); toast("Fiches complétées. Prêt pour le scan suivant."); }
+      },
+      onClose: back
+    });
+  }
+
   function viewScan() {
     if (state.plan !== "premium") return paywall("Scan Éclair", "Filmez un tiroir, il se remplit tout seul. L'IA détecte les objets, les nomme et les pré-range.");
 
     function analyse(file) {
       scanState.error = null;
       scanState.detected = null;
+      scanState.saved = null;
+      // La même photo servira de photo aux objets enregistrés, allégée.
+      scanState.photo = shrinkImage(file, PHOTO_MAX, PHOTO_QUALITY).then(function (blob) {
+        return blob && /^image\/(jpeg|png|webp)$/i.test(blob.type) && blob.size <= MEDIA_MAX ? blob : null;
+      });
 
       var reader = new FileReader();
       reader.onload = function () {
@@ -5717,22 +5776,29 @@
     function saveAll() {
       var keepers = scanState.detected.filter(function (item) { return item.keep; });
       var now = Date.now();
-      keepers.forEach(function (item, index) {
-        state.items.push({
+      var photo = scanState.photo;   // promesse de la photo allégée, ou null
+      var saved = keepers.map(function (item, index) {
+        var created = {
           id: uid("it"), name: item.name, locationId: scanState.target || null, spot: null,
           tags: item.tags, description: null, quantity: item.quantity,
           expiresAt: null, warrantyUntil: null, lentTo: null, lentAt: null,
           lastSeenAt: now - index, createdAt: now - index
-        });
+        };
+        state.items.push(created);
+        return created;
       });
       save();
-      scanState = { image: null, busy: false, detected: null, note: "", target: scanState.target, error: null };
-      state.tab = "search";
+      if (photo && media.available()) saved.forEach(function (created) { attachPhoto(created, photo); });
+      scanState = { image: null, photo: null, busy: false, detected: null, note: "", target: scanState.target, error: null, saved: saved.map(function (i) { return i.id; }) };
       render();
-      toast(plural(keepers.length, "objet enregistré", "objets enregistrés") + ".");
+      toast(plural(saved.length, "objet enregistré", "objets enregistrés") + ".");
+      completeScanned(scanState.saved, 0);
     }
 
     var kept = scanState.detected ? scanState.detected.filter(function (i) { return i.keep; }).length : 0;
+    var lastSaved = (scanState.saved || []).map(function (id) {
+      return state.items.filter(function (i) { return i.id === id; })[0];
+    }).filter(Boolean);
     /* Tant que les limites n'ont pas répondu, on garde le bouton photo : c'est
        le parcours normal, et la bascule se fera au premier rendu suivant. Une
        fois la réponse connue, il faut un assistant ET le droit de lui envoyer
@@ -5804,7 +5870,7 @@
       scanState.detected ? el("div", { style: "margin-top:22px" }, [
         el("div", { class: "inline", style: "justify-content:space-between" }, [
           el("p", { class: "label", style: "color:var(--accent)", text: plural(scanState.detected.length, "objet détecté", "objets détectés") }),
-          el("button", { class: "btn btn-sm btn-quiet", type: "button", onclick: function () { scanState.detected = null; scanState.image = null; render(); } }, "Recommencer")
+          el("button", { class: "btn btn-sm btn-quiet", type: "button", onclick: function () { scanState.detected = null; scanState.image = null; scanState.photo = null; render(); } }, "Recommencer")
         ]),
         scanState.note ? el("p", { class: "muted", style: "font-size:.8125rem;margin-top:8px", text: scanState.note }) : null,
         el("p", { class: "muted", style: "font-size:.8125rem;margin-top:8px", text: "Décochez ce que vous ne voulez pas, corrigez les noms, puis validez." }),
@@ -5832,10 +5898,27 @@
         })
       ]) : null,
 
+      !scanState.detected && lastSaved.length ? el("div", { class: "scan-saved", style: "margin-top:22px" }, [
+        el("p", { class: "label", text: "Dernier scan · " + plural(lastSaved.length, "objet enregistré", "objets enregistrés") }),
+        el("ul", { class: "row-list", style: "margin-top:10px" }, lastSaved.map(function (item, index) {
+          return el("li", {}, [
+            el("button", {
+              class: "row", type: "button", style: "width:100%;text-align:left",
+              "aria-label": "Compléter la fiche de « " + item.name + " »",
+              onclick: function () { completeScanned([item.id], 0); }
+            }, [
+              el("span", { style: "flex:1;min-width:0;font-weight:600", text: item.name }),
+              el("span", { class: "muted", style: "font-size:.75rem", text: item.locationId ? placeName(item.locationId) : "À ranger" }),
+              icon("arrow-right", 15)
+            ])
+          ]);
+        }))
+      ]) : null,
+
       el("p", {
         class: "label",
         style: "text-transform:none;letter-spacing:.04em;font-size:.75rem;line-height:1.7;margin-top:26px;color:var(--faint)",
-        text: "La photo est réduite dans le navigateur avant l'envoi, et seule cette image part. Le reste de votre inventaire ne quitte pas l'appareil."
+        text: "La photo est réduite dans le navigateur avant l'envoi, et seule cette image part. Elle devient aussi la photo des objets enregistrés. Le reste de votre inventaire ne quitte pas l'appareil."
       })
     ]);
   }
@@ -8977,20 +9060,10 @@
       save();
       closeSheet();
       render();
-      if (!item && pending.photo) uploadPhoto(payload, pending.photo, 0);
+      if (!item && pending.photo) attachPhoto(payload, pending.photo);
       if (hooks.onSaved) hooks.onSaved(item || payload);
       else if (guessed) toast("Rangé dans « " + placeName(payload.locationId) + " ».");
       else toast(item ? "Objet enregistré." : "Objet référencé.");
-    }
-
-    /* En ligne, l'objet tout neuf part au serveur avec un léger délai : la
-       photo attend qu'il y soit. */
-    function uploadPhoto(target, blob, tries) {
-      media.add(target, "photo", blob, null).then(function (res) {
-        if (res && res.ok) return;
-        if (res && res.error === "not_found" && tries < 5) { setTimeout(function () { uploadPhoto(target, blob, tries + 1); }, 1500); return; }
-        toast(MEDIA_ERRORS[res && res.error] || "La photo n'a pas pu être enregistrée.");
-      });
     }
 
     function textField(label, key, placeholder, hint, type) {
@@ -9006,7 +9079,7 @@
     }
 
     var card = sheet({
-      title: item ? "Modifier l'objet" : "Nouvel objet",
+      title: hooks.title || (item ? "Modifier l'objet" : "Nouvel objet"),
       onClose: hooks.onClose,
       body: [
         el("label", { class: "field" }, [
@@ -9842,7 +9915,7 @@
        les résultats affichent, jamais l'original. */
     add: function (item, kind, blob, label) {
       if (blob.size > MEDIA_MAX) return Promise.resolve({ ok: false, error: "too_large" });
-      var thumbing = kind === "photo" ? shrinkImage(blob, 480, 0.8) : Promise.resolve(null);
+      var thumbing = kind === "photo" ? shrinkImage(blob, THUMB_MAX, THUMB_QUALITY) : Promise.resolve(null);
       if (cloud) {
         return thumbing.then(function (thumb) {
           return cloud.media.add(item.id, kind, blob, label, thumb && thumb !== blob ? thumb : null);
@@ -9892,20 +9965,72 @@
     reseau: "Pas de connexion : réessayez dans un instant."
   };
 
-  /* Une photo de téléphone pèse 3 à 8 Mo : réduite à 1600 px, elle reste
-     nette et tient en quelques centaines de kilooctets. */
+  /* Une photo de téléphone pèse 3 à 8 Mo. Réduite à 1280 px de côté et
+     réencodée en WebP (JPEG là où le navigateur ne sait pas écrire de WebP,
+     Safari notamment), elle tient en 100 à 200 Ko et reste nette plein écran.
+     Si le fichier d'origine est déjà plus léger, on le garde tel quel. */
+  var PHOTO_MAX = 1280, PHOTO_QUALITY = 0.74;
+  var THUMB_MAX = 480, THUMB_QUALITY = 0.7;
+  var DOC_MAX = 2000, DOC_QUALITY = 0.82;
+
   function shrinkImage(file, max, quality) {
     if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type) || typeof createImageBitmap !== "function") return Promise.resolve(file);
+    quality = quality || PHOTO_QUALITY;
     return createImageBitmap(file).then(function (bitmap) {
       var scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
       var canvas = document.createElement("canvas");
-      canvas.width = Math.round(bitmap.width * scale);
-      canvas.height = Math.round(bitmap.height * scale);
-      canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      return new Promise(function (resolve) {
-        canvas.toBlob(function (blob) { resolve(blob || file); }, "image/jpeg", quality || 0.85);
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+      var ctx = canvas.getContext("2d");
+      // Fond blanc : un PNG transparent ne devient pas noir en JPEG.
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      if (bitmap.close) bitmap.close();
+      return encodeCanvas(canvas, quality).then(function (blob) {
+        if (!blob) return file;
+        var keepOriginal = scale === 1 && /^image\/(jpeg|png|webp)$/i.test(file.type) && file.size <= blob.size;
+        return keepOriginal ? file : blob;
       });
     }).catch(function () { return file; });
+  }
+
+  // WebP d'abord ; un navigateur qui ne l'écrit pas rend du PNG, bien plus
+  // lourd : on repasse alors en JPEG, un cran de qualité au-dessus.
+  function encodeCanvas(canvas, quality) {
+    return new Promise(function (resolve) {
+      canvas.toBlob(function (webp) {
+        if (webp && webp.type === "image/webp") { resolve(webp); return; }
+        canvas.toBlob(function (jpeg) { resolve(jpeg); }, "image/jpeg", Math.min(0.9, quality + 0.06));
+      }, "image/webp", quality);
+    });
+  }
+
+  /* Photo d'un objet tout juste créé. En ligne, l'objet part au serveur avec
+     un léger délai : la photo attend qu'il y soit. La fiche, si elle s'ouvre
+     entre-temps, attend la fin de l'envoi avant d'afficher ses photos. */
+  var photoJobs = Object.create(null);
+  function attachPhoto(target, photo) {
+    var job = Promise.resolve(photo).then(function (blob) {
+      if (!blob) return null;
+      return new Promise(function (resolve) {
+        (function attempt(tries) {
+          media.add(target, "photo", blob, null).then(function (res) {
+            if (res && res.ok) { resolve(res); return; }
+            if (res && res.error === "not_found" && tries < 5) { setTimeout(function () { attempt(tries + 1); }, 1500); return; }
+            toast(MEDIA_ERRORS[res && res.error] || "La photo n'a pas pu être enregistrée.");
+            resolve(res);
+          });
+        })(0);
+      });
+    });
+    photoJobs[target.id] = job;
+    job.then(function () {
+      if (photoJobs[target.id] === job) delete photoJobs[target.id];
+      if (!openSheet && state.tab === "search") render();
+    });
+    return job;
   }
 
   function pickFile(accept, capture, onFile) {
@@ -9931,7 +10056,7 @@
         class: "btn btn-sm btn-line", type: "button", disabled: busy ? true : null,
         onclick: function () {
           pickFile("image/*", "environment", function (file) {
-            shrinkImage(file, 1600).then(function (blob) {
+            shrinkImage(file, PHOTO_MAX, PHOTO_QUALITY).then(function (blob) {
               if (!item) { pending.photo = blob; paintPending(); return; }
               busy = true; load();
               media.add(item, "photo", blob, null).then(done);
@@ -9949,7 +10074,7 @@
           class: "btn btn-sm btn-line", type: "button", disabled: busy ? true : null,
           onclick: function () {
             pickFile("image/*,application/pdf", null, function (file) {
-              (file.type === "application/pdf" ? Promise.resolve(file) : shrinkImage(file, 2000)).then(function (blob) {
+              (file.type === "application/pdf" ? Promise.resolve(file) : shrinkImage(file, DOC_MAX, DOC_QUALITY)).then(function (blob) {
                 busy = true; load();
                 media.add(item, "document", blob, select.value).then(done);
               });
@@ -10007,6 +10132,11 @@
 
     function load() {
       if (busy) { box.replaceChildren(el("p", { class: "muted", text: "Enregistrement…" })); return; }
+      if (item && photoJobs[item.id]) {
+        box.replaceChildren(el("p", { class: "muted", text: "Enregistrement de la photo…" }));
+        photoJobs[item.id].then(function () { if (box.isConnected) load(); });
+        return;
+      }
       media.list(item).then(paint).catch(function () {
         box.replaceChildren(el("p", { class: "muted", text: "Photos et justificatifs indisponibles pour le moment." }));
       });
