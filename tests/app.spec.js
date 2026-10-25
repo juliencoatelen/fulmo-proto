@@ -416,6 +416,113 @@ test.describe("Fiche objet et Scan Éclair", () => {
   });
 });
 
+test.describe("Application : groupes d'objets", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/app#demo");
+    await expect(page.getByRole("heading", { level: 1, name: "Que cherchez-vous ?" })).toBeVisible();
+  });
+  const stored = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("fulmo.demo.v2")).items);
+  // Une fiche qui en remplace une autre : l'ancienne reste un instant, le temps de sa sortie.
+  const live = (page, name) => page.locator(".sheet-backdrop:not(.is-closing)").getByRole("dialog", { name });
+
+  test("un groupe se reconnaît à son icône, et son contenu dit où il est", async ({ page }) => {
+    await page.getByLabel("Chercher un objet").fill("trousse de secours");
+    const group = page.locator(".result.is-group", { hasText: "Trousse de secours" }).first();
+    await expect(group.locator(".r-group")).toContainText("3 objets");
+    await expect(group.locator(".r-gic")).toBeVisible();
+
+    await page.getByLabel("Chercher un objet").fill("compresses");
+    const member = page.locator(".result", { hasText: "Compresses stériles" }).first();
+    await expect(member.locator(".r-ingroup")).toContainText("Dans « Trousse de secours »");
+    await member.locator(".r-where").click();
+    await expect(page.getByRole("dialog", { name: "Compresses stériles" }).locator(".where-path")).toContainText("Trousse de secours");
+  });
+
+  test("la fiche d'un groupe gère son contenu, qui suit le groupe quand il change de place", async ({ page }) => {
+    await page.getByLabel("Chercher un objet").fill("trousse de secours");
+    await page.locator(".result.is-group").first().locator(".r-name").click();
+    let sheet = live(page, "Modifier l'objet");
+    await expect(sheet).toContainText("Contenu du groupe · 3 objets");
+
+    // Retirer un objet du groupe.
+    await sheet.getByRole("button", { name: "Retirer « Couverture de survie » du groupe" }).click();
+    sheet = live(page, "Modifier l'objet");
+    await expect(sheet).toContainText("Contenu du groupe · 2 objets");
+
+    // Ajouter un objet existant, choisi par son nom.
+    await sheet.getByRole("button", { name: "Ajouter des objets existants" }).click();
+    const picker = page.getByRole("dialog", { name: "Ajouter à « Trousse de secours »" });
+    await picker.getByLabel("Rechercher un objet").fill("thermo");
+    await picker.getByRole("checkbox", { name: /Thermomètre/ }).click();
+    await picker.getByRole("button", { name: "Ajouter au groupe (1)" }).click();
+    sheet = live(page, "Modifier l'objet");
+    await expect(sheet).toContainText("Contenu du groupe · 3 objets");
+    await expect(sheet.locator(".grp-list")).toContainText("Thermomètre");
+
+    // Déplacer le groupe déplace son contenu.
+    await sheet.getByRole("option", { name: /^Tiroir bas/ }).click();
+    await sheet.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(sheet).toBeHidden();
+    const items = await stored(page);
+    const trousse = items.find((i) => i.name === "Trousse de secours");
+    const inside = items.filter((i) => i.groupId === trousse.id);
+    expect(inside.map((i) => i.name).sort()).toEqual(["Compresses stériles", "Pansements assortis", "Thermomètre"]);
+    for (const i of inside) expect(i.locationId).toBe(trousse.locationId);
+    expect(items.find((i) => i.name === "Couverture de survie").groupId).toBeFalsy();
+  });
+
+  test("un objet rejoint un groupe depuis sa fiche, et en sort", async ({ page }) => {
+    await page.getByLabel("Chercher un objet").fill("passeport");
+    await page.locator(".result", { hasText: "Passeport" }).first().locator(".r-name").click();
+    const sheet = live(page, "Modifier l'objet");
+    await sheet.getByRole("button", { name: "Ajouter à un groupe" }).click();
+    const picker = page.getByRole("dialog", { name: "Ajouter « Passeport » à un groupe" });
+    // Les groupes existants viennent en tête.
+    await expect(picker.locator(".grp-opt").first()).toContainText("Trousse de secours");
+    await picker.getByLabel("Rechercher un objet").fill("livret");
+    await picker.getByRole("button", { name: /Livret de famille/ }).click();
+    await expect(sheet.locator(".grp-card")).toContainText("Livret de famille");
+    await sheet.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(sheet).toBeHidden();
+    let items = await stored(page);
+    const livret = items.find((i) => i.name === "Livret de famille");
+    expect(items.find((i) => i.name === "Passeport").groupId).toBe(livret.id);
+
+    // Supprimer le groupe garde son contenu, hors groupe.
+    await page.getByLabel("Chercher un objet").fill("livret de famille");
+    await page.locator(".result.is-group", { hasText: "Livret de famille" }).first().locator(".r-name").click();
+    await page.getByRole("button", { name: "Supprimer cet objet" }).click();
+    await expect(page.getByRole("alertdialog")).toContainText("L'objet qu'il contient reste dans l'inventaire");
+    await page.getByRole("alertdialog").getByRole("button", { name: "Supprimer" }).click();
+    items = await stored(page);
+    expect(items.find((i) => i.name === "Passeport").groupId).toBeFalsy();
+  });
+
+  test("un Scan Éclair peut réunir ses objets sous une même entrée", async ({ page }) => {
+    await tab(page, "Scan").click();
+    await page.getByRole("button", { name: "Lancer une détection de démonstration" }).click();
+    const rows = page.locator(".row-list .check");
+    await expect(rows).toHaveCount(6);
+    for (let i = 3; i < 6; i++) await rows.nth(i).click();
+    await page.getByRole("checkbox", { name: /Regrouper sous une même entrée/ }).click();
+    const save = page.getByRole("button", { name: "Enregistrer le groupe (3)" });
+    await expect(save).toBeDisabled();
+    await page.getByLabel("Nom du groupe").fill("Caisse à outils rouge");
+    await expect(save).toBeEnabled();
+    await save.click();
+
+    const first = page.getByRole("dialog", { name: "Compléter la fiche · 1/4" });
+    await expect(first.getByPlaceholder("Perceuse, passeport, guirlande…")).toHaveValue("Caisse à outils rouge");
+    await expect(first).toContainText("Contenu du groupe · 3 objets");
+    await first.getByRole("button", { name: "Fermer" }).click();
+    await expect(page.locator(".scan-saved")).toContainText("4 objets enregistrés");
+
+    const items = await stored(page);
+    const box = items.find((i) => i.name === "Caisse à outils rouge");
+    expect(items.filter((i) => i.groupId === box.id)).toHaveLength(3);
+  });
+});
+
 test("la photo d'un Scan Éclair devient, allégée, celle des objets enregistrés", async ({ page }) => {
   // Un assistant factice, comme celui que l'hôte fournit : il renvoie deux objets.
   await page.addInitScript(() => {
