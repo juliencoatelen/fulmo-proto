@@ -312,3 +312,14 @@ test.describe("Application locale : mot de passe oublié", () => {
     await expect(page.getByText("Pas de réinitialisation pendant la bêta.")).toBeVisible();
   });
 });
+
+test.describe("Application : onglet et écran d'accueil", () => {
+  test("titre d'onglet, icône et nom court pour l'écran d'accueil", async ({ page, request }) => {
+    await page.goto("/app#demo");
+    await expect(page).toHaveTitle("Fulmo — Retrouvez tout chez vous en 2 secondes");
+    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "assets/img/apple-touch-icon.png");
+    await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute("content", "Fulmo");
+    const manifest = await (await request.get("/site.webmanifest")).json();
+    expect(manifest.short_name).toBe("Fulmo");
+  });
+});
