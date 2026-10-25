@@ -489,9 +489,10 @@ test.describe("Application : groupes d'objets", () => {
     expect(items.find((i) => i.name === "Passeport").groupId).toBe(livret.id);
 
     // Supprimer le groupe garde son contenu, hors groupe.
-    await page.getByLabel("Chercher un objet").fill("livret de famille");
+    await expect(page.locator(".sheet-backdrop")).toHaveCount(0);
+    await page.getByLabel("Chercher un objet", { exact: true }).fill("livret de famille");
     await page.locator(".result.is-group", { hasText: "Livret de famille" }).first().locator(".r-name").click();
-    await page.getByRole("button", { name: "Supprimer cet objet" }).click();
+    await live(page, "Modifier l'objet").getByRole("button", { name: "Supprimer cet objet" }).click();
     await expect(page.getByRole("alertdialog")).toContainText("L'objet qu'il contient reste dans l'inventaire");
     await page.getByRole("alertdialog").getByRole("button", { name: "Supprimer" }).click();
     items = await stored(page);
