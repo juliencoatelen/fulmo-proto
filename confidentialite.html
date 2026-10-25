@@ -32,7 +32,7 @@
 <main class="lg">
   <div class="lg-wrap">
     <h1>Politique de confidentialité</h1>
-    <p class="lg-updated">Version 4 · en vigueur le <time datetime="2026-10-09">9 octobre 2026</time></p>
+    <p class="lg-updated">Version 5 · en vigueur le <time datetime="2026-10-25">25 octobre 2026</time></p>
     <p class="lg-lede">Fulmo est conçu pour savoir le moins de choses possible sur vous. Cette page explique, conformément aux articles 12 à 14 du Règlement général sur la protection des données (RGPD) et à la loi Informatique et Libertés, quelles données sont traitées, pourquoi, où elles se trouvent et comment exercer vos droits.</p>
 
     <div class="lg-note"><p><strong>En bref.</strong> Votre compte et votre inventaire sont enregistrés dans l'Union européenne (Francfort), sur l'application app.getfulmo.com : vous les retrouvez sur tous vos appareils, et seuls les membres de votre foyer y ont accès. La démonstration de ce site (getfulmo.com/app) garde, elle, ses données dans le navigateur de votre appareil. Rien n'est vendu, rien n'est utilisé pour de la publicité. Les fonctions d'IA, seulement si vous les lancez et après votre accord, envoient la phrase tapée ou la photo prise à notre fournisseur d'IA, aux États-Unis.</p></div>
@@ -68,7 +68,7 @@
       <table>
         <thead><tr><th scope="col">Données</th><th scope="col">Pourquoi</th><th scope="col">Base légale (art. 6 RGPD)</th><th scope="col">Durée de conservation</th></tr></thead>
         <tbody>
-          <tr><td>Prénom, nom, adresse email, empreinte salée du mot de passe (jamais le mot de passe en clair), formule</td><td>Créer et ouvrir votre compte, envoyer l'email de confirmation</td><td>Exécution du contrat (CGU)</td><td>Jusqu'à la suppression du compte ; compte en ligne supprimé après 3 ans sans connexion</td></tr>
+          <tr><td>Prénom, nom, adresse email, empreinte salée du mot de passe (jamais le mot de passe en clair), formule</td><td>Créer et ouvrir votre compte, envoyer l'email de confirmation et, à votre demande, le lien de réinitialisation du mot de passe</td><td>Exécution du contrat (CGU)</td><td>Jusqu'à la suppression du compte ; compte en ligne supprimé après 3 ans sans connexion</td></tr>
           <tr><td>Logement, pièces, meubles, objets, photos d'objets, alertes, historique de recherche</td><td>Fournir le service : ranger et retrouver vos objets</td><td>Exécution du contrat</td><td>Jusqu'à ce que vous les supprimiez ou supprimiez le compte</td></tr>
           <tr><td>Photos d'objets et justificatifs que vous ajoutez (facture, garantie, notice : image ou PDF, 10 Mo au plus), prix et date d'achat, code-barres, rappels d'entretien</td><td>Retrouver une facture ou une garantie, estimer la valeur de vos biens (rapport pour l'assurance), vous rappeler un entretien</td><td>Exécution du contrat</td><td>Jusqu'à ce que vous les supprimiez, supprimiez l'objet ou le compte</td></tr>
           <tr><td>Historique des déplacements d'un objet (ancien et nouvel emplacement, date, membre qui l'a déplacé)</td><td>Savoir où un objet se trouvait et qui l'a rangé</td><td>Exécution du contrat</td><td>13 mois, puis effacement automatique</td></tr>
@@ -96,9 +96,10 @@
           <tr><td>Démonstration (getfulmo.com/app) : compte, logement, objets, photos et justificatifs, relevés 3D, alertes, historique, idées, copie de l'interface pour l'usage hors connexion</td><td>Stockage local du navigateur de votre appareil (localStorage, IndexedDB et cache du navigateur)</td><td>Le pays où se trouve votre appareil. Fulmo n'en reçoit aucune copie.</td><td>Aujourd'hui</td></tr>
           <tr><td>Fichiers du site et de l'interface de l'application (pages, images, code) et journaux techniques de visite (adresse IP)</td><td>GitHub Pages, GitHub, Inc.</td><td>États-Unis, avec un réseau de diffusion mondial</td><td>Aujourd'hui</td></tr>
           <tr><td>Phrase de recherche IA, photo du Scan Éclair</td><td>Anthropic, fournisseur du modèle d'IA</td><td>États-Unis</td><td>Aujourd'hui, uniquement après votre accord</td></tr>
-          <tr><td>Application (app.getfulmo.com) : nom, email, empreinte du mot de passe, formule, foyers, pièces, objets, photos et justificatifs, historique des déplacements, membres, invitations, idées et votes</td><td>Supabase (base PostgreSQL, authentification et envoi des emails de confirmation)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui</td></tr>
+          <tr><td>Application (app.getfulmo.com) : nom, email, empreinte du mot de passe, formule, foyers, pièces, objets, photos et justificatifs, historique des déplacements, membres, invitations, idées et votes</td><td>Supabase (base PostgreSQL et authentification)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui</td></tr>
+          <tr><td>Emails du compte (confirmation de l'adresse, réinitialisation du mot de passe) : adresse email et contenu de l'email</td><td>Brevo (Sendinblue SAS), service d'envoi d'emails</td><td>Union européenne</td><td>Aujourd'hui</td></tr>
           <tr><td>Application app.getfulmo.com : exécution du code serveur et journaux techniques (adresse IP)</td><td>Vercel Inc.</td><td>Union européenne, région Francfort, Allemagne (fra1), avec un réseau de diffusion mondial</td><td>Aujourd'hui</td></tr>
-          <tr><td>Compteurs anti-abus (empreinte de l'adresse IP)</td><td>Upstash (Redis)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui</td></tr>
+          <tr><td>Compteurs anti-abus (empreinte de l'adresse IP ; empreinte de l'adresse email pour les demandes de réinitialisation du mot de passe)</td><td>Upstash (Redis)</td><td>Union européenne, région Francfort, Allemagne (eu-central-1)</td><td>Aujourd'hui</td></tr>
           <tr><td>Paiement de l'abonnement Éclair</td><td>Stripe Payments Europe, Ltd.</td><td>Irlande (Union européenne), avec transferts possibles vers les États-Unis</td><td>À l'ouverture des paiements</td></tr>
         </tbody>
       </table>
@@ -110,9 +111,10 @@
     <ul>
       <li><strong>GitHub, Inc.</strong> (États-Unis) : hébergement des fichiers du site, dont l'interface que charge l'application app.getfulmo.com. <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">Déclaration de confidentialité de GitHub</a>.</li>
       <li><strong>Anthropic</strong> (États-Unis) : traitement par IA des phrases de recherche et des photos du Scan Éclair. <a href="https://www.anthropic.com/legal/privacy">Politique de confidentialité d'Anthropic</a>.</li>
-      <li><strong>Supabase, Inc.</strong> (serveurs dans l'Union européenne, Francfort) : base de données, authentification et emails de confirmation des comptes en ligne. <a href="https://supabase.com/privacy">Politique de confidentialité de Supabase</a>.</li>
+      <li><strong>Supabase, Inc.</strong> (serveurs dans l'Union européenne, Francfort) : base de données et authentification des comptes en ligne. <a href="https://supabase.com/privacy">Politique de confidentialité de Supabase</a>.</li>
+      <li><strong>Sendinblue SAS (Brevo)</strong> (France ; serveurs dans l'Union européenne) : envoi des emails du compte (confirmation de l'adresse, lien de réinitialisation du mot de passe). Aucun email commercial n'est envoyé par ce biais. <a href="https://www.brevo.com/fr/legal/privacypolicy/">Politique de confidentialité de Brevo</a>.</li>
       <li><strong>Vercel Inc.</strong> (États-Unis ; exécution à Francfort) : hébergement de l'application app.getfulmo.com. <a href="https://vercel.com/legal/privacy-policy">Politique de confidentialité de Vercel</a>.</li>
-      <li><strong>Upstash, Inc.</strong> (États-Unis ; serveurs à Francfort) : compteurs de limitation des abus, qui ne contiennent qu'une empreinte de l'adresse IP. <a href="https://upstash.com/trust/privacy.pdf">Politique de confidentialité d'Upstash</a>.</li>
+      <li><strong>Upstash, Inc.</strong> (États-Unis ; serveurs à Francfort) : compteurs de limitation des abus, qui ne contiennent qu'une empreinte de l'adresse IP ou de l'adresse email, jamais l'adresse elle-même. <a href="https://upstash.com/trust/privacy.pdf">Politique de confidentialité d'Upstash</a>.</li>
       <li><strong>Stripe Payments Europe, Ltd.</strong> (Irlande) : paiement de l'abonnement, à l'ouverture des paiements. Stripe agit aussi comme responsable de traitement pour ses obligations propres (lutte contre la fraude).</li>
     </ul>
 
@@ -149,7 +151,7 @@
     <p><button class="lg-btn lg-btn--volt" type="button" data-consent-open>Gérer les cookies</button></p>
 
     <h2 id="securite">8. Sécurité</h2>
-    <p>Le site et l'application sont servis uniquement en HTTPS. Le mot de passe n'est jamais enregistré en clair : seule son empreinte salée est conservée. Dans l'application, chaque accès à la base est filtré par le foyer et par votre rôle : une personne qui n'est pas membre d'un foyer ne peut rien y lire, et un invité ne peut rien y modifier. Rejoindre un foyer exige d'avoir confirmé son adresse email. Le site ne charge aucun script ni police depuis un service tiers. Dans la démonstration, les données vivent dans votre navigateur : sur un appareil partagé, déconnectez-vous ou supprimez votre compte après usage.</p>
+    <p>Le site et l'application sont servis uniquement en HTTPS. Le mot de passe n'est jamais enregistré en clair : seule son empreinte salée est conservée. Le lien « Mot de passe oublié » ne sert qu'une fois et expire au bout d'une heure ; la réponse à la demande est la même que l'adresse ait un compte ou non, et le changement déconnecte vos autres appareils. Dans l'application, chaque accès à la base est filtré par le foyer et par votre rôle : une personne qui n'est pas membre d'un foyer ne peut rien y lire, et un invité ne peut rien y modifier. Rejoindre un foyer exige d'avoir confirmé son adresse email. Le site ne charge aucun script ni police depuis un service tiers. Dans la démonstration, les données vivent dans votre navigateur : sur un appareil partagé, déconnectez-vous ou supprimez votre compte après usage.</p>
 
     <h2 id="droits">9. Vos droits</h2>
     <p>Vous disposez des droits d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition (articles 15 à 21 du RGPD), du droit de retirer votre consentement à tout moment, et du droit de définir des directives sur le sort de vos données après votre décès (article 85 de la loi Informatique et Libertés).</p>
