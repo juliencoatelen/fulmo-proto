@@ -983,6 +983,61 @@
     });
   }
 
+  /* En ligne, ouvert depuis le lien « Mot de passe oublié » : la session est
+     ouverte, on demande le nouveau mot de passe. Le serveur n'accepte ce
+     changement sans l'ancien que dans les 15 minutes qui suivent le lien. */
+  function recoverySheet() {
+    var password = "";
+    var busy = false;
+    var box, err;
+    function fail(message) {
+      busy = false;
+      err.hidden = false;
+      err.textContent = message;
+      box.setAttribute("aria-invalid", "true");
+      box.focus();
+    }
+    function commit() {
+      if (busy) return;
+      var issue = obFieldError("password", password);
+      if (issue) { fail(issue); return; }
+      busy = true;
+      cloud.setNewPassword(password).then(function (res) {
+        if (res.ok) {
+          closeSheet();
+          toast("Nouveau mot de passe enregistré. Vos autres appareils ont été déconnectés.");
+          return;
+        }
+        fail(res.error === "expire" ? "Ce lien a expiré. Déconnectez-vous, puis redemandez un lien avec « Mot de passe oublié ? »."
+          : res.error === "same" ? "C'est votre mot de passe actuel : choisissez-en un autre."
+          : res.error === "password" ? "Ce mot de passe n'est pas accepté. Choisissez-en un autre, de 12 caractères au moins."
+          : res.error === "limite" ? "Trop de tentatives. Réessayez dans une minute."
+          : "Le mot de passe n'a pas pu être changé. Réessayez dans un instant.");
+      });
+    }
+    sheet({
+      title: "Choisissez un nouveau mot de passe",
+      body: [
+        el("p", { class: "confirm-body", text: "Vous êtes connecté" + (state.account ? " (" + state.account.email + ")" : "") + ". Choisissez le mot de passe qui servira désormais : 12 caractères au moins, dont 5 différents." }),
+        el("label", { class: "field" }, [
+          el("span", { text: "Nouveau mot de passe" }),
+          box = el("input", {
+            class: "input", type: "password", autocomplete: "new-password", maxlength: 200,
+            "aria-describedby": "reset-pw-err",
+            oninput: function (event) { password = event.target.value; err.hidden = true; box.removeAttribute("aria-invalid"); },
+            onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); commit(); } }
+          }),
+          err = el("span", { class: "err", id: "reset-pw-err", role: "alert", hidden: true })
+        ])
+      ],
+      foot: [
+        el("button", { class: "btn btn-line", type: "button", onclick: function () { closeSheet(); } }, "Plus tard"),
+        el("button", { class: "btn btn-volt", type: "button", onclick: commit }, [icon("check", 15), "Enregistrer"])
+      ],
+      initialFocus: box
+    });
+  }
+
   /* Le reflet du bouton principal suit le pointeur. Un seul écouteur délégué,
      posé une fois : les boutons sont recréés à chaque rendu. */
   if (window.matchMedia && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
@@ -3100,7 +3155,49 @@
       obAnnounce("Aucun compte avec cette adresse sur cet appareil.");
     }
 
+    /* En ligne : un lien part par email. La réponse est la même que l'adresse
+       ait un compte ou non, pour ne rien révéler de qui est inscrit. */
     function showForgot() {
+      if (cloud && typeof cloud.requestReset === "function") {
+        var mail = obLogin.email.trim().toLowerCase();
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(mail)) {
+          panel.replaceChildren();
+          setErr("email", "Indiquez d'abord l'adresse de votre compte, puis touchez « Mot de passe oublié ? ».");
+          fields.email.input.focus();
+          shake("email");
+          return;
+        }
+        setErr("email", null);
+        var sending = false;
+        var send = el("button", {
+          class: "ob-line-btn ob-line-btn--volt", type: "button",
+          onclick: function () {
+            if (sending) return;
+            sending = true;
+            send.setAttribute("aria-busy", "true");
+            cloud.requestReset(mail).then(function (res) {
+              sending = false;
+              send.removeAttribute("aria-busy");
+              if (!res.ok) {
+                toast(res.error === "limite" ? "Trop de demandes d'affilée. Réessayez dans une minute." : res.error === "email" ? "Cette adresse email n'est pas valide." : "L'email n'a pas pu partir. Réessayez dans un instant.");
+                return;
+              }
+              panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
+                el("p", { class: "ob-panel-title", text: "Regardez vos emails." }),
+                el("p", { text: "Si un compte Fulmo existe pour " + mail + ", un lien vient d'y partir. Il est valable une heure : ouvrez-le pour choisir un nouveau mot de passe." }),
+                el("p", { text: "Rien reçu dans quelques minutes ? Regardez dans les courriers indésirables, puis vérifiez l'adresse." })
+              ]));
+              obAnnounce("Email de réinitialisation envoyé.");
+            });
+          }
+        }, [icon("arrow-right", 15), "Envoyer le lien"]);
+        panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
+          el("p", { class: "ob-panel-title", text: "Mot de passe oublié ?" }),
+          el("p", { text: "Nous envoyons à " + mail + " un lien pour en choisir un nouveau. Votre logement et votre inventaire ne bougent pas." }),
+          el("div", { class: "ob-panel-actions" }, [send])
+        ]));
+        return;
+      }
       if (cloud) {
         panel.replaceChildren(el("div", { class: "ob-panel", role: "status" }, [
           el("p", { class: "ob-panel-title", text: "Réinitialisation bientôt disponible." }),
@@ -11534,6 +11631,7 @@
       idle: function () { return !openSheet && !cmdk && !tour; },
       toast: toast
     });
+    if (typeof cloud.recovery === "function" && cloud.recovery() && typeof cloud.setNewPassword === "function" && state.session) recoverySheet();
   } else if (window.claude && typeof window.claude.use === "function") {
     window.claude.use("sample").then(function (api) {
       if (!api) return;

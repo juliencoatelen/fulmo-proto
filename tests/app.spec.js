@@ -240,3 +240,75 @@ test.describe("Application : création de compte", () => {
     await expect(page.getByText(/Un compte existe déjà avec cette adresse/).first()).toBeVisible();
   });
 });
+
+// En ligne, app.html est servi par app.getfulmo.com, qui définit window.FulmoCloud
+// avant app.js. Ici, une doublure minimale de ce pont, sans réseau.
+async function fakeCloud(page, opts) {
+  await page.addInitScript((o) => {
+    window.__calls = [];
+    const known = {
+      site: "/",
+      uuid: () => crypto.randomUUID(),
+      initial: (blank) => Object.assign({}, blank, o.session ? {
+        account: { name: "Camille Test", email: "camille@example.org", createdAt: "2026-10-01T00:00:00Z" },
+        session: true, planSeen: true, tourSeen: true,
+      } : {}),
+      persist: () => {},
+      attach: () => {},
+      role: () => "admin",
+      households: () => [],
+      householdId: () => null,
+      requestReset: (email) => { window.__calls.push(["requestReset", email]); return Promise.resolve({ ok: true }); },
+      recovery: () => !!o.recovery,
+      setNewPassword: (pw) => { window.__calls.push(["nouveau", pw]); return Promise.resolve(o.reset || { ok: true }); },
+    };
+    window.FulmoCloud = new Proxy(known, { get: (t, k) => (k in t ? t[k] : () => Promise.resolve({ ok: true })) });
+  }, opts);
+}
+
+test.describe("Application en ligne : mot de passe oublié", () => {
+  test("le lien part, avec la même réponse que l'adresse ait un compte ou non", async ({ page }) => {
+    await fakeCloud(page, {});
+    await page.goto("/app#login");
+    await page.getByRole("button", { name: "Mot de passe oublié ?" }).click();
+    await expect(page.getByText(/Indiquez d'abord l'adresse de votre compte/)).toBeVisible();
+
+    await page.getByLabel("Adresse email").fill("Camille@Example.org ");
+    await page.getByRole("button", { name: "Mot de passe oublié ?" }).click();
+    await page.getByRole("button", { name: "Envoyer le lien" }).click();
+    await expect(page.getByText(/Si un compte Fulmo existe pour camille@example\.org/)).toBeVisible();
+    expect(await page.evaluate(() => window.__calls)).toEqual([["requestReset", "camille@example.org"]]);
+  });
+
+  test("ouvert depuis le lien, on choisit un nouveau mot de passe", async ({ page }) => {
+    await fakeCloud(page, { session: true, recovery: true });
+    await page.goto("/app");
+    const dialog = page.getByRole("dialog", { name: "Choisissez un nouveau mot de passe" });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel("Nouveau mot de passe").fill("court");
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog.getByText(/12 au minimum/)).toBeVisible();
+    await dialog.getByLabel("Nouveau mot de passe").fill("Un-nouveau-mot-de-passe-42");
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText(/Nouveau mot de passe enregistré/)).toBeVisible();
+    expect(await page.evaluate(() => window.__calls)).toEqual([["nouveau", "Un-nouveau-mot-de-passe-42"]]);
+  });
+
+  test("un lien expiré le dit clairement", async ({ page }) => {
+    await fakeCloud(page, { session: true, recovery: true, reset: { ok: false, error: "expire" } });
+    await page.goto("/app");
+    const dialog = page.getByRole("dialog", { name: "Choisissez un nouveau mot de passe" });
+    await dialog.getByLabel("Nouveau mot de passe").fill("Un-nouveau-mot-de-passe-42");
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog.getByText(/Ce lien a expiré/)).toBeVisible();
+  });
+});
+
+test.describe("Application locale : mot de passe oublié", () => {
+  test("sans serveur, l'écran explique qu'aucun email ne peut partir", async ({ page }) => {
+    await page.goto("/app#login");
+    await page.getByRole("button", { name: "Mot de passe oublié ?" }).click();
+    await expect(page.getByText("Pas de réinitialisation pendant la bêta.")).toBeVisible();
+  });
+});
