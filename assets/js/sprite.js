@@ -34,6 +34,7 @@
     "  <symbol id=\"i-upload\" viewBox=\"0 0 24 24\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><path d=\"M17 8l-5-5-5 5M12 3v13\"/></symbol>",
     "  <symbol id=\"i-box\" viewBox=\"0 0 24 24\"><path d=\"M21 8v8a2 2 0 0 1-1 1.7l-7 4a2 2 0 0 1-2 0l-7-4A2 2 0 0 1 3 16V8a2 2 0 0 1 1-1.7l7-4a2 2 0 0 1 2 0l7 4A2 2 0 0 1 21 8z\"/><path d=\"m3.3 7 8.7 5 8.7-5M12 22V12\"/></symbol>",
     "  <symbol id=\"i-pin\" viewBox=\"0 0 24 24\"><path d=\"M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z\"/><circle cx=\"12\" cy=\"10\" r=\"3\"/></symbol>",
+    "  <symbol id=\"i-list\" viewBox=\"0 0 24 24\"><path d=\"M9 6h12M9 12h12M9 18h12\"/><path d=\"M4 6h.01M4 12h.01M4 18h.01\"/></symbol>",
     "  <symbol id=\"f-armoire\" viewBox=\"0 0 48 48\"><rect x=\"11\" y=\"6\" width=\"26\" height=\"33\" rx=\"1.5\"/><path d=\"M24 6v33\"/><path d=\"M21 21v4M27 21v4\"/><path d=\"M14 39v4M34 39v4\"/></symbol>",
     "  <symbol id=\"f-placard\" viewBox=\"0 0 48 48\"><path d=\"M5 5h38M5 43h38\"/><rect x=\"11\" y=\"5\" width=\"26\" height=\"38\" rx=\"1\"/><path d=\"M24 5v38\"/><path d=\"M21 22v4M27 22v4\"/></symbol>",
     "  <symbol id=\"f-commode\" viewBox=\"0 0 48 48\"><rect x=\"7\" y=\"14\" width=\"34\" height=\"25\" rx=\"1.5\"/><path d=\"M7 22.3h34M7 30.6h34\"/><path d=\"M21 18h6M21 26.5h6M21 34.8h6\"/><path d=\"M11 39v4M37 39v4\"/></symbol>",

@@ -1821,8 +1821,9 @@
     tourPending = null;
     closePalette();
     dropScene();
-    searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null };
+    searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null, room: null, more: 0 };
     aiResults = null;
+    forgetThumbs();
     review = null; placingId = null; spaceFocus = null; spaceRoomId = null; mapFocus = null;
   }
 
@@ -4500,7 +4501,7 @@
 
   /* ─── Vue : recherche ─────────────────────────────────────────────── */
 
-  var searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null };
+  var searchState = { query: "", ai: null, aiBusy: false, aiTried: null, filter: null, room: null, more: 0 };
 
   /* Historique de recherche.
 
@@ -4531,6 +4532,335 @@
      ne se joue que si la requête change, jamais à chaque rendu. */
   var lastResultsKey = null;
 
+  /* ─── Résultats en vitrine ────────────────────────────────────────────
+     Comme sur une place de marché, on reconnaît son objet à sa photo avant
+     d'avoir lu son nom. Là où un site marchand met le prix, Fulmo met
+     l'emplacement : c'est la réponse à la question. Un geste sur
+     l'emplacement ouvre son chemin complet, sans quitter les résultats. */
+
+  var RESULTS_PAGE = 48;
+  var VIEW_KEY = "fulmo.resultsView";
+  var resultsView = "grid";
+  try { if (localStorage.getItem(VIEW_KEY) === "list") resultsView = "list"; } catch (e) {}
+  function setResultsView(view) {
+    resultsView = view;
+    try { localStorage.setItem(VIEW_KEY, view); } catch (e) {}
+    render();
+  }
+
+  var foundFlash = null;   // l'objet confirmé depuis la feuille Emplacement
+
+  function rootIdOf(locationId) {
+    var node = locById(locationId), guard = 0;
+    while (node && node.parentId && guard < 12) { node = locById(node.parentId) || null; guard += 1; }
+    return node ? node.id : null;
+  }
+
+  /* Photos d'exemple de la démonstration : servies par ce site, comme le
+     reste (aucune image tierce). Elles n'existent que pour le compte de
+     démonstration ; une vraie photo de l'utilisateur passe devant. */
+  var DEMO_PHOTOS = {
+    "Perceuse sans fil": "perceuse", "Passeport": "passeport", "Chargeur Canon LP-E6": "canon",
+    "Câbles HDMI": "hdmi", "Doliprane 1000 mg": "doliprane", "Trousse de secours": "trousse",
+    "Guirlande lumineuse 10 m": "guirlande", "Carton décorations de Noël": "cartonnoel",
+    "Étoile de sapin": "etoile", "Tente 4 places": "tente", "Robot pâtissier": "robot",
+    "Jeux de société": "jeux", "Parasol": "parasol", "Clé à molette 30 mm": "cle",
+    "Crème solaire indice 50": "creme", "Thermomètre": "thermometre", "Mètre ruban 5 m": "metre",
+    "Moule à gâteau": "moule"
+  };
+  var DEMO_PHOTO_BASE = (function () {
+    try {
+      var src = document.currentScript && document.currentScript.src;
+      if (src) return new URL("../img/demo/", src).href;
+    } catch (e) {}
+    return "/assets/img/demo/";
+  })();
+
+  function demoPhotoUrl(item) {
+    if (cloud || item.noDemoPhoto || !tourIsDemo()) return null;
+    var file = DEMO_PHOTOS[item.name];
+    return file ? DEMO_PHOTO_BASE + file + ".webp" : null;
+  }
+
+  function photoEntry(item) {
+    return (item.media || []).filter(function (m) { return m.kind === "photo"; })[0] || null;
+  }
+
+  /* Miniatures : connues (adresse ou null), en cours, ou inconnues. En ligne,
+     une seule requête pour toutes les cartes affichées ; les adresses signées
+     expirent, on les redemande au bout de huit minutes. */
+  var THUMB_TTL = 8 * 60 * 1000;
+  var thumbCache = Object.create(null);
+  var thumbAt = Object.create(null);
+  var thumbWaiting = Object.create(null);
+
+  function forgetThumb(itemId) {
+    var url = thumbCache[itemId];
+    if (url && url.indexOf("blob:") === 0) URL.revokeObjectURL(url);
+    delete thumbCache[itemId];
+    delete thumbAt[itemId];
+  }
+  function forgetThumbs() { Object.keys(thumbCache).forEach(forgetThumb); }
+
+  function thumbNow(item) {
+    if (item.id in thumbCache && (!cloud || Date.now() - thumbAt[item.id] < THUMB_TTL)) return thumbCache[item.id];
+    if (!cloud && !photoEntry(item)) {
+      thumbCache[item.id] = demoPhotoUrl(item);
+      thumbAt[item.id] = Date.now();
+      return thumbCache[item.id];
+    }
+    return undefined;
+  }
+
+  function loadThumbs(items) {
+    var todo = items.filter(function (item) { return thumbNow(item) === undefined && !thumbWaiting[item.id]; });
+    if (!todo.length) return;
+    todo.forEach(function (item) { thumbWaiting[item.id] = true; });
+    function settle(item, url) {
+      delete thumbWaiting[item.id];
+      if (thumbCache[item.id] !== url) forgetThumb(item.id);
+      thumbCache[item.id] = url;
+      thumbAt[item.id] = Date.now();
+      paintThumbs(item);
+    }
+    if (cloud) {
+      // Une application en ligne plus ancienne ne sait pas encore les donner :
+      // les cartes restent sans photo, sans erreur.
+      if (!cloud.media || typeof cloud.media.thumbs !== "function") {
+        todo.forEach(function (item) { settle(item, null); });
+        return;
+      }
+      for (var i = 0; i < todo.length; i += 60) {
+        (function (chunk) {
+          cloud.media.thumbs(chunk.map(function (item) { return item.id; })).then(function (map) {
+            chunk.forEach(function (item) { settle(item, (map && typeof map[item.id] === "string") ? map[item.id] : null); });
+          }, function () {
+            chunk.forEach(function (item) { settle(item, null); });
+          });
+        })(todo.slice(i, i + 60));
+      }
+      return;
+    }
+    todo.forEach(function (item) {
+      var photo = photoEntry(item);
+      blobStore.get(photo.thumbId || photo.id).then(function (blob) {
+        settle(item, blob ? URL.createObjectURL(blob) : demoPhotoUrl(item));
+      });
+    });
+  }
+
+  function paintThumbs(item) {
+    var nodes = document.querySelectorAll(".r-photo[data-thumb]");
+    for (var i = 0; i < nodes.length; i++) {
+      if (nodes[i].getAttribute("data-thumb") === item.id) fillPhoto(nodes[i], item, thumbCache[item.id], nodes[i].hasAttribute("data-big"));
+    }
+  }
+
+  function photoBox(item, big) {
+    var box = el("span", { class: "r-photo", "data-thumb": item.id, "data-big": big ? "" : null, "aria-hidden": "true" });
+    fillPhoto(box, item, thumbNow(item), big);
+    return box;
+  }
+
+  function fillPhoto(box, item, url, big) {
+    var keep = Array.prototype.slice.call(box.querySelectorAll(".r-badge, .r-qty"));
+    if (url) {
+      box.classList.add("has-img");
+      var img = el("img", { src: url, alt: "", decoding: "async", loading: "lazy" });
+      img.addEventListener("error", function () { fillPhoto(box, item, null, big); });
+      box.replaceChildren.apply(box, [img].concat(keep));
+      return;
+    }
+    box.classList.remove("has-img");
+    box.replaceChildren.apply(box, [sym(rootIconOf(item.locationId), big ? 44 : 34)]
+      .concat(url === null && isEditor() && !simpleMode ? [el("span", { class: "r-addphoto", text: "Ajouter une photo" })] : [])
+      .concat(keep));
+  }
+
+  /* Un seul badge, le plus urgent, toujours écrit en toutes lettres. */
+  function statusBadge(item) {
+    var expiry = daysUntil(item.expiresAt);
+    if (expiry !== null && expiry < 0) return { tone: "danger", text: "Périmé" };
+    if (expiry !== null && expiry <= 30) return { tone: "warn", text: expiry === 0 ? "Expire aujourd'hui" : "Expire dans " + expiry + " j" };
+    if (item.lentTo) return { tone: "arc", text: "Prêté à " + item.lentTo };
+    var warranty = daysUntil(item.warrantyUntil);
+    if (warranty !== null && warranty >= 0 && warranty <= 60) return { tone: "warn", text: "Garantie : " + warranty + " j" };
+    var loc = locById(item.locationId);
+    if (isCarton(loc)) return { tone: "plain", text: "Carton n°" + cartonNumber(loc) };
+    return null;
+  }
+
+  function seenLabel(at) {
+    if (!at) return null;
+    var days = Math.floor((Date.now() - at) / 86400000);
+    if (days <= 0) return "Vu aujourd'hui";
+    if (days === 1) return "Vu hier";
+    if (days < 30) return "Vu il y a " + days + " j";
+    var months = Math.round(days / 30);
+    return months < 12 ? "Vu il y a " + months + " mois" : "Vu il y a plus d'un an";
+  }
+
+  /* L'emplacement en une phrase, pour l'affichage simple. */
+  function placeSentence(item) {
+    var path = pathOf(item.locationId);
+    if (!path.length) return "Pas encore rangé.";
+    return path.join(", ") + (item.spot ? " (" + item.spot + ")" : "") + ".";
+  }
+
+  function confirmFound(item, li) {
+    item.lastSeenAt = Date.now(); save();
+    toast("Emplacement confirmé.");
+    if (!li) return;
+    // Le moment « trouvaille » : la carte pulse une fois en volt.
+    li.classList.remove("found");
+    void li.offsetWidth;
+    li.classList.add("found");
+    var seen = li.querySelector(".r-seen");
+    if (seen) seen.textContent = seenLabel(item.lastSeenAt);
+  }
+
+  function resultCard(row, index, opts) {
+    var item = row.item;
+    var path = pathOf(item.locationId);
+    var badge = statusBadge(item);
+    var photo = photoBox(item, simpleMode);
+    if (badge) photo.appendChild(el("span", { class: "r-badge is-" + badge.tone, text: badge.text }));
+    if (item.quantity > 1) photo.appendChild(el("span", { class: "r-qty", text: "×" + item.quantity }));
+
+    var where = path.length
+      ? (simpleMode
+          ? [el("span", { class: "r-sentence", text: placeSentence(item) })]
+          : [el("b", { text: path[0] }),
+             path.length > 1 || item.spot ? el("span", { class: "r-path" }, [
+               path.slice(1).slice(-2).join(" › "),
+               item.spot ? el("span", { class: "spot", text: (path.length > 1 ? " · " : "") + item.spot }) : null
+             ]) : null])
+      : [el("b", { text: "À ranger" })];
+
+    var li = el("li", {
+      class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (opts.found ? " found" : ""),
+      style: "--i:" + index
+    }, [
+      photo,
+      el("button", { class: "r-name", type: "button", onclick: function () { itemSheet(item); } }, [markMatch(item.name, opts.highlight)]),
+      el("button", {
+        class: "r-where" + (path.length ? "" : " is-unsorted"), type: "button",
+        "aria-label": "Où est " + item.name + " : " + placeName(item.locationId) + (item.spot ? ", " + item.spot : ""),
+        onclick: function () { locationSheet(item); }
+      }, [icon("pin", simpleMode ? 18 : 14), el("span", { class: "r-where-txt" }, where)]),
+      el("div", { class: "tags" }, (item.tags || []).slice(0, 2).map(function (tag) {
+        return el("span", { class: "tagpill", text: tag });
+      })),
+      el("div", { class: "r-foot" }, [
+        el("span", { class: "r-seen", text: seenLabel(item.lastSeenAt) || "" }),
+        el("button", {
+          class: "mini", type: "button", title: "Je l'ai trouvé", "aria-label": "Je l'ai trouvé : confirmer l'emplacement de " + item.name,
+          onclick: function () { confirmFound(item, li); }
+        }, [icon("check", 17)])
+      ])
+    ]);
+    return li;
+  }
+
+  /* La facette Pièce : les pièces où la recherche a trouvé quelque chose,
+     avec leur compte, comme les rayons d'un magasin. */
+  function roomFacet(counts) {
+    var rooms = Object.keys(counts).filter(function (k) { return k !== "__none"; });
+    var current = searchState.room ? locById(searchState.room) : null;
+    if (current) {
+      return el("span", { class: "chip-group on room-facet" }, [
+        el("button", { class: "chip chip-sm", type: "button", "aria-label": "Changer de pièce, actuellement " + current.name, onclick: function () { roomSheet(counts); } }, [
+          sym(current.icon || ICON_BY_KIND[current.kind], 15), current.name
+        ]),
+        el("button", { class: "chip-del", type: "button", "aria-label": "Retirer le filtre " + current.name,
+          onclick: function () { searchState.room = null; render(); } }, [icon("x", 13)])
+      ]);
+    }
+    if (rooms.length < 2) return null;
+    return el("button", { class: "chip chip-sm room-facet", type: "button", "aria-haspopup": "dialog", onclick: function () { roomSheet(counts); } }, [
+      "Pièce", icon("chev", 13)
+    ]);
+  }
+
+  function roomSheet(counts) {
+    var total = Object.keys(counts).reduce(function (sum, k) { return sum + counts[k]; }, 0);
+    var rooms = state.locations.filter(function (loc) { return !loc.parentId && counts[loc.id]; });
+    function pick(id) { searchState.room = id; closeSheet(); render(); }
+    sheet({
+      title: "Filtrer par pièce",
+      body: [
+        el("div", { class: "room-pick" }, [
+          el("button", { class: "room-opt" + (searchState.room ? "" : " on"), type: "button", "aria-pressed": searchState.room ? "false" : "true", onclick: function () { pick(null); } }, [
+            icon("grid", 18), el("span", { text: "Toutes les pièces" }), el("b", { text: String(total) })
+          ])
+        ].concat(rooms.map(function (room) {
+          var on = searchState.room === room.id;
+          return el("button", { class: "room-opt" + (on ? " on" : ""), type: "button", "aria-pressed": on ? "true" : "false", onclick: function () { pick(room.id); } }, [
+            sym(room.icon || ICON_BY_KIND[room.kind], 18), el("span", { text: room.name }), el("b", { text: String(counts[room.id]) })
+          ]);
+        })))
+      ]
+    });
+  }
+
+  /* La feuille Emplacement : le chemin du plus grand au plus précis, comme
+     « allée 23, case 04 » dans un magasin, puis ce qu'on en fait. */
+  var LEVEL_LABEL = { zone: "Espace", room: "Pièce", furniture: "Meuble", container: "Contenant" };
+
+  function locationSheet(item) {
+    var chain = [], node = locById(item.locationId), guard = 0;
+    while (node && guard < 12) { chain.unshift(node); node = node.parentId ? locById(node.parentId) : null; guard += 1; }
+    var house = state.household && state.household.type === "house";
+    var steps = chain.map(function (loc, index) {
+      var kind = LEVEL_LABEL[loc.kind] || "Rangement";
+      if (index === 0 && house && loc.floor != null) kind += " · " + obFloorName(loc.floor);
+      return { pic: sym(loc.icon || ICON_BY_KIND[loc.kind], 18), name: loc.name, kind: kind };
+    });
+    if (item.spot) steps.push({ pic: icon("pin", 16), name: item.spot, kind: "Précision" });
+    var badge = statusBadge(item);
+    var seen = seenLabel(item.lastSeenAt);
+    var rootId = chain.length ? chain[0].id : null;
+
+    sheet({
+      title: item.name,
+      body: [
+        el("div", { class: "where-top" }, [
+          photoBox(item, true),
+          el("div", { class: "where-meta" }, [
+            badge ? el("span", { class: "r-badge is-" + badge.tone, text: badge.text }) : null,
+            item.quantity > 1 ? el("span", { class: "muted", text: "Quantité : " + item.quantity }) : null,
+            seen ? el("span", { class: "muted", text: seen }) : null
+          ])
+        ]),
+        steps.length
+          ? el("ol", { class: "where-path", "aria-label": "Chemin jusqu'à l'objet" }, steps.map(function (step, index) {
+              return el("li", { class: index === steps.length - 1 ? "is-leaf" : null }, [
+                el("span", { class: "dot", "aria-hidden": "true" }, [step.pic]),
+                el("span", { class: "txt" }, [el("b", { text: step.name }), el("small", { text: step.kind })])
+              ]);
+            }))
+          : el("p", { class: "muted", text: "Cet objet n'a pas encore d'emplacement." })
+      ],
+      foot: [
+        el("button", { class: "btn btn-volt", type: "button", onclick: function () {
+          closeSheet();
+          foundFlash = item.id;
+          setTimeout(function () { if (foundFlash === item.id) foundFlash = null; }, 2400);
+          confirmFound(item, null);
+          render();
+        } }, [icon("check", 16), "Je l'ai trouvé"]),
+        !simpleMode && rootId && isPremium() ? el("button", { class: "btn btn-line", type: "button", onclick: function () {
+          closeSheet(); mapFocus = rootId; goTab("map");
+        } }, [icon("map", 16), "Voir sur le plan"]) : null,
+        !simpleMode && chain.length ? el("button", { class: "btn btn-line", type: "button", onclick: function () {
+          chain.forEach(function (loc) { expanded[loc.id] = true; });
+          closeSheet(); goTab("places");
+        } }, [icon("grid", 16), "Voir dans Mes lieux"]) : null,
+        !simpleMode ? el("button", { class: "btn btn-line", type: "button", onclick: function () { itemSheet(item); } }, [icon("eye", 16), "Ouvrir la fiche"]) : null
+      ]
+    });
+  }
+
   function viewSearch() {
     var query = searchState.query.trim();
     var hasQuery = query.length > 0;
@@ -4546,13 +4876,27 @@
       ? state.items.filter(function (item) { return !item.locationId; })
           .map(function (item) { return { item: item, score: 0, reason: "recent" }; })
       : aiActive ? aiResults : search(searchState.query);
-    var shown = results;
+    // La pièce se combine avec la phrase tapée : « chargeur » dans le bureau.
+    var roomCounts = Object.create(null);
+    results.forEach(function (row) {
+      var rid = rootIdOf(row.item.locationId) || "__none";
+      roomCounts[rid] = (roomCounts[rid] || 0) + 1;
+    });
+    if (searchState.room && !roomCounts[searchState.room]) searchState.room = null;
+    var shown = searchState.room
+      ? results.filter(function (row) { return rootIdOf(row.item.locationId) === searchState.room; })
+      : results;
+    var roomsShown = searchState.room ? 1 : Object.keys(roomCounts).filter(function (k) { return k !== "__none"; }).length;
 
-    var resultsKey = (searchState.filter || "") + "|" + (aiActive ? "ai|" : "") + norm(query) + "|" + results.length;
+    var resultsKey = (searchState.filter || "") + "|" + (searchState.room || "") + "|" + (aiActive ? "ai|" : "") + norm(query) + "|" + shown.length;
     var stagger = resultsKey !== lastResultsKey;
     lastResultsKey = resultsKey;
+    if (stagger) searchState.more = 0;
+    var limit = RESULTS_PAGE * (1 + (searchState.more || 0));
+    var visible = shown.slice(0, limit);
     // La trouvaille : un seul résultat pour une vraie requête, il pulse une fois.
-    var singleFound = hasQuery && stagger && results.length === 1 ? results[0].item.id : null;
+    var singleFound = hasQuery && stagger && shown.length === 1 ? shown[0].item.id : null;
+    loadThumbs(visible.map(function (row) { return row.item; }));
     var highlight = aiActive || searchState.filter === "__unsorted" ? "" : query;
 
     var input = el("input", {
@@ -4624,10 +4968,25 @@
         ]) : null,
 
         el("div", { class: "results-head" }, [
-          el("h2", { class: "label", text: aiActive ? "Trouvé en interprétant votre phrase"
-            : searchState.filter === "__unsorted" ? "À ranger"
-            : hasQuery || searchState.filter ? "Résultats" : "Tout votre logement, du plus récent" }),
-          el("span", { class: "count", "aria-live": "polite", text: plural(shown.length, "objet", "objets") })
+          el("div", { class: "rh-title" }, [
+            el("h2", { class: "label", text: aiActive ? "Trouvé en interprétant votre phrase"
+              : searchState.filter === "__unsorted" ? "À ranger"
+              : hasQuery || searchState.filter || searchState.room ? "Résultats" : "Tout votre logement, du plus récent" }),
+            el("span", { class: "count", "aria-live": "polite", text: plural(shown.length, "objet", "objets") + (roomsShown > 1 ? " · " + roomsShown + " pièces" : "") })
+          ]),
+          simpleMode ? null : el("div", { class: "rh-tools" }, [
+            roomFacet(roomCounts),
+            el("div", { class: "view-seg", role: "group", "aria-label": "Affichage des résultats" }, [
+              el("button", {
+                type: "button", "aria-pressed": resultsView === "grid" ? "true" : "false", "aria-label": "Afficher en grille", title: "Grille",
+                onclick: function () { setResultsView("grid"); }
+              }, [icon("grid", 16)]),
+              el("button", {
+                type: "button", "aria-pressed": resultsView === "list" ? "true" : "false", "aria-label": "Afficher en liste", title: "Liste",
+                onclick: function () { setResultsView("list"); }
+              }, [icon("list", 16)])
+            ])
+          ])
         ]),
 
         // « lampe torche cabanon servante » : on propose de la ranger là, d'un geste.
@@ -4640,37 +4999,17 @@
           }, [icon("plus", 15), el("span", {}, ["Ranger « ", el("b", { text: quick.name }), " » dans " + placeName(quick.locationId)])]);
         })(),
 
-        el("ul", { class: "results" + (stagger ? " stagger" : "") }, results.slice(0, 60).map(function (row, index) {
-          var item = row.item;
-          var li = el("li", {
-            class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (item.id === singleFound || item.id === tourFoundId ? " found" : ""),
-            style: "--i:" + index
-          }, [
-            el("span", { class: "thumb" }, [sym(rootIconOf(item.locationId), 20)]),
-            el("button", { class: "body", type: "button", onclick: function () { itemSheet(item); } }, [
-              el("span", { class: "name" }, [
-                markMatch(item.name, highlight),
-                item.quantity > 1 ? el("span", { class: "qty", text: "×" + item.quantity }) : null
-              ]),
-              crumbs(item.locationId, item.spot)
-            ]),
-            el("div", { class: "tags" }, (item.tags || []).slice(0, 2).map(function (tag) {
-              return el("span", { class: "tagpill", text: tag });
-            })),
-            el("button", {
-              class: "mini", type: "button", title: "Je l'ai trouvé", "aria-label": "Je l'ai trouvé : confirmer l'emplacement de " + item.name,
-              onclick: function () {
-                item.lastSeenAt = Date.now(); save();
-                // Le moment « trouvaille » : la ligne pulse une fois en volt.
-                li.classList.remove("found");
-                void li.offsetWidth;
-                li.classList.add("found");
-                toast("Emplacement confirmé.");
-              }
-            }, [icon("check", 17)])
-          ]);
-          return li;
-        }))
+        el("div", { class: "r-wrap" }, [
+          el("ul", { class: "results r-cards " + (simpleMode || resultsView === "grid" ? "is-grid" : "is-list") + (stagger ? " stagger" : "") },
+            visible.map(function (row, index) {
+              return resultCard(row, index, { highlight: highlight, found: row.item.id === singleFound || row.item.id === tourFoundId || row.item.id === foundFlash });
+            }))
+        ]),
+
+        shown.length > limit ? el("button", {
+          class: "btn btn-line results-more", type: "button",
+          onclick: function () { searchState.more = (searchState.more || 0) + 1; render(); }
+        }, ["Afficher " + plural(Math.min(RESULTS_PAGE, shown.length - limit), "objet", "objets") + " de plus"]) : null
       ]);
     }
 
@@ -9388,6 +9727,7 @@
     list: function (item) {
       if (cloud) return cloud.media.list(item.id);
       forgetMediaUrls();   // celles de la fiche précédente
+      var demo = !photoEntry(item) ? demoPhotoUrl(item) : null;
       return Promise.all((item.media || []).map(function (m) {
         return blobStore.get(m.id).then(function (blob) {
           if (!blob) return null;
@@ -9395,32 +9735,57 @@
           mediaUrls.push(url);
           return { id: m.id, kind: m.kind, label: m.label, mime: m.mime, size: m.size, url: url, createdAt: m.createdAt };
         });
-      })).then(function (rows) { return rows.filter(Boolean); });
+      })).then(function (rows) {
+        rows = rows.filter(Boolean);
+        // La photo d'exemple de la démonstration se change ou se retire comme une vraie.
+        return demo ? [{ id: DEMO_PHOTO_ID, kind: "photo", label: null, mime: "image/webp", size: 0, url: demo, createdAt: Date.now() }].concat(rows) : rows;
+      });
     },
+    /* Une photo arrive avec sa miniature (environ 480 px) : c'est elle que
+       les résultats affichent, jamais l'original. */
     add: function (item, kind, blob, label) {
       if (blob.size > MEDIA_MAX) return Promise.resolve({ ok: false, error: "too_large" });
-      if (cloud) return cloud.media.add(item.id, kind, blob, label);
+      var thumbing = kind === "photo" ? shrinkImage(blob, 480, 0.8) : Promise.resolve(null);
+      if (cloud) {
+        return thumbing.then(function (thumb) {
+          return cloud.media.add(item.id, kind, blob, label, thumb && thumb !== blob ? thumb : null);
+        }).then(function (res) { if (kind === "photo") forgetThumb(item.id); return res; });
+      }
       var list = item.media || [];
       var docs = list.filter(function (m) { return m.kind === "document"; }).length;
       if (kind === "document" && docs >= (isPremium() ? 20 : 1)) return Promise.resolve({ ok: false, error: "limit" });
       var id = uid("media");
-      return blobStore.put(id, blob).then(function () {
+      var thumbId = null;
+      return thumbing.then(function (thumb) {
+        if (!thumb || thumb === blob) return null;
+        thumbId = uid("thumb");
+        return blobStore.put(thumbId, thumb).catch(function () { thumbId = null; });
+      }).then(function () { return blobStore.put(id, blob); }).then(function () {
         if (kind === "photo") {
-          list.filter(function (m) { return m.kind === "photo"; }).forEach(function (m) { blobStore.del(m.id); });
+          list.filter(function (m) { return m.kind === "photo"; }).forEach(function (m) {
+            blobStore.del(m.id);
+            if (m.thumbId) blobStore.del(m.thumbId);
+          });
           list = list.filter(function (m) { return m.kind !== "photo"; });
+          forgetThumb(item.id);
         }
-        item.media = list.concat([{ id: id, kind: kind, label: label || null, mime: blob.type, size: blob.size, createdAt: Date.now() }]);
+        item.media = list.concat([{ id: id, kind: kind, label: label || null, mime: blob.type, size: blob.size, thumbId: thumbId, createdAt: Date.now() }]);
         save();
         return { ok: true, id: id };
       }).catch(function () { return { ok: false, error: "stockage" }; });
     },
     remove: function (item, id) {
-      if (cloud) return cloud.media.remove(id);
+      if (cloud) return cloud.media.remove(id).then(function (res) { forgetThumb(item.id); return res; });
+      forgetThumb(item.id);
+      if (id === DEMO_PHOTO_ID) { item.noDemoPhoto = true; save(); return Promise.resolve({ ok: true }); }
+      var gone = (item.media || []).filter(function (m) { return m.id === id; })[0];
       item.media = (item.media || []).filter(function (m) { return m.id !== id; });
       save();
+      if (gone && gone.thumbId) blobStore.del(gone.thumbId);
       return blobStore.del(id).then(function () { return { ok: true }; });
     }
   };
+  var DEMO_PHOTO_ID = "demo-photo";
 
   var MEDIA_ERRORS = {
     too_large: "Fichier trop lourd : 10 Mo au maximum.",
@@ -9432,7 +9797,7 @@
 
   /* Une photo de téléphone pèse 3 à 8 Mo : réduite à 1600 px, elle reste
      nette et tient en quelques centaines de kilooctets. */
-  function shrinkImage(file, max) {
+  function shrinkImage(file, max, quality) {
     if (!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type) || typeof createImageBitmap !== "function") return Promise.resolve(file);
     return createImageBitmap(file).then(function (bitmap) {
       var scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
@@ -9441,7 +9806,7 @@
       canvas.height = Math.round(bitmap.height * scale);
       canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
       return new Promise(function (resolve) {
-        canvas.toBlob(function (blob) { resolve(blob || file); }, "image/jpeg", 0.85);
+        canvas.toBlob(function (blob) { resolve(blob || file); }, "image/jpeg", quality || 0.85);
       });
     }).catch(function () { return file; });
   }
@@ -10903,6 +11268,38 @@
 
   var NEWS_KEY = "fulmo.news";
   var RELEASES = [
+    {
+      id: "2026-10-vitrine",
+      title: "Nouveau dans Fulmo",
+      lede: "Les résultats de recherche se regardent comme une vitrine : la photo de l'objet en grand, et son emplacement juste dessous.",
+      highlights: [
+        { ic: "grid", title: "Vos photos en grand", text: "On reconnaît son objet d'un coup d'œil, avant même d'avoir lu son nom." },
+        { ic: "pin", title: "Où il est, d'un geste", text: "Touchez l'emplacement d'une carte : pièce, meuble, tiroir, et le plan si besoin." },
+        { ic: "search", title: "Filtrer par pièce", text: "« chargeur » dans le bureau seulement : la pièce se combine avec ce que vous tapez." },
+        { ic: "bell", title: "L'essentiel sur la carte", text: "Périmé, prêté, garantie bientôt finie : un badge le dit sans ouvrir la fiche." }
+      ],
+      steps: function () {
+        var steps = [
+          { id: "news", tab: "search", hero: true,
+            title: "Une minute pour les nouveautés",
+            text: "Les résultats de recherche changent de visage. Suivez le projecteur.",
+            next: "C'est parti", prevLabel: "Plus tard" },
+          state.items.length ? { id: "card", tab: "search", target: ".r-cards .result",
+            title: "La photo, le nom, l'emplacement",
+            text: "Chaque objet a sa carte. Touchez la photo ou le nom pour ouvrir sa fiche ; ajoutez-y une photo pour le reconnaître de loin." } : null,
+          state.items.length ? { id: "where", tab: "search", target: ".r-cards .result .r-where",
+            title: "Où il est, d'un geste",
+            text: "Touchez l'emplacement : le chemin s'affiche du plus grand au plus précis, avec « Je l'ai trouvé » et le plan." } : null,
+          state.items.length ? { id: "view", tab: "search", target: ".rh-tools",
+            title: "Pièce, grille ou liste",
+            text: "Filtrez par pièce, ou passez en liste pour voir plus d'objets à la fois. Votre choix est retenu sur cet appareil." } : null
+        ].filter(Boolean);
+        var last = steps[steps.length - 1];
+        last.ending = true;
+        last.next = "Terminer";
+        return steps;
+      }
+    },
     {
       id: "2026-10-outils",
       title: "Nouveau dans Fulmo",
