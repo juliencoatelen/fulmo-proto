@@ -1625,3 +1625,60 @@ p.label[style*="text-transform:none"] { font-weight: 400; line-height: 1.6 !impo
 .news-txt { display: grid; gap: 2px; min-width: 0; }
 .news-txt b { font-size: .9375rem; }
 .news-txt span { font-size: .875rem; line-height: 1.5; color: var(--fg-muted); }
+
+/* ─── Groupes d'objets ─────────────────────────────────────────────────
+   Une trousse et son contenu : l'icône « couches » marque le groupe partout
+   où il apparaît (carte, fiche, lieux, scan). */
+.r-group {
+  position: absolute; left: 8px; bottom: 8px; z-index: 1; display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: var(--r-pill); background: var(--fg); color: var(--bg);
+  font-size: .6875rem; font-weight: 650; line-height: 1.35; white-space: nowrap;
+}
+.r-photo .r-group .icon { font-size: 12px !important; width: 12px !important; height: 12px !important; }
+.r-cards.is-list .r-group { display: none; }
+.r-gic { display: inline-grid; place-items: center; vertical-align: -2px; margin-right: 5px; color: var(--accent); }
+.r-ingroup { display: inline-flex; align-items: center; gap: 4px; font-size: .6875rem; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r-ingroup .icon { flex-shrink: 0; color: var(--accent); }
+
+.grp-card {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-md); background: var(--sunken);
+}
+.grp-ic { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--surface); color: var(--accent); }
+.grp-txt { flex: 1; min-width: 8em; display: flex; flex-direction: column; gap: 1px; }
+.grp-k { font-size: .6875rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fg-faint); }
+.grp-txt b { font-weight: 600; overflow-wrap: anywhere; }
+
+.grp-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.grp-list li { display: flex; align-items: center; gap: 6px; }
+.grp-member {
+  flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; text-align: left; padding: 9px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--fg); font: inherit; cursor: pointer;
+}
+.grp-member:hover { border-color: var(--line-strong); }
+.grp-member .nm { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp-member .qty, .place-items .place-item > .icon { font-family: var(--font-mono); font-size: .75rem; color: var(--fg-faint); }
+.place-items .place-item > .icon { color: var(--accent); align-self: center; }
+
+.grp-pick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 52vh; overflow-y: auto; }
+.grp-opt {
+  width: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; text-align: left; min-height: 48px; padding: 8px 6px;
+  border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--fg); font: inherit; cursor: pointer;
+}
+.grp-opt:hover { background: var(--hover); }
+.grp-opt > .icon { color: var(--accent); }
+.grp-opt .nm { font-weight: 550; flex: 1; min-width: 0; }
+.grp-opt .up { flex-basis: 100%; padding-left: 34px; font-size: .75rem; color: var(--fg-muted); }
+.grp-opt .box {
+  width: 22px; height: 22px; flex: none; border-radius: 6px; display: grid; place-items: center;
+  border: 2px solid var(--line-strong); background: var(--surface); color: var(--on-accent);
+}
+.grp-opt.on .box { background: var(--accent-fill); border-color: var(--volt-mid); }
+
+.scan-group { margin-top: 16px; padding: 12px 14px; border: 1px dashed var(--line-strong); border-radius: var(--r-md); }
+.scan-group.on { border-style: solid; border-color: var(--accent); background: var(--accent-soft); }
+.scan-group > .check { width: 100%; height: auto; margin: 0; display: flex; align-items: flex-start; gap: 12px; text-align: left; font: inherit; }
+.scan-group > .check .box { flex: none; margin-top: 1px; }
+.scan-group-txt { display: flex; flex-direction: column; gap: 3px; color: var(--fg); }
+.scan-group-txt .muted { font-size: .8125rem; }
+.scan-group-txt .icon { color: var(--accent); }
