@@ -128,6 +128,8 @@
     "  <symbol id=\"i-add-box\" viewBox=\"0 0 24 24\"><rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"3.5\"/><path d=\"M12 8.5v7M8.5 12h7\"/></symbol>",
     "  <symbol id=\"i-phone\" viewBox=\"0 0 24 24\"><rect x=\"6\" y=\"2.5\" width=\"12\" height=\"19\" rx=\"2.5\"/><path d=\"M11 18.5h2\"/></symbol>",
     "  <symbol id=\"i-dots-v\" viewBox=\"0 0 24 24\"><path d=\"M12 5h.01M12 12h.01M12 19h.01\" stroke-width=\"3\"/></symbol>",
+    "  <symbol id=\"i-lock\" viewBox=\"0 0 24 24\"><rect x=\"4.5\" y=\"10.5\" width=\"15\" height=\"10.5\" rx=\"2.5\"/><path d=\"M8 10.5V7.5a4 4 0 0 1 8 0v3\"/><path d=\"M12 14.5v2.5\"/></symbol>",
+    "  <symbol id=\"i-gem\" viewBox=\"0 0 24 24\"><path d=\"M6.5 3.5h11L22 9l-10 11.5L2 9z\"/><path d=\"M2 9h20\"/><path d=\"m9.5 3.5-2 5.5L12 20.5 16.5 9l-2-5.5\"/></symbol>",
     "  <symbol id=\"i-eye-off\" viewBox=\"0 0 24 24\"><path d=\"M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-2.6 3.5M6.6 6.6C3.7 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6\"/><path d=\"M9.9 9.9a3 3 0 0 0 4.2 4.2\"/><path d=\"m3 3 18 18\"/></symbol>",
     "  <symbol id=\"i-logout\" viewBox=\"0 0 24 24\"><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"/><path d=\"m16 17 5-5-5-5M21 12H9\"/></symbol></svg>"
   ].join("\n");

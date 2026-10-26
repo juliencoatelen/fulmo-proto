@@ -869,6 +869,19 @@ mark, .mark {
 .r-path { font-family: var(--font-mono); font-size: .6875rem; color: var(--fg-muted); }
 .r-path .spot { color: var(--accent); }
 .r-where.is-unsorted b { color: var(--warn-fg); }
+.r-where.is-locked > .icon { color: var(--fg-muted); }
+.r-where.is-locked .r-path { font-family: inherit; }
+
+/* Objets précieux : l'interrupteur de la fiche et ses mises en garde. */
+.precious-block { display: flex; flex-direction: column; gap: 10px; }
+.precious-block .set-row { min-height: 56px; }
+.precious-note { display: flex; gap: 10px; margin: 0; padding: 12px 14px; border-radius: var(--r-sm); background: var(--sunken); font-size: .8125rem; line-height: 1.5; color: var(--fg-muted); }
+.precious-note > .icon { flex-shrink: 0; margin-top: 2px; color: var(--fg); }
+.precious-note b { display: block; color: var(--fg); font-weight: 600; }
+.precious-note p { margin: 2px 0 0; }
+.precious-note .btn { margin-top: 8px; }
+.precious-note.is-warn { background: var(--warn-soft); color: var(--warn-fg); }
+.precious-note.is-warn > .icon, .precious-note.is-warn b { color: var(--warn-fg); }
 
 .r-foot { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: auto; padding: 2px 2px 2px 11px; pointer-events: none; }
 .r-foot .mini { pointer-events: auto; }
