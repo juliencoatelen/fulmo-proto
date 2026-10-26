@@ -881,7 +881,7 @@
      par l'article 7.1 du RGPD) et se retire dans les Réglages. Changer
      LEGAL_VERSION réinterroge tout le monde. */
 
-  var LEGAL_VERSION = 3;  // 3 : CGU v3 du 9 octobre 2026 (boîte à idées publique, photos et justificatifs)
+  var LEGAL_VERSION = 4;  // 4 : CGU v4 du 25 octobre 2026 (propriété intellectuelle, copie et robots)
 
   function aiConsented() {
     var c = state.consents && state.consents.ai;
