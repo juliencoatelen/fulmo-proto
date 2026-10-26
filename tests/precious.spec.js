@@ -129,4 +129,21 @@ test.describe("Objets précieux", () => {
     expect(item.tags).toContain("papiers");
     await expect(page.locator(".result", { hasText: "Passeport" }).first().locator(".r-where")).toContainText("Bureau");
   });
+
+  test("un objet précieux n'est ni groupe ni membre : le protéger le sort de son groupe", async ({ page }) => {
+    await page.getByLabel("Chercher un objet").fill("pansements");
+    await page.locator(".result", { hasText: "Pansements assortis" }).first().locator(".r-name").click();
+    const dialog = page.getByRole("dialog", { name: "Modifier l'objet" });
+    await dialog.getByRole("switch", { name: /Objet précieux/ }).click();
+    await dialog.getByLabel("Créer le mot de passe des objets précieux").fill("coffre-2026");
+    await dialog.getByLabel("Confirmer ce mot de passe").fill("coffre-2026");
+    await dialog.getByRole("button", { name: "Enregistrer" }).click();
+    await expect(dialog).toBeHidden();
+
+    const item = await page.evaluate(() => JSON.parse(localStorage.getItem("fulmo.demo.v2")).items.find((i) => i.name === "Pansements assortis"));
+    expect(item.groupId).toBeUndefined();
+    const card = page.locator(".result", { hasText: "Pansements assortis" }).first();
+    await expect(card.locator(".r-where")).toContainText("Lieu protégé");
+    await expect(card).not.toContainText("Trousse de secours");
+  });
 });

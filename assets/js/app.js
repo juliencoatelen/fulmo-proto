@@ -674,6 +674,9 @@
       ["Thermomètre", pharma, null, ["santé"], null, 1],
       ["Crème solaire indice 50", pharma, null, ["plage", "été", "santé"], null, 1],
       ["Trousse de secours", pharma, null, ["santé", "urgent"], null, 1],
+      ["Pansements assortis", pharma, null, ["santé"], null, 1],
+      ["Compresses stériles", pharma, null, ["santé"], null, 10],
+      ["Couverture de survie", pharma, null, ["santé", "urgent"], null, 1],
       ["Chaussures de ski", sousLit, null, ["ski", "hiver", "sport"], "Pointure 38", 2],
       ["Combinaison de ski", sousLit, null, ["ski", "hiver"], null, 1],
       ["Masque et tuba", coffre, null, ["plage", "été"], null, 2],
@@ -723,6 +726,12 @@
     setItemField("Taille-haie", { value: 89, purchasedAt: iso(-400), careLabel: "Affûter et graisser la lame", careEvery: 12, careLast: iso(-358) });
     setItemField("Tente 4 places", { value: 159, purchasedAt: iso(-900) });
     setItemField("Trousse de secours", { careLabel: "Vérifier le contenu", careEvery: 6, careLast: iso(-170) });
+
+    // Un groupe : la trousse et ce qu'elle contient.
+    var trousse = state.items.filter(function (item) { return item.name === "Trousse de secours"; })[0];
+    ["Pansements assortis", "Compresses stériles", "Couverture de survie"].forEach(function (name) {
+      setItemField(name, { groupId: trousse.id });
+    });
   }
 
   function setItemField(name, patch) {
@@ -4855,6 +4864,9 @@
     var photo = photoBox(item, simpleMode);
     if (badge) photo.appendChild(el("span", { class: "r-badge is-" + badge.tone, text: badge.text }));
     if (item.quantity > 1) photo.appendChild(el("span", { class: "r-qty", text: "×" + item.quantity }));
+    var members = membersOf(item);
+    var group = groupOf(item);
+    if (members.length) photo.appendChild(el("span", { class: "r-group" }, [icon("group", 12), plural(members.length, "objet", "objets")]));
 
     var sealed = isSealed(item);
     var where = sealed
@@ -4868,18 +4880,22 @@
                item.spot ? el("span", { class: "spot", text: (path.length > 1 ? " · " : "") + item.spot }) : null
              ]) : null])
       : [el("b", { text: "À ranger" })];
+    if (group) where.push(el("span", { class: "r-ingroup" }, [icon("group", 11), "Dans « " + group.name + " »"]));
 
     var li = el("li", {
-      class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (opts.found ? " found" : ""),
+      class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (opts.found ? " found" : "") + (members.length ? " is-group" : ""),
       style: "--i:" + index
     }, [
       photo,
-      el("button", { class: "r-name", type: "button", onclick: function () { itemSheet(item); } }, [markMatch(item.name, opts.highlight)]),
+      el("button", {
+        class: "r-name", type: "button", onclick: function () { itemSheet(item); },
+        "aria-label": members.length ? item.name + ", groupe de " + plural(members.length, "objet", "objets") : null
+      }, [members.length ? el("span", { class: "r-gic", title: "Groupe d'objets" }, [icon("group", 14)]) : null, markMatch(item.name, opts.highlight)]),
       el("button", {
         class: "r-where" + (sealed ? " is-locked" : path.length ? "" : " is-unsorted"), type: "button",
         "aria-label": sealed
           ? "Où est " + item.name + " : lieu protégé, ouvrir avec le mot de passe des objets précieux"
-          : "Où est " + item.name + " : " + placeName(item.locationId) + (item.spot ? ", " + item.spot : ""),
+          : "Où est " + item.name + " : " + placeName(item.locationId) + (item.spot ? ", " + item.spot : "") + (group ? ", dans « " + group.name + " »" : ""),
         onclick: function () { if (sealed) itemSheet(item); else locationSheet(item); }
       }, [icon(sealed ? "lock" : "pin", simpleMode ? 18 : 14), el("span", { class: "r-where-txt" }, where)]),
       el("div", { class: "tags" }, (item.tags || []).slice(0, 2).map(function (tag) {
@@ -4951,6 +4967,8 @@
       return { pic: sym(loc.icon || ICON_BY_KIND[loc.kind], 18), name: loc.name, kind: kind };
     });
     if (item.spot) steps.push({ pic: icon("pin", 16), name: item.spot, kind: "Précision" });
+    var group = groupOf(item);
+    if (group) steps.push({ pic: icon("group", 16), name: group.name, kind: "Groupe" });
     var badge = statusBadge(item);
     var seen = seenLabel(item.lastSeenAt);
     var rootId = chain.length ? chain[0].id : null;
@@ -5646,6 +5664,7 @@
     // passe du bouton au résultat sans comprendre ce qui s'est passé.
     setTimeout(function () {
       scanState.busy = false;
+      scanState.group = null;
       scanState.detected = SCAN_DEMO.map(function (item) {
         return {
           name: item.name, quantity: item.quantity, tags: item.tags.slice(),
@@ -5749,6 +5768,7 @@
                 if (items.length === 0) {
                   scanState.error = (result && result.note) || "Rien d'identifiable sur cette image. Rapprochez-vous et réessayez.";
                 } else {
+                  scanState.group = null;
                   scanState.detected = items;
                   scanState.note = (result && result.note) || "";
                 }
@@ -5785,16 +5805,27 @@
       var keepers = scanState.detected.filter(function (item) { return item.keep; });
       var now = Date.now();
       var photo = scanState.photo;   // promesse de la photo allégée, ou null
+      // Regroupés : une entrée de plus, le groupe, enregistrée en premier.
+      var name = scanState.group && groupsOn() && keepers.length >= 2 ? scanState.group.name.trim().slice(0, 120) : "";
+      var parent = name ? {
+        id: uid("it"), name: name, locationId: scanState.target || null, spot: null,
+        tags: [], description: null, quantity: 1,
+        expiresAt: null, warrantyUntil: null, lentTo: null, lentAt: null,
+        lastSeenAt: now, createdAt: now
+      } : null;
+      if (parent) state.items.push(parent);
       var saved = keepers.map(function (item, index) {
         var created = {
           id: uid("it"), name: item.name, locationId: scanState.target || null, spot: null,
           tags: item.tags, description: null, quantity: item.quantity,
           expiresAt: null, warrantyUntil: null, lentTo: null, lentAt: null,
-          lastSeenAt: now - index, createdAt: now - index
+          lastSeenAt: now - index - 1, createdAt: now - index - 1
         };
+        if (parent) created.groupId = parent.id;
         state.items.push(created);
         return created;
       });
+      if (parent) saved.unshift(parent);
       save();
       if (photo && media.available()) saved.forEach(function (created) {
         // La photo de l'étagère montre aussi l'endroit : la fiche s'en souvient,
@@ -5805,11 +5836,18 @@
       });
       scanState = { image: null, photo: null, busy: false, detected: null, note: "", target: scanState.target, error: null, saved: saved.map(function (i) { return i.id; }) };
       render();
-      toast(plural(saved.length, "objet enregistré", "objets enregistrés") + ".");
+      toast(parent
+        ? "Groupe « " + parent.name + " » enregistré, avec " + plural(saved.length - 1, "objet", "objets") + "."
+        : plural(saved.length, "objet enregistré", "objets enregistrés") + ".");
       completeScanned(scanState.saved, 0);
     }
 
     var kept = scanState.detected ? scanState.detected.filter(function (i) { return i.keep; }).length : 0;
+    /* Plusieurs objets qui n'en font qu'un pour le rangement (une trousse
+       et son contenu, un kit) : on peut les réunir sous une même entrée. */
+    var canGroup = groupsOn() && kept >= 2;
+    var grouping = canGroup && !!scanState.group;
+    var groupName = grouping ? scanState.group.name.trim().slice(0, 120) : "";
     var lastSaved = (scanState.saved || []).map(function (id) {
       return state.items.filter(function (i) { return i.id === id; })[0];
     }).filter(Boolean);
@@ -5905,10 +5943,40 @@
           ]);
         })),
 
+        canGroup ? el("div", { class: "scan-group" + (grouping ? " on" : "") }, [
+          el("button", {
+            class: "check", type: "button", role: "checkbox", "aria-checked": grouping ? "true" : "false",
+            onclick: function () {
+              scanState.group = grouping ? null : { name: "" };
+              render();
+              var input = document.querySelector(".scan-group input");
+              if (input) input.focus();
+            }
+          }, [
+            el("span", { class: "box" }, [grouping ? icon("check", 14) : null]),
+            el("span", { class: "scan-group-txt" }, [
+              el("b", { class: "inline", style: "gap:6px" }, [icon("group", 15), "Regrouper sous une même entrée"]),
+              el("span", { class: "muted", text: "Une trousse et son contenu, un kit, une boîte de jeu : les objets cochés deviennent le contenu d'un groupe." })
+            ])
+          ]),
+          grouping ? el("label", { class: "field", style: "margin-top:12px" }, [
+            el("span", { text: "Nom du groupe" }),
+            el("input", {
+              class: "input", value: scanState.group.name, maxlength: 120, "aria-label": "Nom du groupe",
+              placeholder: "Trousse de secours, kit de couture…",
+              oninput: function (event) {
+                scanState.group.name = event.target.value;
+                var go = document.querySelector(".scan-save");
+                if (go) go.disabled = !event.target.value.trim();
+              }
+            })
+          ]) : null
+        ]) : null,
+
         el("button", {
-          class: "btn btn-lg btn-volt", type: "button", style: "margin-top:20px;width:100%",
-          disabled: kept === 0, onclick: saveAll,
-          text: "Tout enregistrer (" + kept + ")"
+          class: "btn btn-lg btn-volt scan-save", type: "button", style: "margin-top:20px;width:100%",
+          disabled: kept === 0 || (grouping && !groupName), onclick: saveAll,
+          text: grouping ? "Enregistrer le groupe (" + kept + ")" : "Tout enregistrer (" + kept + ")"
         })
       ]) : null,
 
@@ -5921,8 +5989,9 @@
               "aria-label": "Compléter la fiche de « " + item.name + " »",
               onclick: function () { completeScanned([item.id], 0); }
             }, [
+              isGroup(item) ? icon("group", 15) : null,
               el("span", { style: "flex:1;min-width:0;font-weight:600", text: item.name }),
-              el("span", { class: "muted", style: "font-size:.75rem", text: item.locationId ? placeName(item.locationId) : "À ranger" }),
+              el("span", { class: "muted", style: "font-size:.75rem", text: groupOf(item) ? "Dans « " + groupOf(item).name + " »" : item.locationId ? placeName(item.locationId) : "À ranger" }),
               icon("arrow-right", 15)
             ])
           ]);
@@ -9379,11 +9448,16 @@
 
       if (item) {
         moveItem(item, payload.locationId);
+        // Le contenu d'un groupe le suit : la trousse change d'étagère, ses
+        // pansements aussi.
+        membersOf(item).forEach(function (member) { moveItem(member, payload.locationId); });
         Object.keys(payload).forEach(function (key) { item[key] = payload[key]; });
       } else {
         payload.id = uid("it");
         payload.createdAt = Date.now();
         if (payload.lentAt === undefined) payload.lentAt = null;
+        var into = hooks.groupId ? itemById(hooks.groupId) : null;
+        if (into && !into.groupId && groupsOn()) payload.groupId = into.id;
         state.items.push(payload);
       }
       finish(item || payload, guessed);
@@ -9440,6 +9514,9 @@
       preciousKeyFor().then(function (key) {
         if (!key) { release(); return; }
         var target = item || { id: uid("it"), createdAt: Date.now() };
+        // Devenu précieux, il quitte son groupe et libère son contenu.
+        delete target.groupId;
+        state.items.forEach(function (other) { if (other.groupId === target.id) other.groupId = null; });
         target.name = payload.name;
         target.lastSeenAt = payload.lastSeenAt;
         return sealItem(target, key, secret).then(function () {
@@ -9580,6 +9657,12 @@
           }, [icon("cube", 15), "Voir « " + host.name + " » dans la pièce"]);
         })(),
 
+        item ? groupBlock(item, function (moved) {
+          // Entré dans un groupe, l'objet est désormais rangé avec lui.
+          if (moved) draft.locationId = item.locationId;
+          itemSheet(item, null, Object.assign({}, hooks, { draft: draft }));
+        }) : null,
+
         textField("Endroit précis", "spot", "Tiroir du haut, bac 3, étagère B…"),
         textField("Mots-clés", "tags", "noël, déco, fragile", "Séparez par des virgules. Sert à retrouver plusieurs objets d'un coup."),
         textField("Notes", "description", "Modèle, couleur, à qui c'est…"),
@@ -9639,14 +9722,17 @@
         item ? el("button", {
           class: "btn btn-danger-line", type: "button", style: "align-self:flex-start",
           onclick: function () {
+            var inside = membersOf(item);
             confirmSheet({
               title: "Supprimer « " + item.name + " » ?",
-              body: "L'objet disparaît de l'inventaire et des recherches. Cette action est définitive.",
+              body: "L'objet disparaît de l'inventaire et des recherches. Cette action est définitive." +
+                (inside.length ? " " + (inside.length > 1 ? "Les " + inside.length + " objets qu'il contient restent" : "L'objet qu'il contient reste") + " dans l'inventaire, hors groupe." : ""),
               confirmLabel: "Supprimer",
               danger: true,
               // Annuler ramène à la fiche, pas à la page.
               onCancel: function () { itemSheet(item); },
               onConfirm: function () {
+                inside.forEach(leaveGroup);
                 state.items = state.items.filter(function (i) { return i.id !== item.id; });
                 save(); render(); toast("Objet supprimé.");
               }
@@ -9660,6 +9746,188 @@
     });
 
     return card;
+  }
+
+  /* La partie « Groupe » de la fiche : ce que contient un groupe, ou le
+     groupe dont l'objet fait partie. `reopen(moved)` rouvre la fiche telle
+     qu'elle était ; `moved` dit que l'objet a suivi son nouveau groupe. */
+  function groupBlock(item, reopen) {
+    if (!groupsOn() || isSealed(item)) return null;
+    var editor = isEditor();
+    var group = groupOf(item);
+    var members = membersOf(item);
+
+    if (group) {
+      return el("div", { class: "field" }, [
+        el("span", { text: "Groupe" }),
+        el("div", { class: "grp-card" }, [
+          el("span", { class: "grp-ic", "aria-hidden": "true" }, [icon("group", 16)]),
+          el("span", { class: "grp-txt" }, [
+            el("span", { class: "grp-k", text: "Fait partie de" }),
+            el("b", { text: group.name })
+          ]),
+          el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { itemSheet(group); } }, "Ouvrir"),
+          editor ? el("button", {
+            class: "btn btn-sm btn-quiet", type: "button", "aria-label": "Retirer « " + item.name + " » du groupe « " + group.name + " »",
+            onclick: function () {
+              leaveGroup(item); save(); render();
+              toast("Retiré du groupe « " + group.name + " ».");
+              reopen(false);
+            }
+          }, "Retirer") : null
+        ])
+      ]);
+    }
+
+    if (members.length) {
+      return el("div", { class: "field" }, [
+        el("span", { class: "inline", style: "gap:6px" }, [icon("group", 14), "Contenu du groupe · " + plural(members.length, "objet", "objets")]),
+        el("ul", { class: "grp-list" }, members.map(function (member) {
+          return el("li", {}, [
+            el("button", { class: "grp-member", type: "button", onclick: function () { itemSheet(member); } }, [
+              el("span", { class: "nm", text: member.name }),
+              member.quantity > 1 ? el("span", { class: "qty", text: "×" + member.quantity }) : null
+            ]),
+            editor ? el("button", {
+              class: "mini", type: "button", title: "Retirer du groupe", "aria-label": "Retirer « " + member.name + " » du groupe",
+              onclick: function () {
+                leaveGroup(member); save(); render();
+                toast("« " + member.name + " » retiré du groupe.");
+                reopen(false);
+              }
+            }, [icon("x", 15)]) : null
+          ]);
+        })),
+        editor ? el("div", { class: "inline", style: "gap:8px;flex-wrap:wrap" }, [
+          el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { pickMembers(item, reopen); } }, [icon("plus", 14), "Ajouter des objets existants"]),
+          el("button", { class: "btn btn-sm btn-quiet", type: "button", onclick: function () {
+            itemSheet(null, "", { locationId: item.locationId, groupId: item.id, title: "Nouvel objet dans « " + item.name + " »",
+              onSaved: function () { reopen(false); }, onClose: function () { reopen(false); } });
+          } }, [icon("add-box", 14), "Nouvel objet dans le groupe"])
+        ]) : null
+      ]);
+    }
+
+    if (!editor) return null;
+    return el("div", { class: "field" }, [
+      el("span", { text: "Groupe" }),
+      el("span", { class: "field-hint", text: "Une trousse, un kit, une boîte de jeu : réunissez plusieurs objets sous une même entrée." }),
+      el("div", { class: "inline", style: "gap:8px;flex-wrap:wrap" }, [
+        el("button", { class: "btn btn-sm btn-line", type: "button", onclick: function () { pickMembers(item, reopen); } }, [icon("group", 14), "En faire un groupe"]),
+        el("button", { class: "btn btn-sm btn-quiet", type: "button", onclick: function () { pickGroup(item, reopen); } }, [icon("plus", 14), "Ajouter à un groupe"])
+      ])
+    ]);
+  }
+
+  /* Choisir des objets dans l'inventaire, avec une recherche par nom. */
+  function itemPicker(options) {
+    var chosen = {};
+    var query = "";
+    var list = el("ul", { class: "grp-pick" });
+    var go = options.multi ? el("button", { class: "btn btn-lg btn-volt", type: "button", style: "width:100%", disabled: true }) : null;
+
+    function count() { return Object.keys(chosen).length; }
+    function paintGo() {
+      if (!go) return;
+      go.disabled = count() === 0;
+      go.textContent = options.confirmLabel + (count() ? " (" + count() + ")" : "");
+    }
+    function paint() {
+      var tokens = norm(query).split(" ").filter(Boolean);
+      var rows = options.candidates.filter(function (c) {
+        var hay = norm(c.name);
+        return tokens.every(function (t) { return hay.indexOf(t) !== -1; });
+      }).slice(0, 80).map(function (c) {
+        var on = !!chosen[c.id];
+        var note = options.note ? options.note(c) : null;
+        return el("li", {}, [
+          el("button", {
+            class: "grp-opt" + (on ? " on" : ""), type: "button",
+            role: options.multi ? "checkbox" : null, "aria-checked": options.multi ? (on ? "true" : "false") : null,
+            onclick: function () {
+              if (!options.multi) { options.onPick([c]); return; }
+              if (chosen[c.id]) delete chosen[c.id]; else chosen[c.id] = c;
+              paint();
+            }
+          }, [
+            options.multi ? el("span", { class: "box", "aria-hidden": "true" }, [on ? icon("check", 13) : null]) : null,
+            isGroup(c) ? icon("group", 15) : null,
+            el("span", { class: "nm", text: c.name }),
+            note ? el("span", { class: "up", text: note }) : null
+          ])
+        ]);
+      });
+      if (!rows.length) rows.push(el("li", { class: "loc-empty", text: options.candidates.length ? "Aucun objet ne correspond." : options.emptyText }));
+      list.replaceChildren.apply(list, rows);
+      paintGo();
+    }
+
+    if (go) go.addEventListener("click", function () {
+      options.onPick(Object.keys(chosen).map(function (id) { return chosen[id]; }));
+    });
+    var search = el("input", {
+      class: "input", type: "search", placeholder: "Rechercher un objet par son nom…", "aria-label": "Rechercher un objet",
+      oninput: function (event) { query = event.target.value; paint(); }
+    });
+    paint();
+    sheet({
+      title: options.title,
+      onClose: options.onClose,
+      body: [
+        options.lede ? el("p", { class: "muted", style: "font-size:.875rem", text: options.lede }) : null,
+        search,
+        list
+      ],
+      foot: go ? [go] : null
+    });
+  }
+
+  /* Mettre des objets dans `group`. Un objet déjà dans un autre groupe
+     change de groupe ; un groupe n'entre pas dans un autre. */
+  function pickMembers(group, reopen) {
+    var candidates = state.items.filter(function (c) {
+      return c.id !== group.id && !isGroup(c) && !isSealed(c) && (!groupOf(c) || groupOf(c).id !== group.id);
+    }).sort(function (a, b) { return a.name.localeCompare(b.name, "fr"); });
+    itemPicker({
+      title: "Ajouter à « " + group.name + " »",
+      lede: "Cochez ce que contient « " + group.name + " ». Ces objets seront rangés au même endroit que lui.",
+      multi: true,
+      confirmLabel: "Ajouter au groupe",
+      candidates: candidates,
+      emptyText: "Aucun autre objet à ajouter pour l'instant.",
+      note: function (c) { var g = groupOf(c); return g ? "Dans « " + g.name + " »" : placeName(c.locationId); },
+      onClose: function () { reopen(false); },
+      onPick: function (picked) {
+        var n = picked.filter(function (c) { return joinGroup(c, group); }).length;
+        save(); render();
+        toast(plural(n, "objet ajouté", "objets ajoutés") + " au groupe « " + group.name + " ».");
+        reopen(false);
+      }
+    });
+  }
+
+  /* Mettre `item` dans un groupe existant, ou faire d'un autre objet son
+     groupe (la boîte de jeu référencée avant ses pions). */
+  function pickGroup(item, reopen) {
+    var candidates = state.items.filter(function (c) { return c.id !== item.id && !groupOf(c) && !isSealed(c); })
+      .sort(function (a, b) {
+        return (isGroup(b) ? 1 : 0) - (isGroup(a) ? 1 : 0) || a.name.localeCompare(b.name, "fr");
+      });
+    itemPicker({
+      title: "Ajouter « " + item.name + " » à un groupe",
+      lede: "Choisissez le groupe, ou l'objet qui le contient : une trousse, une boîte, un kit.",
+      candidates: candidates,
+      emptyText: "Aucun autre objet dans l'inventaire.",
+      note: function (c) { var n = membersOf(c).length; return n ? plural(n, "objet", "objets") : placeName(c.locationId); },
+      onClose: function () { reopen(false); },
+      onPick: function (picked) {
+        var group = picked[0];
+        if (!joinGroup(item, group)) { reopen(false); return; }
+        save(); render();
+        toast("Ajouté au groupe « " + group.name + " ».");
+        reopen(true);
+      }
+    });
   }
 
   /* ═══ Outils pratiques ═════════════════════════════════════════════════
@@ -10064,8 +10332,11 @@
           : "Rien n'est encore rangé ici." }),
         inside.length ? el("ul", { class: "row-list place-items" }, inside.map(function (item) {
           var sub = pathOf(item.locationId).slice(depth).concat(item.spot ? [item.spot] : []).join(" › ");
+          var inGroup = groupOf(item);
+          if (inGroup) sub += (sub ? " · " : "") + "dans « " + inGroup.name + " »";
           return el("li", {}, [
             el("button", { class: "place-item", type: "button", onclick: function () { itemSheet(item); } }, [
+              isGroup(item) ? icon("group", 13) : null,
               el("span", { class: "nm", text: item.name }),
               item.quantity > 1 ? el("span", { class: "qty", text: "×" + item.quantity }) : null,
               sub ? el("span", { class: "up", text: sub }) : null
@@ -10279,6 +10550,48 @@
     item.locationId = locationId;
     item.lastSeenAt = Date.now();
   }
+
+  /* ─── Groupes d'objets ───────────────────────────────────────────────
+     Une trousse de secours, un kit de couture, une boîte de jeu : une seule
+     entrée qu'on range et qu'on cherche, avec son contenu dedans. Chaque
+     membre porte `groupId`, l'identifiant de son groupe ; un objet est un
+     groupe dès qu'il contient un autre objet. Un seul niveau : un groupe
+     n'entre pas dans un autre groupe, ce qui exclut toute boucle. Le contenu
+     suit le groupe quand on le déplace.
+
+     En ligne, le serveur doit savoir garder `groupId` : la page hôte le dit
+     par `FulmoCloud.groups`. Sans lui, rien ne s'affiche plutôt que de
+     proposer des groupes qui disparaîtraient au rechargement. */
+  function groupsOn() { return !cloud || cloud.groups === true; }
+
+  function itemById(id) {
+    for (var i = 0; i < state.items.length; i++) if (state.items[i].id === id) return state.items[i];
+    return null;
+  }
+
+  function groupOf(item) {
+    // Un objet précieux n'est ni groupe ni membre : le groupe trahirait son lieu.
+    if (!groupsOn() || !item || !item.groupId || item.groupId === item.id || isSealed(item)) return null;
+    var group = itemById(item.groupId);
+    return group && !group.groupId && !isSealed(group) ? group : null;
+  }
+
+  function membersOf(item) {
+    if (!groupsOn() || !item || item.groupId || isSealed(item)) return [];
+    return state.items.filter(function (i) { return i.groupId === item.id && i.id !== item.id && !isSealed(i); })
+      .sort(function (a, b) { return a.name.localeCompare(b.name, "fr"); });
+  }
+
+  function isGroup(item) { return membersOf(item).length > 0; }
+
+  function joinGroup(member, group) {
+    if (!groupsOn() || member.id === group.id || group.groupId || isGroup(member) || isSealed(member) || isSealed(group)) return false;
+    member.groupId = group.id;
+    moveItem(member, group.locationId || null);
+    return true;
+  }
+
+  function leaveGroup(member) { member.groupId = null; }
 
   function placeName(id) {
     if (!id) return "À ranger";
@@ -10757,7 +11070,7 @@
     ["name", "Nom"], ["quantity", "Quantité"], ["room", "Pièce"], ["furniture", "Meuble"], ["container", "Contenant"],
     ["spot", "Endroit précis"], ["tags", "Mots-clés"], ["description", "Notes"], ["value", "Prix d'achat"],
     ["purchasedAt", "Date d'achat"], ["warrantyUntil", "Garantie jusqu'au"], ["expiresAt", "Péremption"],
-    ["barcode", "Code-barres"], ["lentTo", "Prêté à"]
+    ["barcode", "Code-barres"], ["lentTo", "Prêté à"], ["group", "Groupe"]
   ];
 
   function csvCell(value) {
@@ -10774,7 +11087,8 @@
         name: i.name, quantity: i.quantity || 1, room: path[0] || "", furniture: path[1] || "", container: path.slice(2).join(" > "),
         spot: i.spot || "", tags: (i.tags || []).join(", "), description: i.description || "",
         value: typeof i.value === "number" ? String(i.value).replace(".", ",") : "", purchasedAt: i.purchasedAt || "",
-        warrantyUntil: i.warrantyUntil || "", expiresAt: i.expiresAt || "", barcode: i.barcode || "", lentTo: i.lentTo || ""
+        warrantyUntil: i.warrantyUntil || "", expiresAt: i.expiresAt || "", barcode: i.barcode || "", lentTo: i.lentTo || "",
+        group: groupOf(i) ? groupOf(i).name : ""
       };
       rows.push(CSV_COLUMNS.map(function (c) { return cells[c[0]]; }));
     });
@@ -10824,7 +11138,8 @@
     warrantyUntil: ["garantie jusqu'au", "garantie", "fin de garantie", "warranty", "warranty until"],
     expiresAt: ["peremption", "date de peremption", "expiration", "expiry", "dlc"],
     barcode: ["code-barres", "code barres", "code barre", "barcode", "ean", "upc", "gtin"],
-    lentTo: ["prete a", "pret", "lent to"]
+    lentTo: ["prete a", "pret", "lent to"],
+    group: ["groupe", "fait partie de", "kit", "lot", "group"]
   };
 
   function csvField(header) {
@@ -10889,7 +11204,8 @@
         description: get("description").slice(0, 2000) || null,
         value: csvNumber(get("value")), purchasedAt: csvDate(get("purchasedAt")),
         warrantyUntil: csvDate(get("warrantyUntil")), expiresAt: csvDate(get("expiresAt")),
-        barcode: cleanBarcode(get("barcode")), lentTo: get("lentTo").slice(0, 120) || null
+        barcode: cleanBarcode(get("barcode")), lentTo: get("lentTo").slice(0, 120) || null,
+        group: get("group").slice(0, 120) || null
       };
     }).filter(Boolean);
     return { items: items, columns: head.filter(Boolean).length };
@@ -10920,14 +11236,25 @@
           foot: [el("button", {
             class: "btn btn-lg btn-volt", type: "button", style: "width:100%",
             onclick: function () {
-              var created = { count: 0 }, now = Date.now();
+              var created = { count: 0 }, now = Date.now(), added = [];
               parsed.items.forEach(function (i, n) {
-                state.items.push({
+                added.push({
                   id: uid("it"), name: i.name, locationId: ensurePath(i.path, created), spot: i.spot, tags: i.tags,
                   description: i.description, quantity: i.quantity, expiresAt: i.expiresAt, warrantyUntil: i.warrantyUntil,
                   lentTo: i.lentTo, lentAt: i.lentTo ? now : null, lastSeenAt: now - n, createdAt: now - n,
                   value: i.value, purchasedAt: i.purchasedAt, barcode: i.barcode, careLabel: null, careEvery: null, careLast: null
                 });
+              });
+              state.items = state.items.concat(added);
+              // La colonne « Groupe » nomme le groupe : d'abord parmi les lignes
+              // importées, sinon dans l'inventaire.
+              parsed.items.forEach(function (i, n) {
+                if (!i.group) return;
+                var key = norm(i.group);
+                var pool = added.concat(state.items);
+                for (var k = 0; k < pool.length; k++) {
+                  if (pool[k] !== added[n] && norm(pool[k].name) === key && !groupOf(pool[k])) { joinGroup(added[n], pool[k]); return; }
+                }
               });
               save(); closeSheet(); render();
               toast(plural(parsed.items.length, "objet importé", "objets importés") + (created.count ? ", " + plural(created.count, "lieu créé", "lieux créés") : "") + ".");
@@ -10940,7 +11267,7 @@
 
   function csvTemplate() {
     var head = CSV_COLUMNS.map(function (c) { return c[1]; });
-    var sample = ["Perceuse sans fil", "1", "Garage", "Servante", "", "Étagère du bas", "outillage, électrique", "Deux batteries", "129,90", "2025-03-14", "2027-03-14", "", "3165140912345", ""];
+    var sample = ["Perceuse sans fil", "1", "Garage", "Servante", "", "Étagère du bas", "outillage, électrique", "Deux batteries", "129,90", "2025-03-14", "2027-03-14", "", "3165140912345", "", ""];
     saveFile("fulmo-modele-import.csv", "\ufeff" + [head, sample].map(function (r) { return r.map(csvCell).join(";"); }).join("\r\n"), "text/csv;charset=utf-8", "Modèle téléchargé : remplissez-le dans Excel, puis importez-le.");
   }
 

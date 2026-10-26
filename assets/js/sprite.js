@@ -124,6 +124,7 @@
     "  <symbol id=\"i-download\" viewBox=\"0 0 24 24\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><path d=\"M7 10l5 5 5-5M12 15V3\"/></symbol>",
     "  <symbol id=\"i-eye\" viewBox=\"0 0 24 24\"><path d=\"M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></symbol>",
     "  <symbol id=\"i-share\" viewBox=\"0 0 24 24\"><path d=\"M8 9H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-2\"/><path d=\"M12 15V3M8 6.5 12 3l4 3.5\"/></symbol>",
+    "  <symbol id=\"i-group\" viewBox=\"0 0 24 24\"><path d=\"m12 3 9 4.5-9 4.5-9-4.5z\"/><path d=\"m3 12 9 4.5 9-4.5\"/><path d=\"m3 16.5 9 4.5 9-4.5\"/></symbol>",
     "  <symbol id=\"i-add-box\" viewBox=\"0 0 24 24\"><rect x=\"3.5\" y=\"3.5\" width=\"17\" height=\"17\" rx=\"3.5\"/><path d=\"M12 8.5v7M8.5 12h7\"/></symbol>",
     "  <symbol id=\"i-phone\" viewBox=\"0 0 24 24\"><rect x=\"6\" y=\"2.5\" width=\"12\" height=\"19\" rx=\"2.5\"/><path d=\"M11 18.5h2\"/></symbol>",
     "  <symbol id=\"i-dots-v\" viewBox=\"0 0 24 24\"><path d=\"M12 5h.01M12 12h.01M12 19h.01\" stroke-width=\"3\"/></symbol>",
