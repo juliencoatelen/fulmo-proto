@@ -49,7 +49,8 @@
       theme: "light",
       consents: {},     // { ai: { granted, at, version } } : preuve des accords (art. 7.1 RGPD)
       ideas: null,      // boîte à idées de la démonstration (exemples et votes locaux)
-      tourSeen: false   // visite guidée vue ou terminée : elle ne s'impose qu'une fois
+      tourSeen: false,  // visite guidée vue ou terminée : elle ne s'impose qu'une fois
+      preciousLock: null // mot de passe des objets précieux : sel et témoin chiffré, jamais le mot de passe
     };
   }
 
@@ -905,7 +906,7 @@
      par l'article 7.1 du RGPD) et se retire dans les Réglages. Changer
      LEGAL_VERSION réinterroge tout le monde. */
 
-  var LEGAL_VERSION = 4;  // 4 : CGU v4 du 25 octobre 2026 (propriété intellectuelle, copie et robots)
+  var LEGAL_VERSION = 4;  // 4 : CGU v4 du 25 octobre 2026 (propriété intellectuelle, copie et robots ; objets précieux)
 
   function aiConsented() {
     var c = state.consents && state.consents.ai;
@@ -1701,7 +1702,7 @@
       return {
         art: rootIconOf(item.locationId),
         name: item.name + (item.quantity > 1 ? "  ×" + item.quantity : ""),
-        sub: path.length ? path.join(" / ") : "À ranger",
+        sub: isSealed(item) ? "Lieu protégé" : path.length ? path.join(" / ") : "À ranger",
         crumbsOf: item.locationId || "",
         spot: item.spot,
         why: row.reason ? WHY[row.reason] : null,
@@ -4862,6 +4863,7 @@
 
   /* L'emplacement en une phrase, pour l'affichage simple. */
   function placeSentence(item) {
+    if (isSealed(item)) return "Lieu protégé par mot de passe.";
     var path = pathOf(item.locationId);
     if (!path.length) return "Pas encore rangé.";
     return path.join(", ") + (item.spot ? " (" + item.spot + ")" : "") + ".";
@@ -4890,7 +4892,10 @@
     var group = groupOf(item);
     if (members.length) photo.appendChild(el("span", { class: "r-group" }, [icon("group", 12), plural(members.length, "objet", "objets")]));
 
-    var where = path.length
+    var sealed = isSealed(item);
+    var where = sealed
+      ? [el("b", { text: "Lieu protégé" }), simpleMode ? null : el("span", { class: "r-path", text: "Mot de passe requis" })]
+      : path.length
       ? (simpleMode
           ? [el("span", { class: "r-sentence", text: placeSentence(item) })]
           : [el("b", { text: path[0] }),
@@ -4915,10 +4920,12 @@
         "aria-label": members.length ? item.name + ", groupe de " + plural(members.length, "objet", "objets") : null
       }, [members.length ? el("span", { class: "r-gic", title: "Groupe d'objets" }, [icon("group", 14)]) : null, markMatch(item.name, opts.highlight)]),
       el("button", {
-        class: "r-where" + (path.length ? "" : " is-unsorted"), type: "button",
-        "aria-label": "Où est " + item.name + " : " + placeName(item.locationId) + (item.spot ? ", " + item.spot : "") + (group ? ", dans « " + group.name + " »" : ""),
-        onclick: function () { locationSheet(item); }
-      }, [icon("pin", simpleMode ? 18 : 14), el("span", { class: "r-where-txt" }, where)]),
+        class: "r-where" + (sealed ? " is-locked" : path.length ? "" : " is-unsorted"), type: "button",
+        "aria-label": sealed
+          ? "Où est " + item.name + " : lieu protégé, ouvrir avec le mot de passe des objets précieux"
+          : "Où est " + item.name + " : " + placeName(item.locationId) + (item.spot ? ", " + item.spot : "") + (group ? ", dans « " + group.name + " »" : ""),
+        onclick: function () { if (sealed) itemSheet(item); else locationSheet(item); }
+      }, [icon(sealed ? "lock" : "pin", simpleMode ? 18 : 14), el("span", { class: "r-where-txt" }, where)]),
       el("div", { class: "tags" }, (item.tags || []).slice(0, 2).map(function (tag) {
         return el("span", { class: "tagpill", text: tag });
       })),
@@ -5044,10 +5051,11 @@
     var aiActive = !!(aiResults && searchState.aiTried && searchState.aiTried === query);
 
     // « À ranger » n'est pas un mot-clé : c'est l'absence d'emplacement.
-    var unsorted = foldGroups(state.items.filter(function (item) { return !item.locationId; })
+    // Un objet précieux n'a pas de lieu en clair, mais il n'est pas « à ranger ».
+    var unsorted = foldGroups(state.items.filter(function (item) { return !item.locationId && !isSealed(item); })
       .map(function (item) { return { item: item }; })).length;
     var results = searchState.filter === "__unsorted"
-      ? foldGroups(state.items.filter(function (item) { return !item.locationId; })
+      ? foldGroups(state.items.filter(function (item) { return !item.locationId && !isSealed(item); })
           .map(function (item) { return { item: item, score: 0, reason: "recent" }; }))
       : aiActive ? aiResults : search(searchState.query);
     // La pièce se combine avec la phrase tapée : « chargeur » dans le bureau.
@@ -5848,7 +5856,13 @@
       });
       if (parent) saved.unshift(parent);
       save();
-      if (photo && media.available()) saved.forEach(function (created) { attachPhoto(created, photo); });
+      if (photo && media.available()) saved.forEach(function (created) {
+        // La photo de l'étagère montre aussi l'endroit : la fiche s'en souvient,
+        // pour avertir si l'objet devient précieux.
+        attachPhoto(created, photo).then(function (res) {
+          if (res && res.ok) { created.scanPhoto = true; save(); }
+        });
+      });
       scanState = { image: null, photo: null, busy: false, detected: null, note: "", target: scanState.target, error: null, saved: saved.map(function (i) { return i.id; }) };
       render();
       toast(parent
@@ -8974,6 +8988,19 @@
                 : "Rien n'est envoyé à un serveur. Seules la phrase d'une recherche IA et la photo d'un Scan Éclair partent vers l'assistant, avec votre accord." })
             ])
           ]),
+          preciousAvailable() ? (function () {
+            var count = state.items.filter(isSealed).length;
+            return el("div", { class: "set-row" }, [
+              el("span", { class: "fig" }, [icon("gem", 19)]),
+              el("span", { class: "txt" }, [
+                el("b", { text: "Objets précieux" }),
+                el("span", { text: state.preciousLock
+                  ? plural(count, "objet protégé", "objets protégés") + " par un mot de passe à part. Leur lieu et leurs détails sont chiffrés sur cet appareil ; leur nom et leur photo restent visibles."
+                  : "Dans la fiche d'un objet, « Objet précieux » cache son lieu et ses détails derrière un mot de passe à part. Le nom et la photo restent visibles." })
+              ]),
+              state.preciousLock ? el("button", { class: "btn btn-sm btn-line", type: "button", onclick: preciousPasswordSheet }, [icon("lock", 14), "Mot de passe"]) : null
+            ]);
+          })() : null,
           switchRow(
             "Fonctions d'IA",
             aiConsented()
@@ -9014,6 +9041,7 @@
           "L'abonnement ne passe pas par Stripe : la bascule Éclair est libre.",
           "Le foyer partagé et les invitations par email ne sont pas rejouables sans serveur.",
           "Les données vivent dans ce navigateur, pas dans PostgreSQL avec sa Row Level Security.",
+          "Les objets précieux sont chiffrés dans ce navigateur ; l'application en ligne ne propose pas encore cette option.",
           "Le moteur de recherche, lui, est le portage fidèle de la logique SQL : accents, casse, préfixes et fautes de frappe."
         ].map(function (line) {
           return el("li", {}, [icon("chev", 14), el("span", { text: line })]);
@@ -9075,30 +9103,321 @@
 
   /* `hooks` (facultatif) : { onSaved(objet), onClose() } — la visite guidée
      s'en sert pour suivre la fiche sans la réécrire. */
+  /* ─── Objets précieux ────────────────────────────────────────────────
+     Bijoux, espèces, double des clés : on veut les retrouver, sans que
+     quiconque ouvre l'application (un enfant, un visiteur, un téléphone
+     volé) apprenne où ils sont. Le nom et la photo restent visibles dans la
+     recherche et la liste ; tout le reste (lieu, endroit précis, mots-clés,
+     notes, valeur, historique des déplacements) est chiffré avec un mot de
+     passe propre aux objets précieux, distinct de celui du compte.
+
+     Chiffrement AES-GCM, clé tirée du mot de passe par PBKDF2 (310 000
+     tours, SHA-256), dans ce navigateur. Le mot de passe n'est jamais
+     enregistré : seul un témoin chiffré permet de le vérifier. Comme rien
+     n'est en clair, ni la recherche, ni les mots-clés, ni Mes lieux, ni le
+     plan ne peuvent trahir l'emplacement. Les limites sont dites dans les
+     conditions : un mot de passe faible se devine hors ligne, et un
+     appareil compromis lit ce qu'on y tape.
+
+     En ligne, l'application ne propose pas encore cette option : le lieu
+     doit y être protégé côté serveur (fulmo-app). */
+
+  var PRECIOUS_FIELDS = ["locationId", "spot", "tags", "description", "quantity", "expiresAt", "warrantyUntil",
+    "lentTo", "lentAt", "value", "purchasedAt", "barcode", "careLabel", "careEvery", "careLast", "moves"];
+  var PRECIOUS_ITER = 310000;
+  var PRECIOUS_CHECK = "fulmo.precieux.v1";
+  var PRECIOUS_MIN = 6;
+  var PRECIOUS_TRIES = 5;   // essais libres avant d'imposer une attente
+
+  function preciousAvailable() { return !cloud && obCanHash(); }
+  function isSealed(item) { return !!(item && item.precious && item.vault); }
+
+  function b64(buffer) {
+    var bytes = new Uint8Array(buffer), out = "";
+    for (var i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+    return btoa(out);
+  }
+  function unb64(text) {
+    var raw = atob(text), bytes = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    return bytes;
+  }
+  function randomBytes(n) {
+    var bytes = new Uint8Array(n);
+    window.crypto.getRandomValues(bytes);
+    return bytes;
+  }
+
+  function preciousKey(password, salt, iterations) {
+    var subtle = window.crypto.subtle;
+    return subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]).then(function (base) {
+      return subtle.deriveKey({ name: "PBKDF2", salt: unb64(salt), iterations: iterations, hash: "SHA-256" },
+        base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+    });
+  }
+  function sealValue(key, value) {
+    var iv = randomBytes(12);
+    return window.crypto.subtle.encrypt({ name: "AES-GCM", iv: iv }, key, new TextEncoder().encode(JSON.stringify(value)))
+      .then(function (data) { return { iv: b64(iv), data: b64(data) }; });
+  }
+  function openValue(key, box) {
+    return window.crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(box.iv) }, key, unb64(box.data))
+      .then(function (data) { return JSON.parse(new TextDecoder().decode(data)); });
+  }
+
+  /* Pose le mot de passe : un sel neuf et le témoin. → Promise<clé>. */
+  function preciousCreate(password) {
+    var salt = b64(randomBytes(16));
+    return preciousKey(password, salt, PRECIOUS_ITER).then(function (key) {
+      return sealValue(key, PRECIOUS_CHECK).then(function (check) {
+        state.preciousLock = { v: 1, salt: salt, iterations: PRECIOUS_ITER, check: check, fails: 0, until: null };
+        return key;
+      });
+    });
+  }
+  /* → Promise<clé, ou null si le mot de passe est faux>. */
+  function preciousOpen(password) {
+    var lock = state.preciousLock;
+    if (!lock || !password) return Promise.resolve(null);
+    return preciousKey(password, lock.salt, lock.iterations || PRECIOUS_ITER).then(function (key) {
+      return openValue(key, lock.check).then(function (value) { return value === PRECIOUS_CHECK ? key : null; });
+    }).catch(function () { return null; });
+  }
+
+  /* Après cinq erreurs, une attente qui double à chaque nouvel échec
+     (30 s, 1 min, 2 min… 15 min au plus). Elle survit au rechargement. */
+  function preciousWait() {
+    var lock = state.preciousLock;
+    return lock && lock.until && lock.until > Date.now() ? Math.ceil((lock.until - Date.now()) / 1000) : 0;
+  }
+  function preciousFailed() {
+    var lock = state.preciousLock;
+    lock.fails = (lock.fails || 0) + 1;
+    if (lock.fails >= PRECIOUS_TRIES) lock.until = Date.now() + Math.min(15 * 60000, 30000 * Math.pow(2, lock.fails - PRECIOUS_TRIES));
+    save();
+  }
+  function preciousSucceeded() {
+    var lock = state.preciousLock;
+    if (lock.fails || lock.until) { lock.fails = 0; lock.until = null; save(); }
+  }
+  function waitText(seconds) {
+    return seconds >= 90 ? Math.ceil(seconds / 60) + " min" : seconds + " s";
+  }
+
+  /* Le mot de passe des objets précieux doit être distinct de celui du
+     compte : sinon, qui connaît l'un ouvre tout. → Promise<message ou null>. */
+  function preciousPasswordProblem(password, confirm) {
+    if (password.length < PRECIOUS_MIN) return Promise.resolve("Au moins " + PRECIOUS_MIN + " caractères.");
+    if (confirm !== password) return Promise.resolve("Les deux mots de passe ne sont pas identiques.");
+    var secret = state.account && state.account.secret;
+    if (!secret || !secret.hash) return Promise.resolve(null);
+    return obVerify(secret, password).then(function (same) {
+      return same ? "Choisissez un mot de passe différent de celui de votre compte." : null;
+    });
+  }
+
+  /* Remplace les détails d'un objet par leur version chiffrée. */
+  function sealItem(item, key, secret) {
+    return sealValue(key, secret).then(function (box) {
+      PRECIOUS_FIELDS.forEach(function (field) { delete item[field]; });
+      item.locationId = null;
+      item.precious = true;
+      item.vault = box;
+    });
+  }
+  function secretOf(item) {
+    var out = {};
+    PRECIOUS_FIELDS.forEach(function (field) { if (item[field] !== undefined) out[field] = item[field]; });
+    return out;
+  }
+
+  /* Ce qu'il faut dire avant de photographier un objet précieux. */
+  function preciousPhotoAdvice() {
+    return el("div", { class: "precious-note" }, [
+      icon("eye-off", 16),
+      el("div", {}, [
+        el("b", { text: "La photo reste visible de tous" }),
+        el("p", { text: "Photographiez l'objet seul, de près, sur un fond neutre (une table, un drap). Évitez tout ce qui trahit sa cachette : le meuble, le tiroir, la boîte, le coffre, la pièce, une fenêtre. Ne notez pas l'endroit dans le nom." })
+      ])
+    ]);
+  }
+
+  /* La fiche d'un objet précieux s'ouvre par ce verrou, à chaque fois. */
+  function preciousUnlockSheet(item, hooks) {
+    var lock = state.preciousLock;
+    var input, error, button, busy = false;
+
+    function show(message) { error.textContent = message; error.hidden = !message; }
+
+    function attempt() {
+      if (busy) return;
+      var left = preciousWait();
+      if (left) { show("Trop d'essais. Réessayez dans " + waitText(left) + "."); return; }
+      if (!input.value) { show("Saisissez le mot de passe des objets précieux."); input.focus(); return; }
+      busy = true;
+      button.disabled = true;
+      button.textContent = "Vérification…";
+      preciousOpen(input.value).then(function (key) {
+        if (!key) {
+          preciousFailed();
+          busy = false;
+          button.disabled = false;
+          button.textContent = "Ouvrir la fiche";
+          var wait = preciousWait();
+          show(wait ? "Mot de passe incorrect. Trop d'essais : réessayez dans " + waitText(wait) + "." : "Mot de passe incorrect.");
+          input.value = "";
+          input.focus();
+          return;
+        }
+        return openValue(key, item.vault).then(function (plain) {
+          preciousSucceeded();
+          itemSheet(item, null, Object.assign({}, hooks, { unlocked: { key: key, plain: plain } }));
+        });
+      }).catch(function () {
+        busy = false;
+        button.disabled = false;
+        button.textContent = "Ouvrir la fiche";
+        show("La fiche n'a pas pu être déchiffrée sur cet appareil.");
+      });
+    }
+
+    sheet({
+      title: item.name,
+      onClose: hooks.onClose,
+      body: [
+        el("div", { class: "where-top" }, [
+          photoBox(item, true),
+          el("div", { class: "where-meta" }, [
+            el("span", { class: "r-badge is-plain" }, [icon("lock", 13), " Objet précieux"]),
+            el("span", { class: "muted", text: "Son lieu et ses détails sont protégés par un mot de passe." })
+          ])
+        ]),
+        lock && preciousAvailable() ? el("label", { class: "field" }, [
+          el("span", { text: "Mot de passe des objets précieux" }),
+          input = el("input", {
+            class: "input", type: "password", autocomplete: "off", autofocus: true, maxlength: 200,
+            "aria-describedby": "precious-err",
+            onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); attempt(); } }
+          }),
+          error = el("span", { class: "err", id: "precious-err", role: "alert", hidden: true }),
+          el("span", { class: "field-hint", text: "Ce n'est pas le mot de passe du compte. Fulmo ne le connaît pas et ne peut pas le retrouver." })
+        ]) : el("p", { class: "muted", text: "Ce navigateur ne permet pas d'ouvrir les objets précieux (page non sécurisée ou mot de passe absent)." })
+      ],
+      foot: lock && preciousAvailable() ? [
+        el("button", { class: "btn btn-quiet", type: "button", onclick: preciousForgotSheet }, "Mot de passe oublié"),
+        button = el("button", { class: "btn btn-volt", type: "button", onclick: attempt }, "Ouvrir la fiche")
+      ] : null
+    });
+  }
+
+  /* Oublié : rien ne permet de déchiffrer. On le dit, et l'on propose de
+     repartir de zéro en effaçant les détails protégés. */
+  function preciousForgotSheet() {
+    var count = state.items.filter(isSealed).length;
+    confirmSheet({
+      title: "Mot de passe oublié",
+      body: "Fulmo ne connaît pas ce mot de passe et ne peut pas le retrouver : c'est ce qui protège vos objets. Pour repartir de zéro, vous pouvez effacer le mot de passe et les détails protégés (lieu, notes, valeur) de " +
+        plural(count, "objet précieux", "objets précieux") + ". Leur nom et leur photo restent ; il faudra les ranger à nouveau.",
+      confirmLabel: "Effacer les détails protégés",
+      danger: true,
+      onConfirm: function () {
+        state.items.forEach(function (item) {
+          if (!item.precious) return;
+          delete item.vault;
+          delete item.precious;
+          item.locationId = null;
+        });
+        state.preciousLock = null;
+        save();
+        render();
+        toast("Mot de passe effacé. Les objets concernés sont à ranger.");
+      }
+    });
+  }
+
+  /* Changer le mot de passe rechiffre chaque objet précieux. */
+  function preciousPasswordSheet() {
+    var draft = { current: "", next: "", confirm: "" };
+    var error, button, busy = false;
+    function field(label, key, hint) {
+      return el("label", { class: "field" }, [
+        el("span", { text: label }),
+        el("input", { class: "input", type: "password", autocomplete: "new-password", maxlength: 200, oninput: function (event) { draft[key] = event.target.value; } }),
+        hint ? el("span", { class: "field-hint", text: hint }) : null
+      ]);
+    }
+    function fail(message) { busy = false; button.disabled = false; error.textContent = message; error.hidden = false; }
+    function run() {
+      if (busy) return;
+      var left = preciousWait();
+      if (left) { fail("Trop d'essais. Réessayez dans " + waitText(left) + "."); return; }
+      busy = true; button.disabled = true; error.hidden = true;
+      preciousOpen(draft.current).then(function (oldKey) {
+        if (!oldKey) { preciousFailed(); fail("Mot de passe actuel incorrect."); return; }
+        preciousSucceeded();
+        return preciousPasswordProblem(draft.next, draft.confirm).then(function (problem) {
+          if (problem) { fail(problem); return; }
+          var sealed = state.items.filter(isSealed);
+          return Promise.all(sealed.map(function (item) { return openValue(oldKey, item.vault); })).then(function (plains) {
+            var previous = state.preciousLock;
+            return preciousCreate(draft.next).then(function (newKey) {
+              return Promise.all(plains.map(function (plain) { return sealValue(newKey, plain); }));
+            }).then(function (boxes) {
+              sealed.forEach(function (item, index) { item.vault = boxes[index]; });
+              save(); closeSheet(); render();
+              toast("Mot de passe des objets précieux changé.");
+            }, function (e) { state.preciousLock = previous; throw e; });
+          });
+        });
+      }).catch(function () { fail("Le changement n'a pas pu se faire. Rien n'a été modifié."); });
+    }
+    sheet({
+      title: "Mot de passe des objets précieux",
+      body: [
+        field("Mot de passe actuel", "current"),
+        field("Nouveau mot de passe", "next", "Au moins " + PRECIOUS_MIN + " caractères, différent de celui du compte."),
+        field("Confirmer le nouveau mot de passe", "confirm"),
+        error = el("p", { class: "err", role: "alert", hidden: true })
+      ],
+      foot: [
+        el("button", { class: "btn btn-quiet", type: "button", onclick: preciousForgotSheet }, "Mot de passe oublié"),
+        button = el("button", { class: "btn btn-volt", type: "button", onclick: run }, "Changer")
+      ]
+    });
+  }
+
   function itemSheet(item, defaultName, hooks) {
     hooks = hooks || {};
+    // Un objet précieux ne s'ouvre qu'avec son mot de passe, à chaque fois.
+    if (isSealed(item) && !hooks.unlocked) { preciousUnlockSheet(item, hooks); return null; }
+    var unlocked = hooks.unlocked || null;
+    // Ce que la fiche affiche : l'objet, et ses détails déchiffrés s'il est précieux.
+    var src = item && unlocked ? Object.assign({}, item, unlocked.plain) : item;
+    var wasPrecious = !!(item && item.precious);
     // « Référencer « perceuse garage armoire » » depuis la recherche : le lieu
     // est déjà dans la phrase.
     var quick = !item && defaultName && !hooks.locationId ? quickParse(defaultName) : null;
     var draft = item
       ? {
-          name: item.name, locationId: item.locationId, spot: item.spot || "",
-          tags: (item.tags || []).join(", "), description: item.description || "",
-          quantity: item.quantity || 1, expiresAt: item.expiresAt || "",
-          lentTo: item.lentTo || "", warrantyUntil: item.warrantyUntil || "",
-          value: typeof item.value === "number" ? String(item.value).replace(".", ",") : "",
-          purchasedAt: item.purchasedAt || "", barcode: item.barcode || "",
-          careLabel: item.careLabel || "", careEvery: item.careEvery ? String(item.careEvery) : "", careLast: item.careLast || ""
+          name: src.name, locationId: src.locationId, spot: src.spot || "",
+          tags: (src.tags || []).join(", "), description: src.description || "",
+          quantity: src.quantity || 1, expiresAt: src.expiresAt || "",
+          lentTo: src.lentTo || "", warrantyUntil: src.warrantyUntil || "",
+          value: typeof src.value === "number" ? String(src.value).replace(".", ",") : "",
+          purchasedAt: src.purchasedAt || "", barcode: src.barcode || "",
+          careLabel: src.careLabel || "", careEvery: src.careEvery ? String(src.careEvery) : "", careLast: src.careLast || "",
+          precious: !!item.precious, pw: "", pw2: ""
         }
       : {
           name: quick ? quick.name : defaultName || "", locationId: quick ? quick.locationId : hooks.locationId || null,
           spot: "", tags: "", description: "", quantity: 1, expiresAt: "", lentTo: "", warrantyUntil: "",
-          value: "", purchasedAt: "", barcode: hooks.barcode || "", careLabel: "", careEvery: "", careLast: ""
+          value: "", purchasedAt: "", barcode: hooks.barcode || "", careLabel: "", careEvery: "", careLast: "",
+          precious: false, pw: "", pw2: ""
         };
     if (hooks.draft) { draft = hooks.draft; quick = null; }
     var pending = { photo: null };
 
-    var nameInput, nameError;
+    var nameInput, nameError, saveButton, preciousError = null, sealing = false;
 
     function commit() {
       var name = draft.name.trim();
@@ -9142,8 +9461,19 @@
         careLast: careEvery ? draft.careLast || todayIso() : null,
         lastSeenAt: Date.now()
       };
-      if (payload.lentTo && (!item || !item.lentTo)) payload.lentAt = Date.now();
+      if (payload.lentTo && (!src || !src.lentTo)) payload.lentAt = Date.now();
+      else if (src && src.lentTo && payload.lentTo) payload.lentAt = src.lentAt || null;
       if (!payload.lentTo) payload.lentAt = null;
+
+      if (draft.precious) { commitPrecious(payload); return; }
+
+      if (item && unlocked) {
+        // La protection est retirée : les détails reviennent en clair.
+        item.locationId = unlocked.plain.locationId || null;
+        if (unlocked.plain.moves) item.moves = unlocked.plain.moves;
+        delete item.vault;
+        delete item.precious;
+      }
 
       if (item) {
         moveItem(item, payload.locationId);
@@ -9159,14 +9489,137 @@
         if (into && !into.groupId && groupsOn()) payload.groupId = into.id;
         state.items.push(payload);
       }
+      finish(item || payload, guessed);
+    }
 
+    function finish(target, guessed) {
       save();
       closeSheet();
       render();
-      if (!item && pending.photo) attachPhoto(payload, pending.photo);
-      if (hooks.onSaved) hooks.onSaved(item || payload);
-      else if (guessed) toast("Rangé dans « " + placeName(payload.locationId) + " ».");
+      if (!item && pending.photo) attachPhoto(target, pending.photo);
+      if (hooks.onSaved) hooks.onSaved(target);
+      else if (guessed) toast("Rangé dans « " + placeName(target.locationId) + " ».");
+      else if (isSealed(target)) toast(wasPrecious ? "Objet précieux enregistré." : "Objet protégé : son lieu ne s'affiche plus sans mot de passe.");
       else toast(item ? "Objet enregistré." : "Objet référencé.");
+    }
+
+    /* La clé des objets précieux : celle de la fiche déverrouillée, ou celle
+       du mot de passe saisi (créé ici s'il n'existe pas encore). */
+    function preciousKeyFor() {
+      if (unlocked) return Promise.resolve(unlocked.key);
+      function refuse(message) {
+        if (preciousError) { preciousError.textContent = message; preciousError.hidden = false; }
+        return null;
+      }
+      if (state.preciousLock) {
+        var left = preciousWait();
+        if (left) return Promise.resolve(refuse("Trop d'essais. Réessayez dans " + waitText(left) + "."));
+        if (!draft.pw) return Promise.resolve(refuse("Saisissez le mot de passe des objets précieux."));
+        return preciousOpen(draft.pw).then(function (key) {
+          if (!key) { preciousFailed(); return refuse("Mot de passe incorrect."); }
+          preciousSucceeded();
+          return key;
+        });
+      }
+      return preciousPasswordProblem(draft.pw, draft.pw2).then(function (problem) {
+        return problem ? refuse(problem) : preciousCreate(draft.pw);
+      });
+    }
+
+    function commitPrecious(payload) {
+      if (sealing) return;
+      var secret = {};
+      PRECIOUS_FIELDS.forEach(function (field) { if (field !== "moves" && payload[field] !== undefined) secret[field] = payload[field]; });
+      var before = unlocked ? unlocked.plain : item ? secretOf(item) : {};
+      var moves = before.moves || [];
+      if (item && (before.locationId || null) !== (payload.locationId || null)) {
+        moves = [{ at: Date.now(), from: before.locationId || null, to: payload.locationId || null }].concat(moves).slice(0, 30);
+      }
+      if (moves.length) secret.moves = moves;
+      sealing = true;
+      saveButton.disabled = true;
+      saveButton.textContent = "Chiffrement…";
+      function release() { sealing = false; saveButton.disabled = false; saveButton.textContent = "Enregistrer"; }
+      preciousKeyFor().then(function (key) {
+        if (!key) { release(); return; }
+        var target = item || { id: uid("it"), createdAt: Date.now() };
+        // Devenu précieux, il quitte son groupe et libère son contenu.
+        delete target.groupId;
+        state.items.forEach(function (other) { if (other.groupId === target.id) other.groupId = null; });
+        target.name = payload.name;
+        target.lastSeenAt = payload.lastSeenAt;
+        return sealItem(target, key, secret).then(function () {
+          if (!item) state.items.push(target);
+          finish(target, null);
+        });
+      }).catch(function () {
+        release();
+        if (preciousError) { preciousError.textContent = "Le chiffrement a échoué : rien n'a été enregistré."; preciousError.hidden = false; }
+        else toast("Le chiffrement a échoué : rien n'a été enregistré.");
+      });
+    }
+
+    /* L'interrupteur « Objet précieux », et ce qu'il faut savoir avant. */
+    function preciousBlock() {
+      var box = el("div", { class: "precious-block" });
+      function pwField(label, key, hint) {
+        return el("label", { class: "field" }, [
+          el("span", { text: label }),
+          el("input", {
+            class: "input", type: "password", autocomplete: "new-password", maxlength: 200, value: draft[key],
+            oninput: function (event) { draft[key] = event.target.value; if (preciousError) preciousError.hidden = true; }
+          }),
+          hint ? el("span", { class: "field-hint", text: hint }) : null
+        ]);
+      }
+      function paint() {
+        var create = draft.precious && !unlocked && !state.preciousLock;
+        var confirm = draft.precious && !unlocked && !!state.preciousLock;
+        var scanPhoto = draft.precious && item && item.scanPhoto && photoEntry(item);
+        preciousError = create || confirm ? el("span", { class: "err", role: "alert", hidden: true }) : null;
+        fill(box, [
+          el("div", { class: "set-group" }, [
+            el("button", {
+              class: "set-row switch-row", type: "button", role: "switch", "aria-checked": draft.precious ? "true" : "false",
+              onclick: function () { draft.precious = !draft.precious; paint(); }
+            }, [
+              el("span", { class: "fig" }, [icon("gem", 18)]),
+              el("span", { class: "txt" }, [
+                el("b", { text: "Objet précieux" }),
+                el("span", { text: "Son lieu et ses détails ne s'affichent qu'avec un mot de passe. Son nom et sa photo restent visibles." })
+              ]),
+              el("span", { class: "switch", "aria-hidden": "true" }, [el("i")])
+            ])
+          ]),
+          draft.precious ? preciousPhotoAdvice() : null,
+          scanPhoto ? el("div", { class: "precious-note is-warn" }, [
+            icon("warn", 16),
+            el("div", {}, [
+              el("b", { text: "Cette photo vient du Scan Éclair" }),
+              el("p", { text: "Elle montre l'étagère entière, donc l'endroit où l'objet est rangé. Retirez-la, puis photographiez l'objet seul." }),
+              el("button", {
+                class: "btn btn-sm btn-line", type: "button",
+                onclick: function () {
+                  media.remove(item, scanPhoto.id).then(function () {
+                    itemSheet(item, null, Object.assign({}, hooks, { draft: draft }));
+                    toast("Photo retirée.");
+                  });
+                }
+              }, [icon("trash", 14), "Retirer la photo"])
+            ])
+          ]) : null,
+          item && item.precious && !draft.precious ? el("p", { class: "precious-note is-warn" }, [
+            icon("warn", 16),
+            el("span", { text: "En enregistrant, son lieu redeviendra visible par toute personne qui ouvre Fulmo sur cet appareil." })
+          ]) : null,
+          create ? pwField("Créer le mot de passe des objets précieux", "pw", "Au moins " + PRECIOUS_MIN + " caractères, différent de celui du compte. Fulmo ne peut pas le retrouver : notez-le en lieu sûr.") : null,
+          create ? pwField("Confirmer ce mot de passe", "pw2") : null,
+          confirm ? pwField("Mot de passe des objets précieux", "pw", "Celui que vous avez choisi pour vos objets précieux.") : null,
+          preciousError
+        ]);
+      }
+      paint();
+      return box;
     }
 
     function textField(label, key, placeholder, hint, type) {
@@ -9203,6 +9656,8 @@
           el("span", { class: "field-hint", text: "Nommez-le comme vous le chercherez plus tard." })
         ]),
 
+        preciousAvailable() && isEditor() ? preciousBlock() : null,
+
         locationField({
           label: "Où est-il rangé ?",
           value: draft.locationId,
@@ -9212,7 +9667,7 @@
         /* Le rangement a été posé dans un scan : on peut donc montrer l'endroit
            au lieu de l'épeler. C'est tout l'intérêt d'avoir situé les meubles. */
         (function () {
-          var host = item ? situatedAncestor(item.locationId) : null;
+          var host = src ? situatedAncestor(src.locationId) : null;
           if (!host || state.plan !== "premium") return null;
           return el("button", {
             class: "btn btn-line", type: "button", style: "align-self:flex-start",
@@ -9291,7 +9746,7 @@
           el("p", { class: "field-hint", text: "Une garantie, une péremption ou un entretien : Fulmo vous prévient dans Alertes, et peut les ajouter à l'agenda de votre téléphone." })
         ]),
 
-        item && isPremium() ? movesBlock(item) : null,
+        item && isPremium() ? movesBlock(src) : null,
 
         item ? el("button", {
           class: "btn btn-danger-line", type: "button", style: "align-self:flex-start",
@@ -9315,7 +9770,7 @@
         }, [icon("trash", 15), "Supprimer cet objet"]) : null
       ],
       foot: [
-        el("button", { class: "btn btn-lg btn-volt", type: "button", style: "width:100%", onclick: commit, text: "Enregistrer" })
+        saveButton = el("button", { class: "btn btn-lg btn-volt", type: "button", style: "width:100%", onclick: commit, text: "Enregistrer" })
       ]
     });
 
@@ -9326,7 +9781,7 @@
      groupe dont l'objet fait partie. `reopen(moved)` rouvre la fiche telle
      qu'elle était ; `moved` dit que l'objet a suivi son nouveau groupe. */
   function groupBlock(item, reopen) {
-    if (!groupsOn()) return null;
+    if (!groupsOn() || isSealed(item)) return null;
     var editor = isEditor();
     var group = groupOf(item);
     var members = membersOf(item);
@@ -9460,7 +9915,7 @@
      change de groupe ; un groupe n'entre pas dans un autre. */
   function pickMembers(group, reopen) {
     var candidates = state.items.filter(function (c) {
-      return c.id !== group.id && !isGroup(c) && (!groupOf(c) || groupOf(c).id !== group.id);
+      return c.id !== group.id && !isGroup(c) && !isSealed(c) && (!groupOf(c) || groupOf(c).id !== group.id);
     }).sort(function (a, b) { return a.name.localeCompare(b.name, "fr"); });
     itemPicker({
       title: "Ajouter à « " + group.name + " »",
@@ -9483,7 +9938,7 @@
   /* Mettre `item` dans un groupe existant, ou faire d'un autre objet son
      groupe (la boîte de jeu référencée avant ses pions). */
   function pickGroup(item, reopen) {
-    var candidates = state.items.filter(function (c) { return c.id !== item.id && !groupOf(c); })
+    var candidates = state.items.filter(function (c) { return c.id !== item.id && !groupOf(c) && !isSealed(c); })
       .sort(function (a, b) {
         return (isGroup(b) ? 1 : 0) - (isGroup(a) ? 1 : 0) || a.name.localeCompare(b.name, "fr");
       });
@@ -10144,21 +10599,22 @@
   }
 
   function groupOf(item) {
-    if (!groupsOn() || !item || !item.groupId || item.groupId === item.id) return null;
+    // Un objet précieux n'est ni groupe ni membre : le groupe trahirait son lieu.
+    if (!groupsOn() || !item || !item.groupId || item.groupId === item.id || isSealed(item)) return null;
     var group = itemById(item.groupId);
-    return group && !group.groupId ? group : null;
+    return group && !group.groupId && !isSealed(group) ? group : null;
   }
 
   function membersOf(item) {
-    if (!groupsOn() || !item || item.groupId) return [];
-    return state.items.filter(function (i) { return i.groupId === item.id && i.id !== item.id; })
+    if (!groupsOn() || !item || item.groupId || isSealed(item)) return [];
+    return state.items.filter(function (i) { return i.groupId === item.id && i.id !== item.id && !isSealed(i); })
       .sort(function (a, b) { return a.name.localeCompare(b.name, "fr"); });
   }
 
   function isGroup(item) { return membersOf(item).length > 0; }
 
   function joinGroup(member, group) {
-    if (!groupsOn() || member.id === group.id || group.groupId || isGroup(member)) return false;
+    if (!groupsOn() || member.id === group.id || group.groupId || isGroup(member) || isSealed(member) || isSealed(group)) return false;
     member.groupId = group.id;
     moveItem(member, group.locationId || null);
     return true;
@@ -10276,6 +10732,7 @@
           });
           list = list.filter(function (m) { return m.kind !== "photo"; });
           forgetThumb(item.id);
+          delete item.scanPhoto;
         }
         item.media = list.concat([{ id: id, kind: kind, label: label || null, mime: blob.type, size: blob.size, thumbId: thumbId, createdAt: Date.now() }]);
         save();
@@ -10287,6 +10744,7 @@
       forgetThumb(item.id);
       if (id === DEMO_PHOTO_ID) { item.noDemoPhoto = true; save(); return Promise.resolve({ ok: true }); }
       var gone = (item.media || []).filter(function (m) { return m.id === id; })[0];
+      if (gone && gone.kind === "photo") delete item.scanPhoto;
       item.media = (item.media || []).filter(function (m) { return m.id !== id; });
       save();
       if (gone && gone.thumbId) blobStore.del(gone.thumbId);
@@ -10580,8 +11038,12 @@
       var ids = descendantIds(room.id);
       return { name: room.name, items: state.items.filter(function (i) { return ids.indexOf(i.locationId) !== -1; }) };
     });
-    var loose = state.items.filter(function (i) { return !i.locationId || !locById(i.locationId); });
+    var loose = state.items.filter(function (i) { return !isSealed(i) && (!i.locationId || !locById(i.locationId)); });
     if (loose.length) groups.push({ name: "À ranger", items: loose });
+    // Le rapport circule (email, assureur) : le lieu et la valeur des objets
+    // précieux n'y figurent pas, seulement leur nom.
+    var sealedItems = state.items.filter(isSealed);
+    if (sealedItems.length) groups.push({ name: "Objets précieux (détails protégés)", items: sealedItems });
     groups = groups.filter(function (g) { return g.items.length; });
 
     function build() {
