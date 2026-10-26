@@ -131,9 +131,12 @@ test.describe("Objets précieux", () => {
   });
 
   test("un objet précieux n'est ni groupe ni membre : le protéger le sort de son groupe", async ({ page }) => {
-    await page.getByLabel("Chercher un objet").fill("pansements");
-    await page.locator(".result", { hasText: "Pansements assortis" }).first().locator(".r-name").click();
-    const dialog = page.getByRole("dialog", { name: "Modifier l'objet" });
+    // Dans un groupe, l'objet n'a pas sa propre carte : on l'ouvre depuis la trousse.
+    await page.getByLabel("Chercher un objet").fill("trousse de secours");
+    await page.locator(".result.is-group", { hasText: "Trousse de secours" }).first().locator(".r-name").click();
+    await page.locator(".grp-member", { hasText: "Pansements assortis" }).click();
+    const dialog = page.locator(".sheet-backdrop:not(.is-closing)").getByRole("dialog", { name: "Modifier l'objet" });
+    await expect(dialog.getByPlaceholder("Perceuse, passeport, guirlande…")).toHaveValue("Pansements assortis");
     await dialog.getByRole("switch", { name: /Objet précieux/ }).click();
     await dialog.getByLabel("Créer le mot de passe des objets précieux").fill("coffre-2026");
     await dialog.getByLabel("Confirmer ce mot de passe").fill("coffre-2026");
@@ -142,6 +145,7 @@ test.describe("Objets précieux", () => {
 
     const item = await page.evaluate(() => JSON.parse(localStorage.getItem("fulmo.demo.v2")).items.find((i) => i.name === "Pansements assortis"));
     expect(item.groupId).toBeUndefined();
+    await page.getByLabel("Chercher un objet", { exact: true }).fill("pansements");
     const card = page.locator(".result", { hasText: "Pansements assortis" }).first();
     await expect(card.locator(".r-where")).toContainText("Lieu protégé");
     await expect(card).not.toContainText("Trousse de secours");
