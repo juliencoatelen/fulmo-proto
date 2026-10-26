@@ -1,7 +1,7 @@
 # Registre des activités de traitement — Fulmo (article 30 du RGPD)
 
 Responsable : Julien Coatelen, entrepreneur individuel, nom commercial BASICX Marketing (service Fulmo), SIRET 751 919 101 00038, [adresse — à compléter]. Contact : [email vie privée — à compléter].
-Dernière mise à jour : 9 octobre 2026.
+Dernière mise à jour : 26 octobre 2026.
 
 | # | Traitement | Finalité | Base légale | Personnes | Données | Destinataires / sous-traitants | Transfert hors UE | Durée | Sécurité |
 |---|---|---|---|---|---|---|---|---|---|
@@ -17,5 +17,6 @@ Dernière mise à jour : 9 octobre 2026.
 | 10 | Justificatifs et détails des objets | Retrouver factures, garanties et notices ; estimer la valeur des biens (rapport assurance) ; rappeler un entretien | Contrat | Utilisateurs, membres du foyer | Photos et fichiers (image ou PDF, 10 Mo max), prix, date d'achat, code-barres, rappel d'entretien | Application : Supabase Storage, compartiment privé (Francfort, eu-central-1), partagé avec le foyer. Démo : aucun (IndexedDB local) | Idem 1 | Jusqu'à suppression du fichier, de l'objet ou du compte (fichiers effacés avec l'objet) | Compartiment privé, liens signés de courte durée, type et taille vérifiés côté serveur, RLS par foyer |
 | 11 | Historique des déplacements | Savoir où était un objet et qui l'a déplacé | Contrat | Membres du foyer | Objet, ancien et nouvel emplacement, date, membre auteur | Supabase (Francfort, eu-central-1) | Idem 1 | 13 mois, purge automatique | RLS par foyer, lecture seule pour les membres |
 | 12 | Boîte à idées | Recueillir et classer par votes les suggestions des utilisateurs | Intérêt légitime (amélioration du service) | Utilisateurs connectés | Titre, texte, catégorie, votes, prénom de l'auteur (ou « Anonyme ») ; signalements de problème visibles de l'équipe seule | Supabase (Francfort, eu-central-1) | Idem 1 | Tant que l'idée est publiée ; idées et votes effacés avec le compte | Texte affiché sans HTML, 5 idées par jour, modération par l'équipe, RLS |
+| 13 | Objets précieux (application en ligne) | Cacher le lieu et les détails d'un objet précieux à qui ne connaît pas le mot de passe des objets précieux du foyer | Contrat | Membres du foyer | Empreinte bcrypt du mot de passe des objets précieux (jamais en clair), nombre d'essais erronés, fin d'attente, auteur du dernier changement ; lieu et détails des objets précieux, dans une table à part | Supabase (Francfort, eu-central-1) | Idem 1 | Jusqu'au retrait de la protection, de l'objet ou du foyer | Aucune lecture directe (RLS sans policy) ; fonctions serveur après mot de passe ; attente croissante après 5 erreurs ; changement réservé aux administrateurs, avec ré-authentification ; invités exclus |
 
 Analyse d'impact (AIPD) : non requise à ce stade (pas de données sensibles à grande échelle, pas de profilage, pas de surveillance). À réévaluer si le Scan Éclair ou le foyer partagé changent d'échelle.

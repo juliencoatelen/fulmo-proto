@@ -8966,10 +8966,15 @@
               el("span", { class: "txt" }, [
                 el("b", { text: "Objets précieux" }),
                 el("span", { text: state.preciousLock
-                  ? plural(count, "objet protégé", "objets protégés") + " par un mot de passe à part. Leur lieu et leurs détails sont chiffrés sur cet appareil ; leur nom et leur photo restent visibles."
-                  : "Dans la fiche d'un objet, « Objet précieux » cache son lieu et ses détails derrière un mot de passe à part. Le nom et la photo restent visibles." })
+                  ? plural(count, "objet protégé", "objets protégés") + " par un mot de passe à part. " + (cloud
+                    ? "Leur lieu et leurs détails sont gardés à part sur nos serveurs, et ne s'ouvrent qu'avec ce mot de passe, commun aux membres du foyer ; leur nom et leur photo restent visibles."
+                    : "Leur lieu et leurs détails sont chiffrés sur cet appareil ; leur nom et leur photo restent visibles.")
+                  : "Dans la fiche d'un objet, « Objet précieux » cache son lieu et ses détails derrière un mot de passe à part. Le nom et la photo restent visibles." +
+                    (cloud && !preciousAdmin() ? " Un administrateur du foyer crée ce mot de passe." : "") })
               ]),
-              state.preciousLock ? el("button", { class: "btn btn-sm btn-line", type: "button", onclick: preciousPasswordSheet }, [icon("lock", 14), "Mot de passe"]) : null
+              preciousAdmin() && (state.preciousLock || cloud)
+                ? el("button", { class: "btn btn-sm btn-line", type: "button", onclick: preciousPasswordSheet }, [icon("lock", 14), state.preciousLock ? "Mot de passe" : "Créer"])
+                : null
             ]);
           })() : null,
           switchRow(
@@ -9090,8 +9095,11 @@
      conditions : un mot de passe faible se devine hors ligne, et un
      appareil compromis lit ce qu'on y tape.
 
-     En ligne, l'application ne propose pas encore cette option : le lieu
-     doit y être protégé côté serveur (fulmo-app). */
+     En ligne (cloud.precious), rien n'est chiffré ici : le serveur garde le
+     lieu et les détails à part, ne les rend qu'après le mot de passe des
+     objets précieux du foyer (commun aux membres, créé et changé par un
+     administrateur), et impose lui-même l'attente après cinq erreurs. Les
+     invités voient le nom et la photo, jamais le reste. */
 
   var PRECIOUS_FIELDS = ["locationId", "spot", "tags", "description", "quantity", "expiresAt", "warrantyUntil",
     "lentTo", "lentAt", "value", "purchasedAt", "barcode", "careLabel", "careEvery", "careLast", "moves"];
@@ -9100,8 +9108,28 @@
   var PRECIOUS_MIN = 6;
   var PRECIOUS_TRIES = 5;   // essais libres avant d'imposer une attente
 
-  function preciousAvailable() { return !cloud && obCanHash(); }
-  function isSealed(item) { return !!(item && item.precious && item.vault); }
+  function cloudPrecious() { return !!(cloud && cloud.precious && typeof cloud.precious.open === "function"); }
+  function preciousAvailable() { return cloud ? cloudPrecious() : obCanHash(); }
+  function isSealed(item) { return !!(item && item.precious && (item.vault || cloudPrecious())); }
+  // En ligne, seul un administrateur du foyer crée ou change le mot de passe.
+  function preciousAdmin() { return !cloud || cloud.role() === "admin"; }
+  function preciousMin() { return cloudPrecious() ? cloud.precious.min || 8 : PRECIOUS_MIN; }
+
+  /* Un refus du serveur, en clair. */
+  function preciousRefusal(r) {
+    var wait = r && r.wait ? " Réessayez dans " + waitText(r.wait) + "." : "";
+    switch (r && r.error) {
+      case "password": return "Mot de passe incorrect." + (wait ? " Trop d'essais." + wait : "");
+      case "limite": return "Trop d'essais." + (wait || " Réessayez dans quelques minutes.");
+      case "reauth": return "Mot de passe du compte incorrect." + (wait ? " Trop d'essais." + wait : "");
+      case "same_as_account": return "Choisissez un mot de passe différent de celui de votre compte.";
+      case "weak": return "Au moins " + preciousMin() + " caractères.";
+      case "no_lock": return "Aucun mot de passe n'a encore été créé pour les objets précieux de ce foyer.";
+      case "read_only": return "Votre rôle d'invité ne permet pas d'ouvrir les objets précieux.";
+      case "reseau": return "Connexion impossible. Vérifiez le réseau, puis réessayez.";
+      default: return "Le serveur n'a pas pu répondre. Rien n'a été modifié ; réessayez dans un instant.";
+    }
+  }
 
   function b64(buffer) {
     var bytes = new Uint8Array(buffer), out = "";
@@ -9178,7 +9206,7 @@
   /* Le mot de passe des objets précieux doit être distinct de celui du
      compte : sinon, qui connaît l'un ouvre tout. → Promise<message ou null>. */
   function preciousPasswordProblem(password, confirm) {
-    if (password.length < PRECIOUS_MIN) return Promise.resolve("Au moins " + PRECIOUS_MIN + " caractères.");
+    if (password.length < preciousMin()) return Promise.resolve("Au moins " + preciousMin() + " caractères.");
     if (confirm !== password) return Promise.resolve("Les deux mots de passe ne sont pas identiques.");
     var secret = state.account && state.account.secret;
     if (!secret || !secret.hash) return Promise.resolve(null);
@@ -9216,6 +9244,7 @@
   /* La fiche d'un objet précieux s'ouvre par ce verrou, à chaque fois. */
   function preciousUnlockSheet(item, hooks) {
     var lock = state.preciousLock;
+    var canOpen = !!lock && preciousAvailable() && isEditor();
     var input, error, button, busy = false;
 
     function show(message) { error.textContent = message; error.hidden = !message; }
@@ -9228,6 +9257,25 @@
       busy = true;
       button.disabled = true;
       button.textContent = "Vérification…";
+      if (cloudPrecious()) {
+        var password = input.value;
+        cloud.precious.open(item.id, password).then(function (r) {
+          if (r.ok) {
+            // Seuls le lieu et les détails viennent du serveur : le nom reste celui de l'objet.
+            var plain = { moves: r.moves || [] };
+            PRECIOUS_FIELDS.forEach(function (field) { if (field !== "moves" && r.details[field] !== undefined) plain[field] = r.details[field]; });
+            itemSheet(item, null, Object.assign({}, hooks, { unlocked: { password: password, plain: plain } }));
+            return;
+          }
+          busy = false;
+          button.disabled = false;
+          button.textContent = "Ouvrir la fiche";
+          show(preciousRefusal(r));
+          input.value = "";
+          input.focus();
+        });
+        return;
+      }
       preciousOpen(input.value).then(function (key) {
         if (!key) {
           preciousFailed();
@@ -9263,7 +9311,7 @@
             el("span", { class: "muted", text: "Son lieu et ses détails sont protégés par un mot de passe." })
           ])
         ]),
-        lock && preciousAvailable() ? el("label", { class: "field" }, [
+        canOpen ? el("label", { class: "field" }, [
           el("span", { text: "Mot de passe des objets précieux" }),
           input = el("input", {
             class: "input", type: "password", autocomplete: "off", autofocus: true, maxlength: 200,
@@ -9271,10 +9319,15 @@
             onkeydown: function (event) { if (event.key === "Enter") { event.preventDefault(); attempt(); } }
           }),
           error = el("span", { class: "err", id: "precious-err", role: "alert", hidden: true }),
-          el("span", { class: "field-hint", text: "Ce n'est pas le mot de passe du compte. Fulmo ne le connaît pas et ne peut pas le retrouver." })
-        ]) : el("p", { class: "muted", text: "Ce navigateur ne permet pas d'ouvrir les objets précieux (page non sécurisée ou mot de passe absent)." })
+          el("span", { class: "field-hint", text: cloud
+            ? "Ce n'est pas le mot de passe du compte : c'est celui des objets précieux, commun aux membres du foyer."
+            : "Ce n'est pas le mot de passe du compte. Fulmo ne le connaît pas et ne peut pas le retrouver." })
+        ]) : el("p", { class: "muted", text: cloud && !isEditor()
+          ? "Votre rôle d'invité ne permet pas d'ouvrir les objets précieux : leur lieu reste caché."
+          : cloud ? "Aucun mot de passe n'a encore été créé pour les objets précieux de ce foyer."
+          : "Ce navigateur ne permet pas d'ouvrir les objets précieux (page non sécurisée ou mot de passe absent)." })
       ],
-      foot: lock && preciousAvailable() ? [
+      foot: canOpen ? [
         el("button", { class: "btn btn-quiet", type: "button", onclick: preciousForgotSheet }, "Mot de passe oublié"),
         button = el("button", { class: "btn btn-volt", type: "button", onclick: attempt }, "Ouvrir la fiche")
       ] : null
@@ -9284,6 +9337,7 @@
   /* Oublié : rien ne permet de déchiffrer. On le dit, et l'on propose de
      repartir de zéro en effaçant les détails protégés. */
   function preciousForgotSheet() {
+    if (cloudPrecious()) { preciousForgotCloud(); return; }
     var count = state.items.filter(isSealed).length;
     confirmSheet({
       title: "Mot de passe oublié",
@@ -9306,8 +9360,65 @@
     });
   }
 
+  /* En ligne, rien n'est perdu : un administrateur choisit un nouveau mot de
+     passe après avoir confirmé celui de son compte. */
+  function preciousForgotCloud() {
+    if (preciousAdmin()) { preciousPasswordSheet(); return; }
+    var ok;
+    sheet({
+      title: "Mot de passe oublié",
+      body: [el("p", { class: "confirm-body", text: "Demandez à un administrateur du foyer : il peut choisir un nouveau mot de passe dans Réglages, après avoir confirmé celui de son compte. Les lieux et détails protégés sont conservés." })],
+      foot: [ok = el("button", { class: "btn btn-volt", type: "button", onclick: function () { closeSheet(); } }, "Compris")],
+      initialFocus: ok
+    });
+  }
+
+  /* En ligne : créer le mot de passe, ou le remplacer (même oublié) avec
+     celui du compte. Le serveur garde les détails, rien n'est à rechiffrer. */
+  function preciousPasswordCloud() {
+    var creating = !state.preciousLock;
+    var draft = { account: "", next: "", confirm: "" };
+    var error, button, busy = false;
+    function field(label, key, hint, autocomplete) {
+      return el("label", { class: "field" }, [
+        el("span", { text: label }),
+        el("input", { class: "input", type: "password", autocomplete: autocomplete || "new-password", maxlength: 200, oninput: function (event) { draft[key] = event.target.value; } }),
+        hint ? el("span", { class: "field-hint", text: hint }) : null
+      ]);
+    }
+    function fail(message) { busy = false; button.disabled = false; error.textContent = message; error.hidden = false; }
+    function run() {
+      if (busy) return;
+      if (!creating && !draft.account) { fail("Saisissez le mot de passe de votre compte."); return; }
+      busy = true; button.disabled = true; error.hidden = true;
+      preciousPasswordProblem(draft.next, draft.confirm).then(function (problem) {
+        if (problem) { fail(problem); return; }
+        return cloud.precious.lock(creating ? { password: draft.next } : { password: draft.next, account: draft.account }).then(function (r) {
+          if (!r.ok) { fail(preciousRefusal(r)); return; }
+          state.preciousLock = { cloud: true };
+          closeSheet(); render();
+          toast(creating ? "Mot de passe des objets précieux créé." : "Mot de passe changé. Prévenez les membres du foyer : l'ancien ne fonctionne plus.");
+        });
+      }).catch(function () { fail(preciousRefusal(null)); });
+    }
+    sheet({
+      title: "Mot de passe des objets précieux",
+      body: [
+        el("p", { class: "muted", text: creating
+          ? "Un seul mot de passe pour les objets précieux du foyer, à confier aux seuls membres de confiance. Les invités ne peuvent jamais les ouvrir."
+          : "Même si l'ancien est oublié : le mot de passe de votre compte suffit, et les lieux et détails protégés sont conservés." }),
+        creating ? null : field("Mot de passe de votre compte", "account", null, "current-password"),
+        field(creating ? "Mot de passe des objets précieux" : "Nouveau mot de passe", "next", "Au moins " + preciousMin() + " caractères, différent de celui du compte."),
+        field("Confirmer ce mot de passe", "confirm"),
+        error = el("p", { class: "err", role: "alert", hidden: true })
+      ],
+      foot: [button = el("button", { class: "btn btn-volt", type: "button", onclick: run }, creating ? "Créer" : "Changer")]
+    });
+  }
+
   /* Changer le mot de passe rechiffre chaque objet précieux. */
   function preciousPasswordSheet() {
+    if (cloudPrecious()) { preciousPasswordCloud(); return; }
     var draft = { current: "", next: "", confirm: "" };
     var error, button, busy = false;
     function field(label, key, hint) {
@@ -9346,7 +9457,7 @@
       title: "Mot de passe des objets précieux",
       body: [
         field("Mot de passe actuel", "current"),
-        field("Nouveau mot de passe", "next", "Au moins " + PRECIOUS_MIN + " caractères, différent de celui du compte."),
+        field("Nouveau mot de passe", "next", "Au moins " + preciousMin() + " caractères, différent de celui du compte."),
         field("Confirmer le nouveau mot de passe", "confirm"),
         error = el("p", { class: "err", role: "alert", hidden: true })
       ],
@@ -9438,6 +9549,22 @@
 
       if (draft.precious) { commitPrecious(payload); return; }
 
+      if (item && unlocked && cloudPrecious()) {
+        // En ligne, le serveur rend d'abord le lieu et les détails au foyer.
+        if (sealing) return;
+        sealing = true;
+        saveButton.disabled = true;
+        cloud.precious.unprotect(item.id, unlocked.password).then(function (r) {
+          sealing = false;
+          saveButton.disabled = false;
+          if (!r.ok) { toast(preciousRefusal(r)); return; }
+          delete item.precious;
+          item.locationId = r.details.locationId || null;
+          commitPlain(payload, guessed);
+        });
+        return;
+      }
+
       if (item && unlocked) {
         // La protection est retirée : les détails reviennent en clair.
         item.locationId = unlocked.plain.locationId || null;
@@ -9445,7 +9572,10 @@
         delete item.vault;
         delete item.precious;
       }
+      commitPlain(payload, guessed);
+    }
 
+    function commitPlain(payload, guessed) {
       if (item) {
         moveItem(item, payload.locationId);
         // Le contenu d'un groupe le suit : la trousse change d'étagère, ses
@@ -9511,6 +9641,7 @@
       saveButton.disabled = true;
       saveButton.textContent = "Chiffrement…";
       function release() { sealing = false; saveButton.disabled = false; saveButton.textContent = "Enregistrer"; }
+      if (cloudPrecious()) { savePreciousCloud(payload, secret, release); return; }
       preciousKeyFor().then(function (key) {
         if (!key) { release(); return; }
         var target = item || { id: uid("it"), createdAt: Date.now() };
@@ -9530,6 +9661,48 @@
       });
     }
 
+    /* En ligne : le serveur garde le lieu et les détails ; l'objet ne garde
+       ici que son nom (et sa photo). Le mot de passe est créé au passage si
+       le foyer n'en a pas encore et que l'on est administrateur. */
+    function savePreciousCloud(payload, secret, release) {
+      function refuse(message) {
+        release();
+        if (preciousError) { preciousError.textContent = message; preciousError.hidden = false; }
+        else toast(message);
+      }
+      var password = unlocked ? unlocked.password : draft.pw;
+      if (!unlocked && !state.preciousLock && !preciousAdmin()) { refuse("Un administrateur du foyer doit d'abord créer le mot de passe des objets précieux, dans Réglages."); return; }
+      if (!password) { refuse("Saisissez le mot de passe des objets précieux."); return; }
+      saveButton.textContent = "Enregistrement…";
+      var ready = !unlocked && !state.preciousLock
+        ? preciousPasswordProblem(draft.pw, draft.pw2).then(function (problem) {
+            if (problem) return problem;
+            return cloud.precious.lock({ password: draft.pw }).then(function (r) {
+              if (!r.ok) return preciousRefusal(r);
+              state.preciousLock = { cloud: true };
+              return null;
+            });
+          })
+        : Promise.resolve(null);
+      ready.then(function (problem) {
+        if (problem) { refuse(problem); return; }
+        var target = item || { id: uid("it"), createdAt: Date.now() };
+        return cloud.precious.save({ itemId: target.id, name: payload.name, password: password, details: secret }).then(function (r) {
+          if (!r.ok) { refuse(preciousRefusal(r)); return; }
+          // Devenu précieux, il quitte son groupe et libère son contenu.
+          delete target.groupId;
+          state.items.forEach(function (other) { if (other.groupId === target.id) other.groupId = null; });
+          PRECIOUS_FIELDS.forEach(function (field) { delete target[field]; });
+          target.name = payload.name;
+          target.lastSeenAt = payload.lastSeenAt;
+          target.locationId = null;
+          target.precious = true;
+          if (!item) state.items.push(target);
+          finish(target, null);
+        });
+      }).catch(function () { refuse(preciousRefusal(null)); });
+    }
+
     /* L'interrupteur « Objet précieux », et ce qu'il faut savoir avant. */
     function preciousBlock() {
       var box = el("div", { class: "precious-block" });
@@ -9544,10 +9717,11 @@
         ]);
       }
       function paint() {
-        var create = draft.precious && !unlocked && !state.preciousLock;
+        var create = draft.precious && !unlocked && !state.preciousLock && preciousAdmin();
         var confirm = draft.precious && !unlocked && !!state.preciousLock;
+        var noLock = draft.precious && !unlocked && !state.preciousLock && !preciousAdmin();
         var scanPhoto = draft.precious && item && item.scanPhoto && photoEntry(item);
-        preciousError = create || confirm ? el("span", { class: "err", role: "alert", hidden: true }) : null;
+        preciousError = create || confirm || noLock ? el("span", { class: "err", role: "alert", hidden: true }) : null;
         fill(box, [
           el("div", { class: "set-group" }, [
             el("button", {
@@ -9581,11 +9755,19 @@
           ]) : null,
           item && item.precious && !draft.precious ? el("p", { class: "precious-note is-warn" }, [
             icon("warn", 16),
-            el("span", { text: "En enregistrant, son lieu redeviendra visible par toute personne qui ouvre Fulmo sur cet appareil." })
+            el("span", { text: cloud
+              ? "En enregistrant, son lieu et ses détails redeviendront visibles de tous les membres du foyer, invités compris."
+              : "En enregistrant, son lieu redeviendra visible par toute personne qui ouvre Fulmo sur cet appareil." })
           ]) : null,
-          create ? pwField("Créer le mot de passe des objets précieux", "pw", "Au moins " + PRECIOUS_MIN + " caractères, différent de celui du compte. Fulmo ne peut pas le retrouver : notez-le en lieu sûr.") : null,
+          create ? pwField("Créer le mot de passe des objets précieux", "pw", cloud
+            ? "Au moins " + preciousMin() + " caractères, différent de celui du compte. Il sera commun aux membres du foyer ; un administrateur pourra le changer."
+            : "Au moins " + preciousMin() + " caractères, différent de celui du compte. Fulmo ne peut pas le retrouver : notez-le en lieu sûr.") : null,
           create ? pwField("Confirmer ce mot de passe", "pw2") : null,
-          confirm ? pwField("Mot de passe des objets précieux", "pw", "Celui que vous avez choisi pour vos objets précieux.") : null,
+          confirm ? pwField("Mot de passe des objets précieux", "pw", cloud ? "Celui des objets précieux du foyer." : "Celui que vous avez choisi pour vos objets précieux.") : null,
+          noLock ? el("p", { class: "precious-note is-warn" }, [
+            icon("warn", 16),
+            el("span", { text: "Un administrateur du foyer doit d'abord créer le mot de passe des objets précieux, dans Réglages." })
+          ]) : null,
           preciousError
         ]);
       }
@@ -10611,7 +10793,9 @@
           }))
         : el("p", { class: "muted", text: "Aucun déplacement enregistré depuis sa création." }));
     }
-    if (cloud && typeof cloud.moves === "function") {
+    // Un objet précieux ouvert en ligne : son historique vient avec la fiche.
+    if (cloud && item.precious && Array.isArray(item.moves)) show(item.moves);
+    else if (cloud && typeof cloud.moves === "function") {
       cloud.moves(item.id).then(show).catch(function () { box.replaceChildren(el("p", { class: "muted", text: "Historique indisponible pour le moment." })); });
     } else show(item.moves || []);
     return el("details", { class: "more-fields" }, [el("summary", { text: "Historique des déplacements" }), box]);
