@@ -369,9 +369,9 @@
     var items = state.items;
 
     if (!q) {
-      return items.slice().sort(function (a, b) {
+      return foldGroups(items.slice().sort(function (a, b) {
         return (b.lastSeenAt || 0) - (a.lastSeenAt || 0);
-      }).map(function (item) { return { item: item, score: 0, reason: "recent" }; });
+      }).map(function (item) { return { item: item, score: 0, reason: "recent" }; }));
     }
 
     var words = q.split(" ").filter(Boolean);
@@ -420,7 +420,31 @@
     scored.sort(function (x, y) {
       return y.score - x.score || (y.item.lastSeenAt || 0) - (x.item.lastSeenAt || 0);
     });
-    return scored;
+    return foldGroups(scored);
+  }
+
+  /* Un groupe se montre en une seule carte : chercher « bol » affiche le
+     Thermomix qui le contient, pas le bol à part. La ligne du groupe prend
+     la place de son premier membre trouvé, et `via` garde les noms des
+     membres qui ont répondu, pour le dire sur la carte. */
+  function foldGroups(rows) {
+    var at = Object.create(null);
+    var out = [];
+    rows.forEach(function (row) {
+      var group = groupOf(row.item);
+      var item = group || row.item;
+      var folded = at[item.id];
+      if (!folded) {
+        folded = at[item.id] = { item: item, score: row.score, reason: row.reason, via: [] };
+        out.push(folded);
+      } else if (!group) {
+        // Le groupe lui-même répond aussi : c'est son score qui compte.
+        folded.score = Math.max(folded.score, row.score);
+        folded.reason = row.reason;
+      }
+      if (group) folded.via.push(row.item.name);
+    });
+    return out;
   }
 
   /* ─── Alertes ─────────────────────────────────────────────────────── */
@@ -4881,6 +4905,10 @@
              ]) : null])
       : [el("b", { text: "À ranger" })];
     if (group) where.push(el("span", { class: "r-ingroup" }, [icon("group", 11), "Dans « " + group.name + " »"]));
+    // Trouvé par ce qu'il contient : on dit quoi, sinon la carte surprend.
+    if (row.via && row.via.length && opts.highlight) {
+      where.push(el("span", { class: "r-ingroup" }, [icon("group", 11), "Contient « " + row.via.slice(0, 2).join(" », « ") + " »" + (row.via.length > 2 ? "…" : "")]));
+    }
 
     var li = el("li", {
       class: "result" + (row.reason === "tag" ? " tagmatch" : "") + (opts.found ? " found" : "") + (members.length ? " is-group" : ""),
@@ -5024,10 +5052,11 @@
 
     // « À ranger » n'est pas un mot-clé : c'est l'absence d'emplacement.
     // Un objet précieux n'a pas de lieu en clair, mais il n'est pas « à ranger ».
-    var unsorted = state.items.filter(function (item) { return !item.locationId && !isSealed(item); }).length;
+    var unsorted = foldGroups(state.items.filter(function (item) { return !item.locationId && !isSealed(item); })
+      .map(function (item) { return { item: item }; })).length;
     var results = searchState.filter === "__unsorted"
-      ? state.items.filter(function (item) { return !item.locationId && !isSealed(item); })
-          .map(function (item) { return { item: item, score: 0, reason: "recent" }; })
+      ? foldGroups(state.items.filter(function (item) { return !item.locationId && !isSealed(item); })
+          .map(function (item) { return { item: item, score: 0, reason: "recent" }; }))
       : aiActive ? aiResults : search(searchState.query);
     // La pièce se combine avec la phrase tapée : « chargeur » dans le bureau.
     var roomCounts = Object.create(null);
