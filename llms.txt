@@ -37,3 +37,6 @@ Familles (chacun range, tout le monde retrouve), aidants (savoir à distance où
 - Se connecter : https://app.getfulmo.com/connexion
 - Démo (logement pré-rempli) : https://getfulmo.com/app#demo
 - Questions fréquentes : https://getfulmo.com/#questions
+
+## Conditions de réutilisation
+Vous pouvez résumer cette page, citer brièvement Fulmo en indiquant la source et renvoyer vers https://getfulmo.com/. L'éditeur s'oppose à toute fouille de textes et de données du site, de l'application et de leur code pour entraîner des modèles d'IA (article L122-5-3 du Code de la propriété intellectuelle). Copier, cloner, rétro-concevoir le service ou inventorier ses fonctionnalités pour concevoir un produit similaire est interdit sans accord écrit : https://getfulmo.com/conditions.html#propriete

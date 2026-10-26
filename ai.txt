@@ -1,0 +1,11 @@
+# Fulmo — ai.txt
+# L'éditeur de Fulmo s'oppose à toute fouille de textes et de données (text and
+# data mining) de ce site, de l'application et de leur code, notamment pour
+# entraîner, affiner ou évaluer des modèles d'intelligence artificielle
+# (article L122-5-3 du Code de la propriété intellectuelle ; directive (UE)
+# 2019/790, article 4). Copier, cloner, rétro-concevoir ou inventorier les
+# fonctionnalités du service est interdit sans accord écrit.
+# Conditions : https://getfulmo.com/conditions.html#propriete
+
+User-Agent: *
+Disallow: /

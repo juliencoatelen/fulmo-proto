@@ -23,7 +23,8 @@ assets/js/pano-*.js     Relevé et visionneuse panoramiques
 assets/js/landing.bundle.js  Bundle généré de la landing (ne pas éditer à la main)
 src/landing/            Sources de la scène 3D et des animations de la landing
 assets/fonts/           Bricolage Grotesque, Geist, Geist Mono, Instrument Serif (woff2)
-robots.txt, sitemap.xml, llms.txt, site.webmanifest
+robots.txt, ai.txt, sitemap.xml, llms.txt, site.webmanifest
+LICENSE                 Tous droits réservés (dépôt public sans licence d'utilisation)
 PRODUCT.md, DESIGN.md   Vérité produit et contrat de design « Nuit électrique »
 ```
 
@@ -50,3 +51,7 @@ Toutes les données de la démo vivent dans le navigateur (localStorage + Indexe
 Les vrais comptes, synchronisés entre appareils et partagés avec le foyer, sont sur `app.getfulmo.com` (repo privé `fulmo-app`).
 Liens utiles : `app#signup` (création de compte) et `app#demo` (logement de démonstration
 de 40 objets, formule Éclair activée).
+
+## Droits
+
+Code, design, textes et fonctionnalités : tous droits réservés, voir [LICENSE](LICENSE) et l'[article 9 des conditions](https://getfulmo.com/conditions.html#propriete). Les robots d'entraînement d'IA sont refusés (robots.txt, ai.txt, balises `noai` et `tdm-reservation`).
