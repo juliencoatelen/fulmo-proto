@@ -431,11 +431,15 @@ test.describe("Application : groupes d'objets", () => {
     await expect(group.locator(".r-group")).toContainText("3 objets");
     await expect(group.locator(".r-gic")).toBeVisible();
 
+    // Chercher un objet du groupe montre le groupe, en une seule carte.
     await page.getByLabel("Chercher un objet").fill("compresses");
-    const member = page.locator(".result", { hasText: "Compresses stériles" }).first();
-    await expect(member.locator(".r-ingroup")).toContainText("Dans « Trousse de secours »");
-    await member.locator(".r-where").click();
-    await expect(page.getByRole("dialog", { name: "Compresses stériles" }).locator(".where-path")).toContainText("Trousse de secours");
+    await expect(page.locator(".result")).toHaveCount(1);
+    const found = page.locator(".result.is-group", { hasText: "Trousse de secours" });
+    await expect(found.locator(".r-ingroup")).toContainText("Contient « Compresses stériles »");
+    // Sans recherche non plus, le contenu d'un groupe n'a pas sa propre carte.
+    await page.getByLabel("Chercher un objet").fill("");
+    await expect(page.locator(".result", { hasText: "Trousse de secours" })).toHaveCount(1);
+    await expect(page.locator(".result", { hasText: "Pansements assortis" })).toHaveCount(0);
   });
 
   test("la fiche d'un groupe gère son contenu, qui suit le groupe quand il change de place", async ({ page }) => {
