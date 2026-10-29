@@ -22,7 +22,7 @@ jobs:
         run: npm audit --audit-level=high
 
   non-regression:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04  # Playwright 1.56 ne gère pas encore ubuntu 26.04 (ubuntu-latest)
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
