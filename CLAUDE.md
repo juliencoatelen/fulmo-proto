@@ -30,6 +30,15 @@ est en ligne quelques minutes plus tard. Lis aussi `PRODUCT.md` et `DESIGN.md`.
 3. Si une demande impose de casser une règle, ne le fais pas : explique pourquoi en une
    phrase et propose l'alternative (souvent : « à faire dans fulmo-app »).
 
+## Où vivent les règles (source unique : `main` sur GitHub)
+- Site public : ce fichier (P1–P6) et `tools/check-security.sh`.
+- Application et backend : `docs/SECURITY_RULES.md` (S01–S31), `docs/RGPD.md`,
+  `docs/TRACKING_PLAN.md` et `docs/securite/` du repo **privé** `fulmo-app`.
+  Ne recopie jamais ces documents ici : ce repo est public.
+- Instructions du projet Claude : copie de référence dans `fulmo-app/docs/CLAUDE_PROJECT_INSTRUCTIONS.md`.
+
+En cas d'écart entre une copie locale, une discussion et ces fichiers sur `main`, ce sont ces fichiers qui font foi.
+
 ## Juridique (RGPD)
 - Ne jamais fusionner une PR ni modifier les réglages GitHub Pages sans l'accord écrit de Julien.
 - Pages : `mentions-legales.html`, `confidentialite.html`, `conditions.html`. Tout nouveau traitement de données, sous-traitant, pays d'hébergement ou traceur doit y être ajouté AVANT la mise en ligne, ainsi que dans `docs/legal/registre-des-traitements.md`.
